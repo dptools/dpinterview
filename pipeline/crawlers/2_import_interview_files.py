@@ -46,10 +46,10 @@ logging.basicConfig(**logargs)
 console = utils.get_console()
 
 
-def catogorize_audio_files(audio_files: List[Path], subject_id: str) -> Dict[str, List[Path]]:
+def catogorize_audio_files(
+    audio_files: List[Path], subject_id: str, known_interviewers: List[str]
+) -> Dict[str, List[Path]]:
     files: Dict[str, List[Path]] = {}
-
-    known_interviewers = ["CB", "JT", "KFH", "JB", "BK"]
 
     files["combined"] = []
     files["participant"] = []
@@ -128,7 +128,9 @@ def catogorize_audio_files(audio_files: List[Path], subject_id: str) -> Dict[str
     return files
 
 
-def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
+def fetch_interview_files(
+    config_file: Path, interview: Interview
+) -> List[InterviewFile]:
     """
     Fetches the interview files for a given interview.
 
@@ -138,6 +140,12 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
     Returns:
         List[InterviewFile]: A list of InterviewFile objects.
     """
+
+    crawler_params = config(path=config_file, section="crawler")
+    known_interviewers: List[str] = crawler_params.get("known_interviewers", "").split(
+        ","
+    )
+
     interview_files: List[InterviewFile] = []
     subject_id = interview.subject_id
 
@@ -156,7 +164,9 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
             audio_files.append(file)
 
     categorized_audio_files = catogorize_audio_files(
-        audio_files=audio_files, subject_id=subject_id
+        audio_files=audio_files,
+        subject_id=subject_id,
+        known_interviewers=known_interviewers,
     )
 
     # Add the audio files
@@ -315,7 +325,9 @@ def import_interviews(config_file: Path) -> None:
         task = progress.add_task("Fetching interview files...", total=len(interviews))
         for interview in interviews:
             progress.update(task, advance=1)
-            interview_files.extend(fetch_interview_files(interview=interview))
+            interview_files.extend(
+                fetch_interview_files(interview=interview, config_file=config_file)
+            )
 
     # Generate the SQL queries
     sql_queries = generate_queries(
@@ -323,7 +335,9 @@ def import_interviews(config_file: Path) -> None:
     )
 
     # Execute the SQL queries
-    db.execute_queries(config_file=config_file, queries=sql_queries, logger=logger, show_commands=False)
+    db.execute_queries(
+        config_file=config_file, queries=sql_queries, logger=logger, show_commands=False
+    )
 
 
 if __name__ == "__main__":
