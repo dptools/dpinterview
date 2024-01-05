@@ -33,9 +33,9 @@ def get_time_range(consent_date: datetime, event_date: datetime) -> str:
     """
     # Get the time range
     if consent_date == event_date:
-        time_range = "day1to001"
+        time_range = "day1to0001"
     else:
-        time_range = f"day1to{get_days_between_dates(consent_date, event_date):03d}"
+        time_range = f"day1to{get_days_between_dates(consent_date, event_date):04d}"
 
     return time_range
 
@@ -58,9 +58,9 @@ def get_dpdash_timepoint(consent_date: datetime, event_date: datetime) -> str:
 
     # Get the time range
     if consent_date == event_date:
-        timepoint = "day001"
+        timepoint = "day0001"
     else:
-        timepoint = f"day{abs((consent_date - event_date).days) + 1:03d}"
+        timepoint = f"day{abs((consent_date - event_date).days) + 1:04d}"
 
     return timepoint
 

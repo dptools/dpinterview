@@ -93,7 +93,13 @@ class File:
         INSERT INTO files (file_name, file_type, file_size_mb,
             file_path, m_time, md5)
         VALUES ('{f_name}', '{self.file_type}', '{self.file_size_mb}',
-            '{f_path}', '{self.m_time}', '{self.md5}');
+            '{f_path}', '{self.m_time}', '{self.md5}')
+        ON CONFLICT (file_path) DO UPDATE SET
+            file_name = excluded.file_name,
+            file_type = excluded.file_type,
+            file_size_mb = excluded.file_size_mb,
+            m_time = excluded.m_time,
+            md5 = excluded.md5;
         """
 
         return sql_query

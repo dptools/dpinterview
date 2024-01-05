@@ -1,7 +1,11 @@
 import logging
 import subprocess
 import sys
+from pathlib import Path
 from typing import Callable, Optional
+import shutil
+
+from pipeline.helpers.config import config
 
 
 def get_repo_root() -> str:
@@ -129,3 +133,49 @@ def execute_commands(
             on_fail()
 
     return result
+
+
+def singularity_run(
+    config_file: Path, command_array: list, logger: Optional[logging.Logger] = None
+) -> list:
+    """
+    Add Singularity-specific arguments to the command.
+
+    Args:
+        config_file_path (str): The path to the configuration file.
+        command_array (list): The command to run inside the container.
+
+    Returns:
+        list: The command to run inside the container, with Singularity-specific arguments added.
+    """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+
+    params = config(path=config_file, section="singularity")
+    singularity_image_path = params["singularity_image_path"]
+
+    # Check if singularity binary exists
+    if shutil.which("singularity") is None:
+        logger.error(
+            "[red][u]singularity[/u] binary not found.[/red]", extra={"markup": True}
+        )
+        logger.error(
+            "[yellow]Did you run '[i]module load singularity'[/i]?",
+            extra={"markup": True},
+        )
+        sys.exit(1)
+
+    # Check if singularity_image_path exists
+    if not Path(singularity_image_path).is_file():
+        print("could not read file: " + singularity_image_path)
+        sys.exit(1)
+
+    command_array = [
+        "singularity",
+        "exec",
+        "-B /data:/data",
+        singularity_image_path,
+    ] + command_array
+
+    return command_array

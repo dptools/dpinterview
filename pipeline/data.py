@@ -44,3 +44,22 @@ def get_subject_ids(config_file: Path, study_id: str) -> List[str]:
     subject_ids = results["subject_id"].tolist()
 
     return subject_ids
+
+
+def log(config_file: Path, module_name: str, message: str) -> None:
+    """
+    Logs a message to the database.
+
+    Args:
+    - config_file (str): the path to the configuration file
+    - module_name (str): the name of the module
+    - message (str): the message to log
+    """
+    commands = [
+        f"""
+        INSERT INTO logs (log_module, log_message)
+        VALUES ('{module_name}', '{message}');
+        """
+    ]
+
+    db.execute_queries(config_file, commands, show_commands=False, silent=True)

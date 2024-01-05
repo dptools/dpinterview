@@ -7,6 +7,9 @@ from pipeline.models.interviews import InterviewType
 from pipeline.models.interviews import Interview
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
+from pipeline.models.key_store import KeyStore
+from pipeline.models.logs import Log
+from pipeline.models.decrypted_files import DecryptedFile
 
 from pipeline.helpers import db
 
@@ -26,18 +29,24 @@ def init_db(config_file: Path):
         InterviewFile.drop_table_query(),
         Interview.drop_table_query(),
         InterviewType.drop_table_query(),
+        DecryptedFile.drop_table_query(),
         File.drop_table_query(),
         Subject.drop_table_query(),
         Study.drop_table_query(),
+        KeyStore.drop_table_query(),
+        Log.drop_table_query(),
     ]
 
     create_queries_l: List[Union[str, List[str]]] = [
+        KeyStore.init_table_query(),
+        Log.init_table_query(),
         Study.init_table_query(),
         Subject.init_table_query(),
         InterviewType.init_table_query(),
         Interview.init_table_query(),
         File.init_table_query(),
         InterviewFile.init_table_query(),
+        DecryptedFile.init_table_query(),
     ]
     create_queries = flatten_list(create_queries_l)
 

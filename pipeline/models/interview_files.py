@@ -51,7 +51,8 @@ class InterviewFile:
 
         sql_query = f"""
         INSERT INTO interview_files (interview_path, interview_file, interview_file_tags)
-        VALUES ('{i_path}', '{i_file}', '{self.tags}') ON CONFLICT DO NOTHING;
+        VALUES ('{i_path}', '{i_file}', '{self.tags}')
+        ON CONFLICT (interview_path, interview_file) DO UPDATE SET interview_file_tags = '{self.tags}';
         """
 
         return sql_query

@@ -56,9 +56,9 @@ class Interview:
         interview_datetime: datetime,
         subject_id: str,
         study_id: str,
-        id: Optional[int] = None,
+        interview_id: Optional[int] = None,
     ):
-        self.id = id
+        self.interview_id = interview_id
         self.interview_name = interview_name
         self.interview_path = interview_path
         self.interview_type = interview_type
@@ -79,7 +79,7 @@ class Interview:
         """
         sql_query = """
         CREATE TABLE IF NOT EXISTS interviews (
-            id SERIAL PRIMARY KEY,
+            interview_id SERIAL PRIMARY KEY,
             interview_name TEXT NOT NULL,
             interview_path TEXT NOT NULL UNIQUE,
             interview_type TEXT NOT NULL REFERENCES interview_types (interview_type),
@@ -116,7 +116,8 @@ class Interview:
 
         sql_query = f"""
         INSERT INTO interviews (interview_name, interview_path, interview_type, interview_date, subject_id, study_id)
-        VALUES ('{i_name}', '{i_path}', '{i_type}', '{i_date}', '{s_id}', '{st_id}');
+        VALUES ('{i_name}', '{i_path}', '{i_type}', '{i_date}', '{s_id}', '{st_id}')
+        ON CONFLICT (interview_path) DO NOTHING;
         """
 
         return sql_query

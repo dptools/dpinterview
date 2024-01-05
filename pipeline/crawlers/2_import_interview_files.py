@@ -233,7 +233,7 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
         interview_name = dpdash.get_dpdash_name(
             study=study_id,
             subject=subject_id,
-            data_type="offsite_interview",
+            data_type="offsiteInterview",
             category=None,
             consent_date=consent_date,
             event_date=interview_datetime,
