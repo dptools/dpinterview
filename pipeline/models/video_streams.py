@@ -77,9 +77,15 @@ class VideoStream:
         """
         Return the SQL query to insert this object into the 'video_streams' table.
         """
+
+        if self.vs_process_time is None:
+            process_time = "NULL"
+        else:
+            process_time = str(self.vs_process_time)
+
         sql_query = f"""
         INSERT INTO video_streams (video_path, ir_role, vs_path, vs_process_time)
-        VALUES ('{self.video_path}', '{self.ir_role.value}', '{self.vs_path}', {self.vs_process_time});
+        VALUES ('{self.video_path}', '{self.ir_role.value}', '{self.vs_path}', {process_time});
         """
 
         return sql_query
