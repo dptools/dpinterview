@@ -34,6 +34,24 @@ class InterviewRole(Enum):
     SUBJECT = "subject"
 
     @staticmethod
+    def from_str(str: str) -> "InterviewRole":
+        """
+        Return the InterviewRole enum value from the given string.
+
+        Args:
+            str (str): The string to convert to an InterviewRole enum value.
+
+        Returns:
+            InterviewRole: The InterviewRole enum value.
+        """
+        if str == "interviewer":
+            return InterviewRole.INTERVIEWER
+        elif str == "subject":
+            return InterviewRole.SUBJECT
+        else:
+            raise ValueError(f"Invalid interview role: {str}")
+
+    @staticmethod
     def init_table_query() -> List[str]:
         """
         Return the SQL query to create the 'interview_roles' table.

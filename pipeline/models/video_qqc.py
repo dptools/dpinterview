@@ -19,8 +19,7 @@ except ValueError:
 
 from typing import Optional
 
-
-from pipeline.helpers import utils, db
+from pipeline.helpers import db, utils
 
 console = utils.get_console()
 

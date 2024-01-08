@@ -1,8 +1,9 @@
+import logging
+import sys
 from pathlib import Path
 from typing import List, Optional
-import logging
 
-from pipeline.helpers import utils, cli
+from pipeline.helpers import cli, utils
 
 
 def extract_screenshots_from_video(
@@ -68,3 +69,55 @@ def extract_screenshots_from_video(
     screenshots = list(output_dir.glob(f"*.{extension}"))
 
     return screenshots
+
+
+def crop_video(
+    source: Path,
+    target: Path,
+    crop_params: str,
+    remove_audio: bool = True,
+    logger: Optional[logging.Logger] = None,
+) -> None:
+    """
+    Crop a video stream using FFmpeg.
+
+    Args:
+        source (str): The path to the input video file.
+        target (str): The path to the output video file.
+        crop_params (str): The crop parameters in the format "out_w:out_h:x:y".
+        config_file (str): The path to the FFmpeg configuration file.
+
+    Returns:
+        None
+    """
+
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
+    cli_command_array = [
+        "ffmpeg",
+        "-y",  # overwrite output file if it exists
+        "-i",
+        source,
+        "-filter:v",
+        f"crop={crop_params}",  # out_w:out_h:x:y
+    ]
+
+    if remove_audio:
+        cli_command_array += ["-an"]
+    else:
+        # copy audio stream
+        cli_command_array += ["-c:a", "copy"]
+
+    cli_command_array += [target]
+
+    def _on_fail() -> None:
+        logger.error(f"Failed to crop video stream from {source}")
+        sys.exit(1)
+
+    with utils.get_progress_bar() as progress:
+        progress.add_task("[green]Cropping video stream...", total=None)
+        cli.execute_commands(
+            command_array=cli_command_array,
+            on_fail=_on_fail,
+        )
