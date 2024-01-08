@@ -52,7 +52,7 @@ class DecryptedFile:
         sql_query = """
         CREATE TABLE IF NOT EXISTS decrypted_files (
             source_path TEXT NOT NULL REFERENCES files (file_path),
-            destination_path TEXT NOT NULL,
+            destination_path TEXT NOT NULL UNIQUE,
             process_time REAL,
             decrypted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (source_path)
