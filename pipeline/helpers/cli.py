@@ -1,9 +1,10 @@
 import logging
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
-from typing import Callable, Optional
-import shutil
+from typing import Callable, List, Optional
 
 from pipeline.helpers.config import config
 
@@ -179,3 +180,71 @@ def singularity_run(
     ] + command_array
 
     return command_array
+
+
+def send_email(
+    subject: str,
+    message: str,
+    recipients: List[str],
+    sender: str,
+    attachments: List[Path] = [],
+    logger: Optional[logging.Logger] = None,
+) -> None:
+    """
+    Send an email with the given subject and message to the given recipients.
+
+    Uses the `mail` binary to send the email.
+
+    Args:
+        subject (str): The subject of the email.
+        message (str): The message of the email.
+        recipients (List[str]): The recipients of the email.
+        sender (str): The sender of the email.
+        attachments (List[Path], optional): The attachments to add to the email. Defaults to [].
+        logger (Optional[logging.Logger], optional): The logger to use for logging. Defaults to None.
+
+    Returns:
+        None
+    """
+
+    if logger is None:
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+
+    if shutil.which("mail") is None:
+        logger.error("[red][u]mail[/u] binary not found.[/red]", extra={"markup": True})
+        logger.warning(
+            "[yellow]Skipping sending email.[/yellow]", extra={"markup": True}
+        )
+        return
+
+    with tempfile.NamedTemporaryFile(mode="w", prefix="email_", suffix=".eml") as temp:
+        temp.write(f"From: {sender}\n")
+        temp.write(f"To: {', '.join(recipients)}\n")
+        temp.write(f"Subject: {subject}\n")
+        temp.write("\n")
+        temp.write(message)
+        temp.write("\n")
+        if attachments:
+            temp.write("\n")
+            temp.write(f"{len(attachments)} Attachment(s):\n")
+            for attachment in attachments:
+                temp.write(str(attachment.name) + "\n")
+        temp.flush()
+
+        command_array = [
+            "mail",
+            "-s",
+            f"'{subject}'",  # wrap subject in quotes to avoid issues with special characters
+        ]
+
+        for attachment in attachments:
+            command_array += ["-a", str(attachment)]
+
+        command_array += recipients
+
+        command_array += ["<", temp.name]
+
+        logger.debug("Sending email:")
+        logger.debug(" ".join(command_array))
+        execute_commands(command_array, shell=True)
