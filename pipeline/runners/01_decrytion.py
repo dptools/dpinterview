@@ -18,7 +18,7 @@ except ValueError:
     pass
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 import cryptease as crypt
 from rich.logging import RichHandler
@@ -114,6 +114,25 @@ def construct_dest_file_name(file_to_decrypt: Path, interview_name: str) -> str:
     return dest_file_name
 
 
+def reconstruct_dest_file_name(dest_file_name: str, suffix: str) -> str:
+    ext = dest_file_name.split(".")[-1]
+    file_name = dest_file_name.split(".")[0]
+
+    dp_dash_dict = dpdash.parse_dpdash_name(file_name)
+
+    if dp_dash_dict["optional_tags"] is None:
+        dp_dash_dict["optional_tags"] = []
+
+    optional_tags: List[str] = dp_dash_dict["optional_tags"]  # type: ignore
+    optional_tags.append(suffix)
+    dp_dash_dict["optional_tags"] = optional_tags
+
+    new_name = dpdash.get_dpdash_name_from_dict(dp_dash_dict)
+    new_name = f"{new_name}.{ext}"
+
+    return new_name
+
+
 def get_key_from_config_file(config_file: Path) -> str:
     """
     Retrieves the decryption key from the specified config file.
@@ -143,7 +162,7 @@ def get_key_from_config_file(config_file: Path) -> str:
 
 def decrypt_file(
     config_file: Path, file_to_decrypt: Path, path_for_decrypted_file: Path
-) -> None:
+) -> Path:
     """
     Decrypts a file using a key obtained from a configuration file.
 
@@ -158,12 +177,31 @@ def decrypt_file(
     # Decrypt file
     key = get_key_from_config_file(config_file=config_file)
 
+    suffix: int = 1
+    while path_for_decrypted_file.exists():
+        logger.warning(
+            f"Error: Decrypted file already exists: {path_for_decrypted_file}"
+        )
+        logger.warning(f"Appending suffix: {suffix}")
+        dest_file_name = path_for_decrypted_file.name
+        dest_file_name = reconstruct_dest_file_name(dest_file_name, str(suffix))
+        path_for_decrypted_file = Path(path_for_decrypted_file.parent, dest_file_name)
+        logger.info(f"New path_for_decrypted_file: {path_for_decrypted_file}")
+
+        suffix += 1
+
     with open(file_to_decrypt, "rb") as f:
         key = crypt.key_from_file(f, key)
 
         with utils.get_progress_bar() as progress:
             progress.add_task("[cyan]Decrypting file...", total=None)
             crypt.decrypt(f, key, filename=path_for_decrypted_file)
+
+    if not path_for_decrypted_file.exists():
+        logger.error(f"Error: Decrypted file not found: {path_for_decrypted_file}")
+        sys.exit(1)
+
+    return path_for_decrypted_file
 
 
 def log_decryption(
@@ -253,7 +291,7 @@ if __name__ == "__main__":
 
                 # Decrypt file
                 with Timer() as timer:
-                    decrypt_file(
+                    path_for_decrypted_file = decrypt_file(
                         config_file=config_file,
                         file_to_decrypt=file_to_decrypt_path,
                         path_for_decrypted_file=path_for_decrypted_file,

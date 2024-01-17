@@ -248,3 +248,21 @@ def send_email(
         logger.debug("Sending email:")
         logger.debug(" ".join(command_array))
         execute_commands(command_array, shell=True)
+
+
+def remove_directory(path: Path) -> None:
+    """
+    Remove all files in the specified directory.
+
+    Args:
+        path (str): The path to the directory to be cleared.
+
+    Returns:
+        None
+    """
+
+    # Check if directory exists
+    if not Path(path).is_dir():
+        return
+
+    shutil.rmtree(path)

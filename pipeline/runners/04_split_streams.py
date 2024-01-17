@@ -91,7 +91,12 @@ def construct_stream_path(video_path: Path, role: InterviewRole, suffix: str) ->
     dpdash_dict["category"] = "video"
 
     dp_dash_name = dpdash.get_dpdash_name_from_dict(dpdash_dict)
-    return video_path.parent / f"{dp_dash_name}.{suffix}"
+    stream_path = video_path.parent / "streams" / f"{dp_dash_name}.{suffix}"
+
+    # Create streams directory if it doesn't exist
+    stream_path.parent.mkdir(parents=True, exist_ok=True)
+
+    return stream_path
 
 
 def split_streams(

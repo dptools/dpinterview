@@ -1,5 +1,7 @@
 import logging
+import re
 from pathlib import Path
+from typing import List
 
 from rich.console import Console
 from rich.progress import (
@@ -91,3 +93,37 @@ def get_config_file_path() -> Path:
         raise FileNotFoundError(f"Config file not found at {config_file_path}")
 
     return Path(config_file_path)
+
+
+def get_instance_name(module_name: str, process_name: str) -> str:
+    """
+    Returns the process name, with the number of instances of the process running
+    appended to the end.
+
+    Args:
+        module_name (str): The name of the module eg. decrytion
+        process_name (str): The name of the process. eg. 01_decryption.py
+
+    Returns:
+        str: The process name, with the number of instances of the process running
+        appended to the end.
+    """
+
+    # Get the number of instances of the process running
+    instance_id = cli.get_number_of_running_processes(process_name)
+
+    # Append the number of instances of the process running to the end of the process name
+    module_name = module_name + "_" + str(instance_id)
+
+    return module_name
+
+
+def camel_case_split(word: str) -> List[str]:
+    # If first character is lowercase make it uppercase
+    word = word[0].upper() + word[1:]
+    parts: List[str] = re.findall(r"[A-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))", word)
+
+    # make all parts lowercase
+    parts = [part.lower() for part in parts]
+
+    return parts

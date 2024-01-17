@@ -51,12 +51,12 @@ class VideoStream:
         """
         sql_query = """
         CREATE TABLE IF NOT EXISTS video_streams (
+            vs_path TEXT NOT NULL PRIMARY KEY,
             video_path TEXT NOT NULL REFERENCES video_quick_qc (video_path),
             ir_role TEXT NOT NULL REFERENCES interview_roles (ir_role),
-            vs_path TEXT NOT NULL UNIQUE,
             vs_process_time REAL,
             vs_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (video_path, ir_role)
+            UNIQUE (video_path, ir_role)
         );
         """
 

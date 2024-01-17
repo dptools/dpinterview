@@ -140,6 +140,13 @@ def get_black_bars_height(image_file: Path) -> float:
         return height
 
 
+def sanitize_black_bar_height(height: float) -> float:
+    if height > 200:
+        return 180
+
+    return height
+
+
 def check_black_bars(screenshots: List[Path]) -> bool:
     black_bar_count = 0
 
@@ -161,6 +168,7 @@ def get_black_bar_height(screenshots: List[Path]) -> int:
         has_black_bars = check_if_image_has_black_bars(image_file=screenshot)
         if has_black_bars:
             black_bar_height = get_black_bars_height(image_file=screenshot)
+            black_bar_height = sanitize_black_bar_height(height=black_bar_height)
             black_bar_heights.append(black_bar_height)
 
     # Median

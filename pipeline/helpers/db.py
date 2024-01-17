@@ -104,9 +104,12 @@ def execute_queries(
         params = config(path=config_file, section="postgresql")
         # connect to the PostgreSQL server
         if show_commands:
-            logger.debug("Connecting to the PostgreSQL database...")
             logger.debug(
-                f"{params['host']}:{params['port']} {params['database']} ({params['user']})"
+                "[grey]Connecting to the PostgreSQL database...", extra={"markup": True}
+            )
+            logger.debug(
+                f"[grey]{params['host']}:{params['port']} {params['database']} ({params['user']})",
+                extra={"markup": True},
             )
 
         conn = psycopg2.connect(**params)  # type: ignore
@@ -115,7 +118,7 @@ def execute_queries(
         def execute_query(query: str):
             if show_commands:
                 logger.debug("Executing query:")
-                logger.debug(f'[bold blue]{query}', extra={"markup": True})
+                logger.debug(f"[bold blue]{query}", extra={"markup": True})
             cur.execute(query)
             try:
                 output.append(cur.fetchall())
@@ -141,7 +144,9 @@ def execute_queries(
         conn.commit()
 
         if not silent:
-            logger.debug(f"Executed {len(queries)} SQL query(ies).")
+            logger.debug(
+                f"[grey]Executed {len(queries)} SQL query(ies).", extra={"markup": True}
+            )
     except (Exception, psycopg2.DatabaseError) as e:
         logger.error("[bold red]Error executing queries.", extra={"markup": True})
         if command is not None:

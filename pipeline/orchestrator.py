@@ -188,3 +188,13 @@ def check_if_decryption_requested(config_file: Path) -> bool:
                 f"[red] Unexpected value in key_store table: {result}. Exiting..."
             )
             raise ValueError
+
+
+def get_max_instances(
+    config_file: Path,
+    module_name: str,
+) -> int:
+    config_params = config(config_file, section="orchestration")
+    max_instances = int(config_params[f"{module_name}_max_instances"])
+
+    return max_instances
