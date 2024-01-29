@@ -62,6 +62,9 @@ def get_file_to_decrypt(config_file: Path) -> Optional[Tuple[str, str, str]]:
 
     df = db.execute_sql(config_file=config_file, query=query)
 
+    if df.empty:
+        return None
+
     file_to_decrypt = df["interview_file"].iloc[0]
     interview_type = df["interview_type"].iloc[0]
     interview_name = df["interview_name"].iloc[0]

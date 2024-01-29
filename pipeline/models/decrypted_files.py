@@ -77,11 +77,12 @@ class DecryptedFile:
         Return the SQL query to insert the DecryptedFile object into the 'decrypted_files' table.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        source_path = db.santize_string(str(self.source_path))
 
         sql_query = f"""
         INSERT INTO decrypted_files (source_path, destination_path, \
             process_time, decrypted_at)
-        VALUES ('{self.source_path}', '{self.destination_path}', \
+        VALUES ('{source_path}', '{self.destination_path}', \
             {self.process_time}, '{timestamp}')
         """
 

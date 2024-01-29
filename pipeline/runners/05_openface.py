@@ -308,7 +308,7 @@ if __name__ == "__main__":
             sys.exit(1)
 
         openface_path = construct_output_path(
-            config_file=config_file, video_path=video_path
+            config_file=config_file, video_path=video_stream_path
         )
         logger.debug(f"Output path: {openface_path}")
         # Check if another process is running with same files
