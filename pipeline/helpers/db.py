@@ -77,6 +77,7 @@ def execute_queries(
     show_progress=False,
     silent=False,
     logger: Optional[logging.Logger] = None,
+    db: str = "postgresql",
 ) -> list:
     """
     Executes a list of SQL queries on a PostgreSQL database.
@@ -101,7 +102,7 @@ def execute_queries(
     output = []
     try:
         # read the connection parameters
-        params = config(path=config_file, section="postgresql")
+        params = config(path=config_file, section=db)
         # connect to the PostgreSQL server
         if show_commands:
             logger.debug(
@@ -160,7 +161,9 @@ def execute_queries(
     return output
 
 
-def get_db_connection(config_file: Path) -> sqlalchemy.engine.base.Engine:
+def get_db_connection(
+    config_file: Path, db: str = "postgresql"
+) -> sqlalchemy.engine.base.Engine:
     """
     Establishes a connection to the PostgreSQL database using the provided configuration file.
 
@@ -170,7 +173,7 @@ def get_db_connection(config_file: Path) -> sqlalchemy.engine.base.Engine:
     Returns:
         sqlalchemy.engine.base.Engine: The database connection engine.
     """
-    params = config(path=config_file, section="postgresql")
+    params = config(path=config_file, section=db)
     engine = sqlalchemy.create_engine(
         "postgresql+psycopg2://"
         + params["user"]
@@ -187,7 +190,7 @@ def get_db_connection(config_file: Path) -> sqlalchemy.engine.base.Engine:
     return engine
 
 
-def execute_sql(config_file: Path, query: str) -> pd.DataFrame:
+def execute_sql(config_file: Path, query: str, db: str = "postgresql") -> pd.DataFrame:
     """
     Executes a SQL query on a PostgreSQL database and returns the result as a pandas DataFrame.
 
@@ -198,7 +201,7 @@ def execute_sql(config_file: Path, query: str) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A pandas DataFrame containing the result of the SQL query.
     """
-    engine = get_db_connection(config_file=config_file)
+    engine = get_db_connection(config_file=config_file, db=db)
 
     df = pd.read_sql(query, engine)
 
@@ -207,7 +210,9 @@ def execute_sql(config_file: Path, query: str) -> pd.DataFrame:
     return df
 
 
-def fetch_record(config_file: Path, query: str) -> Optional[str]:
+def fetch_record(
+    config_file: Path, query: str, db: str = "postgresql"
+) -> Optional[str]:
     """
     Fetches a single record from the database using the provided SQL query.
 
@@ -219,7 +224,7 @@ def fetch_record(config_file: Path, query: str) -> Optional[str]:
         Optional[str]: The value of the first column of the first row of the result set,
         or None if the result set is empty.
     """
-    df = execute_sql(config_file=config_file, query=query)
+    df = execute_sql(config_file=config_file, query=query, db=db)
 
     # Check if there is a row
     if df.shape[0] == 0:
