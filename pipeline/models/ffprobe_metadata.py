@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+FfprobeMetadata Model
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -29,6 +32,16 @@ console = utils.get_console()
 
 
 def aspect_ratio(width, height):
+    """
+    Calculate the aspect ratio of a video based on its width and height.
+
+    Parameters:
+    width (int): The width of the video.
+    height (int): The height of the video.
+
+    Returns:
+    str: The aspect ratio in the format "width:height".
+    """
     width = int(width)
     height = int(height)
     gcd = math.gcd(width, height)
@@ -82,6 +95,16 @@ def metric_or_null(metric: str, metadata: Dict[str, Any]) -> str:
 
 
 class FfprobeMetadata:
+    """
+    Class representing ffprobe metadata.
+
+    Attributes:
+        source_path (Path): The path to the source file.
+        metadata (Dict[str, Any]): The ffprobe metadata.
+        timestamp (datetime): The timestamp of when the metadata was retrieved.
+        role (Optional[InterviewRole]): The role of the interviewee.
+    """
+
     def __init__(
         self,
         source_path: Path,
@@ -101,6 +124,12 @@ class FfprobeMetadata:
 
     @staticmethod
     def init_table_query() -> List[str]:
+        """
+        Returns a list of SQL queries to create the ffprobe_metadata tables.
+
+        Returns:
+            List[str]: A list of SQL queries.
+        """
         metadata_table = """
         CREATE TABLE IF NOT EXISTS ffprobe_metadata (
             fm_source_path TEXT NOT NULL PRIMARY KEY,
@@ -180,6 +209,12 @@ class FfprobeMetadata:
 
     @staticmethod
     def drop_table_query() -> List[str]:
+        """
+        Returns a list of SQL queries to drop the ffprobe_metadata tables.
+
+        Returns:
+            List[str]: A list of SQL queries.
+        """
         drop_metadata_table = """
         DROP TABLE IF EXISTS ffprobe_metadata;
         """
@@ -201,7 +236,19 @@ class FfprobeMetadata:
     @staticmethod
     def stream_to_sql(
         stream: Dict[str, Any], source_path: Path, role: Optional[InterviewRole] = None
-    ):
+    ) -> str:
+        """
+        Convert a stream to a SQL query.
+
+        Args:
+            stream (Dict[str, Any]): The stream to convert.
+            source_path (Path): The path to the source file.
+            role (Optional[InterviewRole], optional): The role of the interviewee.
+                Defaults to None.
+
+        Returns:
+            str: The SQL query.
+        """
         if role is None:
             ir_role = "NULL"
         else:
@@ -337,8 +384,17 @@ class FfprobeMetadata:
         return query
 
     def to_sql(self) -> List[str]:
+        """
+        Convert the ffprobe metadata to a list of SQL queries.
+        - inserts the metadata into the ffprobe_metadata table.
+        - inserts the video stream (if any) into the ffprobe_metadata_video table.
+        - inserts the audio stream (if any) into the ffprobe_metadata_audio table.
+
+        Returns:
+            List[str]: A list of SQL queries.
+        """
         streams = self.metadata["streams"]
-        format: Dict[str, str] = self.metadata["format"]  # type: ignore
+        format_dict: Dict[str, str] = self.metadata["format"]  # type: ignore
 
         sql_queries = []
 
@@ -354,13 +410,13 @@ class FfprobeMetadata:
                 fm_tags
             ) VALUES (
                 '{self.source_path}',
-                '{format['format_name']}',
-                '{format['format_long_name']}',
-                '{format['duration']}',
-                '{format['size']}',
-                '{format['bit_rate']}',
-                '{format['probe_score']}',
-                '{db.santize_string(str(format['tags']))}'
+                '{format_dict['format_name']}',
+                '{format_dict['format_long_name']}',
+                '{format_dict['duration']}',
+                '{format_dict['size']}',
+                '{format_dict['bit_rate']}',
+                '{format_dict['probe_score']}',
+                '{db.santize_string(str(format_dict['tags']))}'
             );
         """
 

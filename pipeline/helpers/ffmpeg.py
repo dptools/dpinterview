@@ -1,3 +1,7 @@
+"""
+Helper functions for interacting with FFmpeg.
+"""
+
 import logging
 import sys
 from pathlib import Path

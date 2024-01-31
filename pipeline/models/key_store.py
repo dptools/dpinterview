@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+KeyStore Model
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -24,6 +27,14 @@ console = utils.get_console()
 
 
 class KeyStore:
+    """
+    Represents a key-value pair.
+
+    Attributes:
+        name (str): The name of the key.
+        value (str): The value of the key.
+    """
+
     def __init__(self, name: str, value: str) -> None:
         self.name = name
         self.value = value

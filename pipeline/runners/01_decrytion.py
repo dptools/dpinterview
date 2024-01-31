@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+Decryption Module
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -45,6 +48,16 @@ console = utils.get_console()
 
 
 def get_file_to_decrypt(config_file: Path) -> Optional[Tuple[str, str, str]]:
+    """
+    Retrieves a file to decrypt from the database.
+
+    Args:
+        config_file (Path): The path to the config file.
+
+    Returns:
+        Optional[Tuple[str, str, str]]: A tuple containing the path to the file to decrypt,
+            the interview type, and the interview name.
+    """
     config_params = config(config_file, section="general")
     study_id = config_params["study"]
 
@@ -88,25 +101,32 @@ def construct_dest_dir(
     """
     # Get PARTICIPANT_ID and INTERVIEW_NAME from osir_audio_video_file_path
     # INTERVIEW_NAME = encrypted_file_path.split("/")[-2]
-    PARTICIPANT_ID = str(encrypted_file_path).split("/")[-5]
+    participant_id = str(encrypted_file_path).split("/")[-5]
 
-    DEST_DIR = Path(
+    destination_dir = Path(
         data_root,
         "PROTECTED",
         study_id,
-        PARTICIPANT_ID,
+        participant_id,
         f"{interview_type}_interview",
         "processed",
         "decrypted",
     )
 
-    if not DEST_DIR.exists():
-        DEST_DIR.mkdir(parents=True)
+    if not destination_dir.exists():
+        destination_dir.mkdir(parents=True)
 
-    return Path(DEST_DIR)
+    return Path(destination_dir)
 
 
 def construct_dest_file_name(file_to_decrypt: Path, interview_name: str) -> str:
+    """
+    Constructs a dpdash compliant  destination file name for the decrypted file.
+
+    Args:
+        file_to_decrypt (str): The path to the file to decrypt.
+        interview_name (str): The name of the interview.
+    """
     ext = file_to_decrypt.suffixes[-2]
     dp_dash_dict = dpdash.parse_dpdash_name(interview_name)
     dp_dash_dict["category"] = "audioVideo"
@@ -118,6 +138,15 @@ def construct_dest_file_name(file_to_decrypt: Path, interview_name: str) -> str:
 
 
 def reconstruct_dest_file_name(dest_file_name: str, suffix: str) -> str:
+    """
+    Adds a suffix to the destination file name.
+
+    Handles the case where the destination file name already has a suffix.
+
+    Args:
+        dest_file_name (str): The destination file name.
+        suffix (str): The suffix to add.
+    """
     ext = dest_file_name.split(".")[-1]
     file_name = dest_file_name.split(".")[0]
 
@@ -157,7 +186,7 @@ def get_key_from_config_file(config_file: Path) -> str:
         sys.exit(1)
 
     # Get key from key_file
-    with open(key_file, "r") as f:
+    with open(key_file, "r", encoding="utf-8") as f:
         key = f.read().strip()
 
     return key
@@ -256,7 +285,7 @@ if __name__ == "__main__":
     else:
         decrytion_count = orchestrator.get_decryption_count(config_file=config_file)
 
-    counter = 0
+    COUNTER = 0
 
     while True:
         if orchestrator.check_if_decryption_requested(config_file=config_file):
@@ -264,7 +293,7 @@ if __name__ == "__main__":
             decrytion_count = orchestrator.get_decryption_count(config_file=config_file)
             logger.info(f"decrytion_count: {decrytion_count}")
 
-            while counter < decrytion_count:
+            while COUNTER < decrytion_count:
                 file_to_decrypt_t = get_file_to_decrypt(config_file=config_file)
 
                 if not file_to_decrypt_t:
@@ -308,13 +337,13 @@ if __name__ == "__main__":
                     process_time=timer.duration,
                 )
 
-                counter += 1
+                COUNTER += 1
 
             # Log to database
             data.log(
                 config_file=config_file,
                 module_name=MODULE_NAME,
-                message=f"Decrypted {counter} files.",
+                message=f"Decrypted {COUNTER} files.",
             )
 
             # Set key_store to disabled
@@ -328,4 +357,4 @@ if __name__ == "__main__":
             decrytion_count = orchestrator.get_decryption_count(config_file=config_file)
 
             # Reset counter
-            counter = 0
+            COUNTER = 0

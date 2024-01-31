@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+Run Quick QC on video files
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -47,6 +50,16 @@ console = utils.get_console()
 def get_file_to_process(
     config_file: Path, study_id: str
 ) -> Optional[Tuple[str, float]]:
+    """
+    Fetch a file to process from the database, that has not been processed yet.
+
+    - Fetches a file that has not been processed yet
+    - Fetches a file that is part of the study
+
+    Args:
+        config_file (Path): Path to config file
+        study_id (str): Study ID
+    """
     sql_query = f"""
         SELECT fm.fm_source_path, fm.fm_duration
         FROM ffprobe_metadata AS fm
@@ -80,8 +93,26 @@ def get_file_to_process(
 def check_if_image_has_black_bars(
     image_file: Path, bars_height: float = 0.2, threshold: float = 0.8
 ) -> bool:
+    """
+    Checks if an image has black bars.
+
+    Checks if top and bottom {threshold} of the image has black pixels, if majority of the
+    pixels are black, then the image has black bars.
+
+    Args:
+        image_file (Path): Path to image file
+        bars_height (float, optional): Height of the top and bottom bars. Defaults to 0.2.
+            - 0.2 means 20% of the image height
+        threshold (float, optional): Threshold to determine if the image has black bars.
+            Defaults to 0.8.
+            - If the ratio of black pixels to total pixels is greater than the threshold,
+            then the image has black bars.
+
+    Returns:
+        bool: True if image has black bars, False otherwise
+    """
     image = cv2.imread(str(image_file))
-    height, width, channels = image.shape
+    height, width, _ = image.shape  # height, width, channels
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -105,6 +136,12 @@ def check_if_image_has_black_bars(
 
 
 def get_black_bars_height(image_file: Path) -> float:
+    """
+    Gets the height of the black bars in the image.
+
+    Args:
+        image_file (Path): Path to image file
+    """
     image = cv2.imread(str(image_file))
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -120,7 +157,7 @@ def get_black_bars_height(image_file: Path) -> float:
     # loop over the contours
     for c in contours:
         # get the bounding rectangle of the contour
-        x, y, w, h = cv2.boundingRect(c)
+        _, y, _, h = cv2.boundingRect(c)  # x, y, w, h
         if h < 100:
             continue
         heights_y.append((h, y))
@@ -141,6 +178,14 @@ def get_black_bars_height(image_file: Path) -> float:
 
 
 def sanitize_black_bar_height(height: float) -> float:
+    """
+    Caps the black bar height at 180px
+
+    - This is to avoid the case where the black bar height is the height of the video
+
+    Args:
+        height (float): Black bar height
+    """
     if height > 200:
         return 180
 
@@ -148,6 +193,12 @@ def sanitize_black_bar_height(height: float) -> float:
 
 
 def check_black_bars(screenshots: List[Path]) -> bool:
+    """
+    Checks is a majority of the screenshots have black bars.
+
+    Args:
+        screenshots (List[Path]): List of screenshots
+    """
     black_bar_count = 0
 
     for screenshot in screenshots:
@@ -162,6 +213,12 @@ def check_black_bars(screenshots: List[Path]) -> bool:
 
 
 def get_black_bar_height(screenshots: List[Path]) -> int:
+    """
+    Gets the median black bar height from the screenshots.
+
+    Args:
+        screenshots (List[Path]): List of screenshots
+    """
     black_bar_heights = []
 
     for screenshot in screenshots:
@@ -182,6 +239,17 @@ def get_black_bar_height(screenshots: List[Path]) -> int:
 
 
 def do_video_qqc(video_path: Path, duration: float) -> VideoQuickQc:
+    """
+    Performs video quick qc on a video file.
+
+    - Extracts screenshots from the video
+    - Checks if the video has black bars
+    - Gets the black bar height
+
+    Args:
+        video_path (Path): Path to video file
+        duration (float): Video duration
+    """
     # Get screenshots
     num_screenshots = 10
 
@@ -216,6 +284,13 @@ def log_video_qqc(
     config_file: Path,
     result: VideoQuickQc,
 ) -> None:
+    """
+    Logs the video_qqc result to the database.
+
+    Args:
+        config_file (Path): Path to config file
+        result (VideoQuickQc): VideoQuickQc result
+    """
     sql_query = result.to_sql()
 
     logger.info("Logging video_qqc...", extra={"markup": True})
@@ -234,7 +309,7 @@ if __name__ == "__main__":
     config_params = utils.config(config_file, section="general")
     study_id = config_params["study"]
 
-    counter = 0
+    COUNTER = 0
 
     logger.info("[bold green]Starting video_qqc loop...", extra={"markup": True})
 
@@ -246,19 +321,19 @@ if __name__ == "__main__":
 
         if file_to_process is None:
             # Log if any files were processed
-            if counter > 0:
+            if COUNTER > 0:
                 data.log(
                     config_file=config_file,
                     module_name=MODULE_NAME,
-                    message=f"Checked video_qqc for {counter} files.",
+                    message=f"Checked video_qqc for {COUNTER} files.",
                 )
-                counter = 0
+                COUNTER = 0
 
             # Snooze if no files to process
             orchestrator.snooze(config_file=config_file)
             continue
 
-        counter += 1
+        COUNTER += 1
         logger.info(
             f"[cyan]Checking video_qqc for {file_to_process}...",
             extra={"markup": True},

@@ -1,3 +1,7 @@
+"""
+Interview model
+"""
+
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
@@ -48,6 +52,19 @@ class InterviewType(Enum):
 
 
 class Interview:
+    """
+    Represents an interview.
+
+    Attributes:
+        interview_id (int): The interview ID.
+        interview_name (str): The name of the interview.
+        interview_path (Path): The path to the interview.
+        interview_type (InterviewType): The type of interview.
+        interview_datetime (datetime): The date and time of the interview.
+        subject_id (str): The subject ID.
+        study_id (str): The study ID.
+    """
+
     def __init__(
         self,
         interview_name: str,

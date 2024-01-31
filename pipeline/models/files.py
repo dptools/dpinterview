@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+"""
+File Model
+"""
 
 from pathlib import Path
 from datetime import datetime

@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+Openface Model
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -28,6 +31,18 @@ console = utils.get_console()
 
 
 class Openface:
+    """
+    Represents an Openface Run.
+
+    Attributes:
+        vs_path (Path): The path to the video stream.
+        ir_role (InterviewRole): The role of the interviewee.
+        video_path (Path): The path to the video.
+        of_processed_path (Path): The path to the processed video.
+        of_process_time (float): The time it took to process the video.
+        of_timestamp (datetime): The timestamp of the Openface run.
+    """
+
     def __init__(
         self,
         vs_path: Path,
@@ -112,7 +127,6 @@ if __name__ == "__main__":
 
     sql_queries = drop_queries + create_queries
 
-    sql_query = Openface.init_table_query()
     db.execute_queries(config_file=config_file, queries=sql_queries, show_commands=True)
 
     console.log("'openface' table initialized.")

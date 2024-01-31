@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+OpenfaceQC Model
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -29,6 +32,28 @@ console = utils.get_console()
 
 
 class OpenfaceQC:
+    """
+    Results of the OpenFace quality check.
+
+    Attributes:
+        of_processed_path (Path): The path to the processed video.
+        faces_count (int): The number of faces detected.
+        frames_count (int): The number of frames in the video.
+        sucessful_frames_count (int): The number of frames with a confidence
+            score above the threshold.
+        sucessful_frames_percentage (float): The percentage of frames with a
+            confidence score above the threshold.
+        successful_frames_confidence_mean (float): The mean confidence score of
+            the successful frames.
+        successful_frames_confidence_std (float): The standard deviation of
+            the confidence scores of the successful frames.
+        successful_frames_confidence_median (float): The median confidence
+            score of the successful frames.
+        passed (bool): Whether or not the video passed the quality check.
+        ofqc_process_time (float): The time it took to process the video.
+        ofqc_timestamp (datetime): The timestamp of the OpenFace quality check.
+    """
+
     def __init__(
         self,
         of_processed_path: Path,

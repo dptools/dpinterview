@@ -1,15 +1,22 @@
 #!/usr/bin/env python
+"""
+Split video streams into individual files
+
+Splits Videos into
+- Left - Participant and
+- Right - Interviewer
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -45,6 +52,15 @@ console = utils.get_console()
 def get_file_to_process(
     config_file: Path, study_id: str
 ) -> Optional[Tuple[Path, bool, int]]:
+    """
+    Fetch a file to process from the database.
+
+    - Fetches a file that has not been processed yet and is part of the study.
+        - Must have metadata extracted
+
+    Args:
+        config_file (Path): Path to config file
+    """
     sql_query = f"""
         SELECT vqqc.video_path, vqqc.has_black_bars, vqqc.black_bar_height
         FROM video_quick_qc AS vqqc
@@ -79,6 +95,14 @@ def get_file_to_process(
 
 
 def construct_stream_path(video_path: Path, role: InterviewRole, suffix: str) -> Path:
+    """
+    Constructs a dpdash compliant stream path
+
+    Args:
+        video_path (Path): Path to video
+        role (InterviewRole): Role of the stream
+        suffix (str): Suffix of the stream
+    """
     dpdash_dict = dpdash.parse_dpdash_name(video_path.name)
     if dpdash_dict["optional_tags"] is None:
         optional_tag: List[str] = []
@@ -105,6 +129,15 @@ def split_streams(
     black_bar_height: Optional[int],
     config_file: Path,
 ) -> List[VideoStream]:
+    """
+    Split video into streams
+
+    Args:
+        video_path (Path): Path to video
+        has_black_bars (bool): Whether video has black bars
+        black_bar_height (Optional[int]): Height of black bars
+        config_file (Path): Path to config file
+    """
     config_params = utils.config(path=config_file, section="split-streams")
     default_role = InterviewRole.from_str(config_params["default_role"])
 
@@ -162,6 +195,13 @@ def split_streams(
 
 
 def log_streams(config_file: Path, streams: List[VideoStream]) -> None:
+    """
+    Log streams to database.
+
+    Args:
+        config_file (Path): Path to config file
+        streams (List[VideoStream]): List of streams
+    """
     sql_queries = [stream.to_sql() for stream in streams]
 
     logger.info("Inserting streams into DB", extra={"markup": True})
@@ -180,8 +220,8 @@ if __name__ == "__main__":
     config_params = utils.config(config_file, section="general")
     study_id = config_params["study"]
 
-    counter = 0
-    streams_counter = 0
+    COUNTER = 0
+    STREAMS_COUNTER = 0
 
     logger.info("[bold green]Starting split streams loop...", extra={"markup": True})
 
@@ -193,20 +233,20 @@ if __name__ == "__main__":
 
         if file_to_process is None:
             # Log if any files were processed
-            if counter > 0:
+            if COUNTER > 0:
                 data.log(
                     config_file=config_file,
                     module_name=MODULE_NAME,
-                    message=f"Split {counter} files into {streams_counter} streams.",
+                    message=f"Split {COUNTER} files into {STREAMS_COUNTER} streams.",
                 )
-                counter = 0
-                streams_counter = 0
+                COUNTER = 0
+                STREAMS_COUNTER = 0
 
             # Snooze if no files to process
             orchestrator.snooze(config_file=config_file)
             continue
 
-        counter += 1
+        COUNTER += 1
 
         video_path = Path(file_to_process[0])
         has_black_bars = bool(file_to_process[1])
@@ -233,6 +273,6 @@ if __name__ == "__main__":
             black_bar_height=black_bar_height,
             config_file=config_file,
         )
-        streams_counter += len(streams)
+        STREAMS_COUNTER += len(streams)
 
         log_streams(config_file=config_file, streams=streams)

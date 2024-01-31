@@ -1,3 +1,5 @@
+""" pipeline ochestration module """
+
 import sys
 import time
 from pathlib import Path
@@ -7,6 +9,15 @@ from pipeline.helpers.config import config
 
 
 def get_decryption_count(config_file: Path) -> int:
+    """
+    Gets the number of files to decrypt from the configuration file.
+
+    Args:
+        config_file (str): The path to the configuration file.
+
+    Returns:
+        int: The number of files to decrypt.
+    """
     orchestration_params = config(config_file, section="orchestration")
     num_to_decrypt = int(orchestration_params["num_to_decrypt"])
     return num_to_decrypt
@@ -194,6 +205,16 @@ def get_max_instances(
     config_file: Path,
     module_name: str,
 ) -> int:
+    """
+    Returns the maximum number of instances of a module that can be run at once.
+
+    Args:
+        config_file (str): The path to the configuration file.
+        module_name (str): The name of the module.
+
+    Returns:
+        int: The maximum number of instances of a module that can be run at once.
+    """
     config_params = config(config_file, section="orchestration")
     max_instances = int(config_params[f"{module_name}_max_instances"])
 

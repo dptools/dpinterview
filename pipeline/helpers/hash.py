@@ -1,3 +1,7 @@
+"""
+Helper functions for computing hash digests of files.
+"""
+
 import hashlib
 from pathlib import Path
 

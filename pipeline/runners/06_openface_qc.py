@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+Performs quality control on OpenFace output.
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -43,6 +46,19 @@ console = utils.get_console()
 
 
 def get_file_to_process(config_file: Path, study_id: str) -> Optional[Path]:
+    """
+    Fetches a file to process from the database.
+
+    - Fetches a file that has not been processed yet.
+        - Must be processed by OpenFace.
+
+    Args:
+        config_file (Path): Path to the config file.
+        study_id (str): Study ID.
+
+    Returns:
+        Optional[Path]: Path to the file to process.
+    """
     sql_query = f"""
         SELECT of_processed_path
         FROM openface AS of
@@ -129,6 +145,13 @@ def openface_qc(of_processed_path: Path) -> OpenfaceQC:
 
 
 def log_openface_qc(config_file: Path, openface_qc_result: OpenfaceQC) -> None:
+    """
+    Logs the results of the OpenFace QC to the database.
+
+    Args:
+        config_file (Path): Path to the config file.
+        openface_qc_result (OpenfaceQC): Object containing the results of the quality control.
+    """
     query = openface_qc_result.to_sql()
 
     db.execute_queries(config_file=config_file, queries=[query], show_commands=True)
@@ -146,7 +169,7 @@ if __name__ == "__main__":
     config_params = utils.config(config_file, section="general")
     study_id = config_params["study"]
 
-    counter = 0
+    COUNTER = 0
 
     logger.info("[bold green]Starting openface_qc loop...", extra={"markup": True})
 
@@ -158,20 +181,19 @@ if __name__ == "__main__":
 
         if file_to_process is None:
             # Log if any files were processed
-            if counter > 0:
+            if COUNTER > 0:
                 data.log(
                     config_file=config_file,
                     module_name=MODULE_NAME,
-                    message=f"Ran OpenFace QC on {counter} files.",
+                    message=f"Ran OpenFace QC on {COUNTER} files.",
                 )
-                counter = 0
-                streams_counter = 0
+                COUNTER = 0
 
             # Snooze if no files to process
             orchestrator.snooze(config_file=config_file)
             continue
 
-        counter += 1
+        COUNTER += 1
         logger.info(
             f"[cyan]Running OpenFace QC on {file_to_process.stem}...",
             extra={"markup": True},

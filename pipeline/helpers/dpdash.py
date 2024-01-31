@@ -1,3 +1,7 @@
+"""
+Module that provides helper functions for working with dpdash-compliant names.
+"""
+
 from typing import Dict, Union
 from typing import Optional, List
 from datetime import datetime
@@ -21,8 +25,9 @@ def get_time_range(consent_date: datetime, event_date: datetime) -> str:
     """
     Generates a time range string in the format {consent_date}to{event_date}.
 
-    Note: Consent day is considered as day1, event day is computed as the number of days between consent date and
-    event date. If the event date is the same as the consent date, then event day is considered as day1: day1to1
+    Note: Consent day is considered as day1, event day is computed as the number of days
+    between consent date and event date. If the event date is the same as the consent
+    date, then event day is considered as day1: day1to1
 
     Args:
         consent_date (datetime): The consent date.
@@ -45,8 +50,9 @@ def get_dpdash_timepoint(consent_date: datetime, event_date: datetime) -> str:
     Generates a DPDash compliant timepoint string in the format dayXXX, where
     XXX is the number of days between consent date and event date.
 
-    Note: Consent day is considered as day1, event day is computed as the number of days between consent date and
-    event date. If the event date is the same as the consent date, then event day is considered as day1: day1
+    Note: Consent day is considered as day1, event day is computed as the number of
+    days between consent date and event date. If the event date is the same as the
+    consent date, then event day is considered as day1: day1
 
     Args:
         consent_date (datetime): The consent date.
@@ -100,17 +106,19 @@ def get_dpdash_name(
     | optional_tag | _ | underscore |
 
     ## Time Range
-    Time Range is generated as {consent_date}to{event_date}: Example: NtoM, where N is the consent date and M
-    is the event date.
+    Time Range is generated as {consent_date}to{event_date}: Example: NtoM, where N is the
+    consent date and M is the event date.
 
-    Note: Consent day is considered as day1, event day is computed as the number of days between consent date and
-    event date. If the event date is the same as the consent date, then event day is considered as day1: day1to1
+    Note: Consent day is considered as day1, event day is computed as the number of days
+    between consent date and event date. If the event date is the same as the consent date,
+    then event day is considered as day1: day1to1
 
     ## Examples
-    - CAMI-ABC123-onsiteInterview_video-day1to1.mp4: CAMI study, ABC123 subject, onsiteInterview data
-    type, video category, consent date and event date are the same
-    - CAMI-ABC123-onsiteInterview_day1to2.mp4: CAMI study, ABC123 subject, onsiteInterview data type,
-    no category specified, consent date is say 01/01/2021 and event date is 02/01/2021
+    - CAMI-ABC123-onsiteInterview_video-day1to1.mp4: CAMI study, ABC123 subject,
+    onsiteInterview data type, video category, consent date and event date are the same
+    - CAMI-ABC123-onsiteInterview_day1to2.mp4: CAMI study, ABC123 subject,
+    onsiteInterview data type, no category specified, consent date is say
+    01/01/2021 and event date is 02/01/2021
 
     Args:
         study (str): The study ID.
@@ -145,7 +153,8 @@ def get_dpdash_name(
         name += f"_{category}"
 
     # tags joined by underscore, e.g. test_test2
-    # attached to the end of the name by - e.g. CAMI-ABC123-onsiteInterview_video_test_test2-day1to1.mp4
+    # attached to the end of the name by
+    # - e.g. CAMI-ABC123-onsiteInterview_video_test_test2-day1to1.mp4
     if optional_tag:
         name += f"_{('_').join(optional_tag)}"
 
@@ -156,7 +165,8 @@ def get_dpdash_name(
 
 def parse_dpdash_name(name: str) -> Dict[str, Union[str, List[str], None]]:
     """
-    Parses a string in the format of a dpdash file name and returns a dictionary with the parsed values.
+    Parses a string in the format of a dpdash file name and returns a dictionary
+    with the parsed values.
 
     Args:
         name (str): The dpdash file name to parse.
@@ -200,19 +210,23 @@ def parse_dpdash_name(name: str) -> Dict[str, Union[str, List[str], None]]:
     }
 
 
-def get_dpdash_name_from_dict(dict: Dict[str, Union[str, List[str], None]]) -> str:
+def get_dpdash_name_from_dict(
+    dpdash_dict: Dict[str, Union[str, List[str], None]]
+) -> str:
     """
     Given a dictionary containing the required and optional fields for a dpdash name,
     returns the dpdash name as a string.
 
     Args:
-        dict: A dictionary containing the following keys:
+        dpdash_dict: A dictionary containing the following keys:
             - study (str): The name of the study.
             - subject (str): The subject ID.
             - data_type (str): The type of data.
             - time_range (str): The time range of the data.
-            - category (List[str], optional): A list of categories for the data. Defaults to None.
-            - optional_tags (List[str], optional): A list of optional tags for the data. Defaults to None.
+            - category (List[str], optional): A list of categories for the data.
+                Defaults to None.
+            - optional_tags (List[str], optional): A list of optional tags for the data.
+                Defaults to None.
 
     Returns:
         The dpdash name as a string.
@@ -224,19 +238,19 @@ def get_dpdash_name_from_dict(dict: Dict[str, Union[str, List[str], None]]) -> s
     optional_fields = ["category", "optional_tags"]
 
     for field in required_fields:
-        if field not in dict:
+        if field not in dpdash_dict:
             raise ValueError(f"Missing required field: {field}")
 
     for field in optional_fields:
-        if field not in dict:
-            dict[field] = None
+        if field not in dpdash_dict:
+            dpdash_dict[field] = None
 
     name = get_dpdash_name(
-        study=dict["study"],  # type: ignore
-        subject=dict["subject"],  # type: ignore
-        data_type=dict["data_type"],  # type: ignore
-        category=dict["category"],  # type: ignore
-        optional_tag=dict["optional_tags"],  # type: ignore
-        time_range=dict["time_range"],  # type: ignore
+        study=dpdash_dict["study"],  # type: ignore
+        subject=dpdash_dict["subject"],  # type: ignore
+        data_type=dpdash_dict["data_type"],  # type: ignore
+        category=dpdash_dict["category"],  # type: ignore
+        optional_tag=dpdash_dict["optional_tags"],  # type: ignore
+        time_range=dpdash_dict["time_range"],  # type: ignore
     )
     return name

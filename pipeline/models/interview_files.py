@@ -1,9 +1,22 @@
+"""
+InterviewFiles model
+"""
+
 from pathlib import Path
 
 from pipeline.helpers import db
 
 
 class InterviewFile:
+    """
+    Represents a file associated with an interview.
+
+    Attributes:
+        interview_path (Path): The path to the interview.
+        interview_file (Path): The path to the file.
+        tags (str): The tags associated with the file.
+    """
+
     def __init__(self, interview_path: Path, interview_file: Path, tags: str):
         self.interview_path = interview_path
         self.interview_file = interview_file

@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+Helper funtions for interacting with the ffprobe
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
-root = None
+ROOT = None
 parent = file.parent
 for parent in file.parents:
     if parent.name == "pipeline":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -24,17 +27,38 @@ import argparse
 import json
 import subprocess
 from typing import NamedTuple
+import logging
 
 from pipeline.helpers import cli
 
 
 class FFProbeResult(NamedTuple):
+    """
+    Represents the result of an FFProbe command.
+
+    Attributes:
+        return_code (int): The return code of the FFProbe command.
+        json (str): The JSON output of the FFProbe command.
+        error (str): Any error message produced by the FFProbe command.
+    """
+
     return_code: int
     json: str
     error: str
 
 
 def get_metadata(config_file: Path, file_path_to_process: Path) -> dict:
+    """
+    Retrieves metadata from a file using ffprobe.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+            - contains singularity image path
+        file_path_to_process (Path): The path to the file to retrieve metadata from.
+
+    Returns:
+        dict: A dictionary containing the metadata retrieved from the file.
+    """
     ffprobe_result = ffprobe(file_path_to_process, config_file=config_file)
 
     if ffprobe_result.return_code != 0:
@@ -47,6 +71,16 @@ def get_metadata(config_file: Path, file_path_to_process: Path) -> dict:
 
 
 def ffprobe(file_path, config_file=None) -> FFProbeResult:
+    """
+    Runs ffprobe on a file and returns the result.
+
+    Args:
+        file_path (Path): The path to the file to run ffprobe on.
+        config_file (Path, optional): The path to the configuration file. Defaults to None.
+
+    Returns:
+        FFProbeResult: The result of the ffprobe command.
+    """
     command_array = [
         "ffprobe",
         "-v",
@@ -63,7 +97,8 @@ def ffprobe(file_path, config_file=None) -> FFProbeResult:
             config_file=config_file, command_array=command_array
         )
 
-    print(" ".join(command_array))
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Running ffprobe command: {' '.join(command_array)}")
 
     result = subprocess.run(
         " ".join(command_array),
@@ -71,6 +106,7 @@ def ffprobe(file_path, config_file=None) -> FFProbeResult:
         stderr=subprocess.PIPE,
         universal_newlines=True,
         shell=True,
+        check=False,
     )
 
     return FFProbeResult(
@@ -85,7 +121,7 @@ if __name__ == "__main__":
     if not Path(args.input).is_file():
         print("could not read file: " + args.input)
         exit(1)
-    print("File:       {}".format(args.input))
+    print(f"File:       {args.input}")
     ffprobe_result = ffprobe(file_path=args.input)
     if ffprobe_result.return_code == 0:
         # Print the raw json string

@@ -1,3 +1,7 @@
+"""
+Models Database tables, and contains functions to initialize the database.
+"""
+
 from pathlib import Path
 from typing import List, Union
 
@@ -15,6 +19,15 @@ from pipeline.helpers import db
 
 
 def flatten_list(coll: list) -> list:
+    """
+    Flattens a list of lists into a single list.
+
+    Args:
+        coll (list): List of lists.
+
+    Returns:
+        list: Flattened list.
+    """
     flat_list = []
     for i in coll:
         if isinstance(i, list):
@@ -25,6 +38,15 @@ def flatten_list(coll: list) -> list:
 
 
 def init_db(config_file: Path):
+    """
+    Initializes the database.
+
+    WARNING: This will drop all tables and recreate them.
+    DO NOT RUN THIS IN PRODUCTION.
+
+    Args:
+        config_file (Path): Path to the config file.
+    """
     drop_queries: List[str] = [
         InterviewFile.drop_table_query(),
         Interview.drop_table_query(),

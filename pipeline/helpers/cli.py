@@ -1,3 +1,7 @@
+"""
+Module providing command line interface for the pipeline.
+"""
+
 import logging
 import shutil
 import subprocess
@@ -31,7 +35,7 @@ def check_if_running(process_name: str) -> bool:
         bool: True if the process is running, False otherwise.
     """
     command = f"ps -ef | grep -v grep | grep -c {process_name}"
-    result = subprocess.run(command, stdout=subprocess.PIPE, shell=True)
+    result = subprocess.run(command, stdout=subprocess.PIPE, shell=True, check=True)
     num_processes = int(result.stdout.decode("utf-8"))
     return num_processes > 0
 
@@ -86,8 +90,10 @@ def execute_commands(
     Args:
         command_array (list): The command to execute as a list of strings.
         shell (bool, optional): Whether to execute the command in a shell. Defaults to False.
-        logger (Optional[logging.Logger], optional): The logger to use for logging. Defaults to None.
-        on_fail (Callable, optional): The function to call if the command fails. Defaults to lambda: sys.exit(1).
+        logger (Optional[logging.Logger], optional): The logger to use for logging.
+            Defaults to None.
+        on_fail (Callable, optional): The function to call if the command fails.
+            Defaults to lambda: sys.exit(1).
 
     Returns:
         subprocess.CompletedProcess: The result of the command execution.
@@ -111,15 +117,16 @@ def execute_commands(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=True,
+            check=False,
         )
     else:
         result = subprocess.run(
-            command_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            command_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False
         )
 
     if result.returncode != 0:
         logger.error("=====================================")
-        logger.error("Command: " + " ".join(command_array))
+        logger.error("Command: %s", " ".join(command_array))
         logger.error("=====================================")
         logger.error("stdout:")
         logger.error(result.stdout.decode("utf-8"))
@@ -127,7 +134,7 @@ def execute_commands(
         logger.error("stderr:")
         logger.error(result.stderr.decode("utf-8"))
         logger.error("=====================================")
-        logger.error("Exit code: " + str(result.returncode))
+        logger.error("Exit code: %s", str(result.returncode))
         logger.error("=====================================")
 
         if on_fail:
@@ -187,7 +194,7 @@ def send_email(
     message: str,
     recipients: List[str],
     sender: str,
-    attachments: List[Path] = [],
+    attachments: Optional[List[Path]] = None,
     logger: Optional[logging.Logger] = None,
 ) -> None:
     """
@@ -200,8 +207,10 @@ def send_email(
         message (str): The message of the email.
         recipients (List[str]): The recipients of the email.
         sender (str): The sender of the email.
-        attachments (List[Path], optional): The attachments to add to the email. Defaults to [].
-        logger (Optional[logging.Logger], optional): The logger to use for logging. Defaults to None.
+        attachments (List[Path], optional): The attachments to add to the email.
+            Defaults to None.
+        logger (Optional[logging.Logger], optional): The logger to use for logging.
+            Defaults to None.
 
     Returns:
         None
@@ -225,7 +234,7 @@ def send_email(
         temp.write("\n")
         temp.write(message)
         temp.write("\n")
-        if attachments:
+        if attachments is not None:
             temp.write("\n")
             temp.write(f"{len(attachments)} Attachment(s):\n")
             for attachment in attachments:
@@ -238,8 +247,9 @@ def send_email(
             f"'{subject}'",  # wrap subject in quotes to avoid issues with special characters
         ]
 
-        for attachment in attachments:
-            command_array += ["-a", str(attachment)]
+        if attachments is not None:
+            for attachment in attachments:
+                command_array += ["-a", str(attachment)]
 
         command_array += recipients
 

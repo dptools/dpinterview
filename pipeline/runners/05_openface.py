@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+Runs OpenFace on video streams
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -47,6 +50,20 @@ console = utils.get_console()
 def get_file_to_process(
     config_file: Path, study_id: str
 ) -> Optional[Tuple[Path, InterviewRole, Path]]:
+    """
+    Fetch a file to process from the database.
+
+    - Fetches a file that has not been processed yet and is part of the study.
+        - Must have completed split-streams process
+
+    Args:
+        config_file (Path): Path to config file
+        study_id (str): Study ID
+
+    Returns:
+        Optional[Tuple[Path, InterviewRole, Path]]: Tuple of video stream path,
+            interview role, and video path
+    """
     sql_query = f"""
         SELECT vs.vs_path, vs.ir_role, vs.video_path
         FROM video_streams AS vs
@@ -82,6 +99,21 @@ def get_file_to_process(
 def get_other_stream_to_process(
     config_file: Path, video_path: Path
 ) -> Optional[Tuple[Path, InterviewRole, Path]]:
+    """
+    Fetch a file to process from the database.
+
+    - Fetches a file that has not been processed yet and
+        is part of the study.
+    - Fetches video stream that is part of the same video as the
+        video stream that was just processed.
+
+    Args:
+        config_file (Path): Path to config file
+
+    Returns:
+        Optional[Tuple[Path, InterviewRole, Path]]: Tuple of video stream path,
+            interview role, and video path
+    """
     sql_query = f"""
         SELECT vs.vs_path, vs.ir_role, vs.video_path
         FROM video_streams AS vs
@@ -104,6 +136,13 @@ def get_other_stream_to_process(
 
 
 def construct_output_path(config_file: Path, video_path: Path) -> Path:
+    """
+    Construct output path for OpenFace output
+
+    Args:
+        config_file (Path): Path to config file
+        video_path (Path): Path to video
+    """
     config_params = utils.config(path=config_file, section="general")
     data_root = Path(config_params["data_root"])
 
@@ -151,6 +190,14 @@ def construct_output_path(config_file: Path, video_path: Path) -> Path:
 def run_openface(
     config_file: Path, file_path_to_process: Path, output_path: Path
 ) -> None:
+    """
+    Run OpenFace on a video stream
+
+    Args:
+        config_file (Path): Path to config file
+        file_path_to_process (Path): Path to video stream
+        output_path (Path): Path to output directory
+    """
     params = utils.config(config_file, section="openface")
 
     max_retry = int(params["openface_max_retry"])
@@ -232,6 +279,18 @@ def log_openface(
     openface_path: Path,
     process_time: Optional[float] = None,
 ) -> None:
+    """
+    Log OpenFace to database
+
+    Args:
+        config_file (Path): Path to config file
+        video_stream_path (Path): Path to video stream
+        interview_role (InterviewRole): Interview role
+        video_path (Path): Path to video
+        openface_path (Path): Path to OpenFace output
+        process_time (Optional[float], optional): Time it took to process the video.
+            Defaults to None.
+    """
     openface = Openface(
         vs_path=video_stream_path,
         ir_role=interview_role,
@@ -247,6 +306,13 @@ def log_openface(
 
 
 def await_decrytion(config_file: Path, counter: int) -> None:
+    """
+    Request decryption and snooze if no more files to process
+
+    Args:
+        config_file (Path): Path to config file
+        counter (int): Number of files processed
+    """
     # Log if any files were processed
     if counter > 0:
         data.log(
@@ -277,18 +343,18 @@ if __name__ == "__main__":
         module_name=INSTANCE_NAME, process_name=sys.argv[0]
     )
 
-    counter = 0
-    skip_counter = 0
+    COUNTER = 0
+    SKIP_COUNTER = 0
 
     logger.info("[bold green]Starting OpenFace loop...", extra={"markup": True})
 
-    stash: Optional[Tuple[Path, InterviewRole, Path]] = None
+    STASH: Optional[Tuple[Path, InterviewRole, Path]] = None
 
     while True:
         # Get file to process
-        if stash is not None:
-            file_to_process = stash
-            stash = None
+        if STASH is not None:
+            file_to_process = STASH
+            STASH = None
         else:
             file_to_process = get_file_to_process(
                 config_file=config_file, study_id=study_id
@@ -296,8 +362,8 @@ if __name__ == "__main__":
 
         if file_to_process is None:
             console.log("[bold green] No file to process.")
-            await_decrytion(config_file=config_file, counter=counter)
-            counter = 0
+            await_decrytion(config_file=config_file, counter=COUNTER)
+            COUNTER = 0
             continue
 
         video_stream_path, interview_role, video_path = file_to_process
@@ -316,23 +382,23 @@ if __name__ == "__main__":
             logger.warning(
                 f"Another process is running with the same file: {video_stream_path}"
             )
-            skip_counter += 1
-            if skip_counter > orchestrator.get_max_instances(
+            SKIP_COUNTER += 1
+            if SKIP_COUNTER > orchestrator.get_max_instances(
                 config_file=config_file,
                 module_name=MODULE_NAME,
             ):
                 console.log("[bold red]Max number of instances reached. Snoozing...")
-                await_decrytion(config_file=config_file, counter=counter)
-                skip_counter = 0
-                counter = 0
+                await_decrytion(config_file=config_file, counter=COUNTER)
+                SKIP_COUNTER = 0
+                COUNTER = 0
                 continue
             file_to_process = get_file_to_process(
                 config_file=config_file, study_id=study_id
             )
             continue
         else:
-            skip_counter = 0
-            counter += 1
+            SKIP_COUNTER = 0
+            COUNTER += 1
 
         logger.info(
             f"Processing {video_stream_path} as {interview_role} from {video_path}"
@@ -358,7 +424,7 @@ if __name__ == "__main__":
 
         # Get other stream to process
         logger.info(f"Checking for other stream to process from {video_path}")
-        stash = get_other_stream_to_process(
+        STASH = get_other_stream_to_process(
             config_file=config_file, video_path=video_path
         )
 

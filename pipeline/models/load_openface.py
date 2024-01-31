@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+LoadOpenface Model
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -27,6 +30,21 @@ console = utils.get_console()
 
 
 class LoadOpenface:
+    """
+    Represents a row in the 'load_openface' table.
+
+    Attributes:
+        interview_name (str): The name of the interview.
+        subject_id (str): The ID of the subject.
+        study_id (str): The ID of the study.
+        subject_of_processed_path (str): The path to the processed subject video.
+        interviewer_of_processed_path (str): The path to the processed interviewer video.
+        lof_notes (str): Notes about the load openface process.
+        lof_process_time (float): The time it took to process the videos.
+        lof_report_generation_possible (bool): Whether or not a report can be generated.
+        lof_timestamp (datetime): The timestamp of the load openface process.
+    """
+
     def __init__(
         self,
         interview_name: str,
@@ -49,7 +67,8 @@ class LoadOpenface:
         self.lof_timestamp = datetime.now()
 
     def __repr__(self):
-        return f"LoadOpenface({self.interview_name}, {self.subject_id}, {self.subject_of_processed_path}, \
+        return f"LoadOpenface({self.interview_name}, {self.subject_id}, \
+            {self.subject_of_processed_path}, \
             {self.interviewer_of_processed_path}, {self.lof_notes}, {self.lof_process_time}, \
             {self.lof_report_generation_possible}, {self.lof_timestamp})"
 

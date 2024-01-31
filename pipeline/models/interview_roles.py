@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+InterviewRole Model
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -34,7 +37,7 @@ class InterviewRole(Enum):
     SUBJECT = "subject"
 
     @staticmethod
-    def from_str(str: str) -> "InterviewRole":
+    def from_str(role: str) -> "InterviewRole":
         """
         Return the InterviewRole enum value from the given string.
 
@@ -44,12 +47,12 @@ class InterviewRole(Enum):
         Returns:
             InterviewRole: The InterviewRole enum value.
         """
-        if str == "interviewer":
+        if role == "interviewer":
             return InterviewRole.INTERVIEWER
-        elif str == "subject":
+        elif role == "subject":
             return InterviewRole.SUBJECT
         else:
-            raise ValueError(f"Invalid interview role: {str}")
+            raise ValueError(f"Invalid interview role: {role}")
 
     @staticmethod
     def init_table_query() -> List[str]:

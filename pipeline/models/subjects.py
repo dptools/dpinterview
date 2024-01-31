@@ -1,9 +1,24 @@
+"""
+Subject Model
+"""
+
 from datetime import datetime
 
 from pipeline.helpers import db
 
 
 class Subject:
+    """
+    Represents a subject / study participant.
+
+    Attributes:
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+        is_active (bool): Whether or not the subject is active.
+        consent_date (datetime): The date the subject consented to the study.
+        optional_notes (dict): Optional notes about the subject.
+    """
+
     def __init__(
         self,
         study_id: str,

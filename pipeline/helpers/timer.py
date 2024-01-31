@@ -1,3 +1,7 @@
+"""
+Helper class for measuring the execution time of a block of code.
+"""
+
 from datetime import datetime
 from typing import Optional
 
@@ -28,4 +32,4 @@ class Timer:
         if self.start is not None:
             self.duration = (self.end - self.start).total_seconds()
         else:
-            raise Exception("Timer was not initialized.")
+            raise ValueError("Timer was not started.")

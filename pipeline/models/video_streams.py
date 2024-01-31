@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+VideoStream Model
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -26,6 +29,19 @@ console = utils.get_console()
 
 
 class VideoStream:
+    """
+    Represent a VideoStream.
+
+    A VideoStream is a video with a role in an interview.
+    This VideoStream is processed by OpenFace.
+
+    Attributes:
+        video_path (Path): The path to the video.
+        ir_role (InterviewRole): The role of the interviewee.
+        vs_path (Path): The path to the video stream.
+        vs_process_time (Optional[float]): The time it took to process the video stream.
+    """
+
     def __init__(
         self,
         video_path: Path,
@@ -102,7 +118,6 @@ if __name__ == "__main__":
 
     sql_queries = drop_queries + create_queries
 
-    sql_query = VideoStream.init_table_query()
     db.execute_queries(config_file=config_file, queries=sql_queries, show_commands=True)
 
     console.log("'video_streams' table initialized.")

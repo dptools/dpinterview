@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+Initializes the Openface features table.
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -43,6 +46,14 @@ logging.basicConfig(**logargs)
 
 
 def generate_create_query(config_file: Path, csv_file: Path) -> str:
+    """
+    Generates the create query for the OpenFace features table., by using the
+    sample csv file.
+
+    Args:
+        config_file (Path): Path to the config file.
+        csv_file (Path): Path to the sample csv file (OpenFace output).
+    """
     datatypes = data.get_openface_datatypes(config_file=config_file, csv_file=csv_file)
 
     query = """
@@ -68,6 +79,12 @@ def generate_create_query(config_file: Path, csv_file: Path) -> str:
 
 
 def finalize() -> List[str]:
+    """
+    Creates indexes and views, for the OpenFace features table.
+
+    Returns:
+        List[str]: List of queries.
+    """
     queries = []
 
     index_queries = [

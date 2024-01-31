@@ -1,3 +1,4 @@
+"""  Module contain helper functions specific to this data pipeline """
 from pathlib import Path
 from typing import Optional, List, Dict
 

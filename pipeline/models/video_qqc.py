@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+VideoQuickQc Model
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -25,6 +28,16 @@ console = utils.get_console()
 
 
 class VideoQuickQc:
+    """
+    Results from the video quick qc process.
+
+    Attributes:
+        video_path (Path): The path to the video.
+        has_black_bars (bool): Whether or not the video has black bars.
+        black_bar_height (Optional[int]): The height of the black bars.
+        process_time (Optional[float]): The time it took to process the video.
+    """
+
     def __init__(
         self,
         video_path: Path,

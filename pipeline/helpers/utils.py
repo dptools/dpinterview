@@ -1,3 +1,7 @@
+"""
+Helper functions for the pipeline
+"""
+
 import logging
 import re
 from pathlib import Path
@@ -119,6 +123,19 @@ def get_instance_name(module_name: str, process_name: str) -> str:
 
 
 def camel_case_split(word: str) -> List[str]:
+    """
+    Splits a camel case word into a list of lowercase words.
+
+    Args:
+        word (str): The camel case word to be split.
+
+    Returns:
+        List[str]: A list of lowercase words.
+
+    Example:
+        >>> camel_case_split("camelCaseWord")
+        ['camel', 'case', 'word']
+    """
     # If first character is lowercase make it uppercase
     word = word[0].upper() + word[1:]
     parts: List[str] = re.findall(r"[A-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))", word)

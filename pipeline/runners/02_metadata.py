@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+"""
+Gather metadata for files
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -42,6 +45,15 @@ console = utils.get_console()
 
 
 def get_file_to_process(config_file: Path, study_id: str) -> Optional[str]:
+    """
+    Fetch a file to process from the database.
+
+    Fetches a file that has not been processed yet and is part of the study.
+
+    Args:
+        config_file (Path): Path to config file
+        study_id (str): Study ID
+    """
     sql_query = f"""
         SELECT destination_path
         FROM decrypted_files
@@ -63,6 +75,14 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[str]:
 
 
 def log_metadata(source: Path, metadata: Dict, config_file: Path) -> None:
+    """
+    Logs metadata to the database.
+
+    Args:
+        source (Path): Path to source file
+        metadata (Dict): Metadata to log
+        config_file (Path): Path to config file
+    """
     ffprobe_metadata = FfprobeMetadata(
         source_path=source,
         metadata=metadata,
@@ -86,7 +106,7 @@ if __name__ == "__main__":
     config_params = utils.config(config_file, section="general")
     study_id = config_params["study"]
 
-    counter = 0
+    COUNTER = 0
 
     logger.info(
         "[bold green]Starting metadata gathering loop...", extra={"markup": True}
@@ -99,19 +119,19 @@ if __name__ == "__main__":
 
         if file_to_process is None:
             # Log if any files were processed
-            if counter > 0:
+            if COUNTER > 0:
                 data.log(
                     config_file=config_file,
                     module_name=MODULE_NAME,
-                    message=f"Gathered metadata for {counter} files.",
+                    message=f"Gathered metadata for {COUNTER} files.",
                 )
-                counter = 0
+                COUNTER = 0
 
             # Snooze if no files to process
             orchestrator.snooze(config_file=config_file)
             continue
 
-        counter += 1
+        COUNTER += 1
         logger.info(
             f"[cyan] Getting Metadata for{file_to_process}...", extra={"markup": True}
         )

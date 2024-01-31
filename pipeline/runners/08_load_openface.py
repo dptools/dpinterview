@@ -1,15 +1,20 @@
 #!/usr/bin/env python
+"""
+Loads OpenFace Features into openface_db
+
+Determines in Interview is ready for report generation.
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -44,6 +49,16 @@ console = utils.get_console()
 
 
 def get_interview_to_process(config_file: Path, study_id: str):
+    """
+    Fetch an interview to process from the database.
+
+    - Fetches an interview that has not been processed yet.
+        - Must be processed by OpenFace.
+
+    Args:
+        config_file (Path): Path to the config file.
+        study_id (str): Study ID.
+    """
     query = f"""
     SELECT interview_files.interview_name
     FROM openface
@@ -80,6 +95,13 @@ def get_interview_to_process(config_file: Path, study_id: str):
 
 
 def get_openface_runs(config_file: Path, interview_name: str) -> pd.DataFrame:
+    """
+    Retrives all OpenFace runs for an interview. (Interviewer and Subject)
+
+    Args:
+        config_file (Path): Path to the config file.
+        interview_name (str): The name of the interview.
+    """
     query = f"""
     SELECT openface.of_processed_path, openface.ir_role, interview_files.interview_name
     FROM openface
@@ -102,6 +124,13 @@ def get_openface_runs(config_file: Path, interview_name: str) -> pd.DataFrame:
 
 
 def construct_load_openface(interview_name: str, of_runs: pd.DataFrame) -> LoadOpenface:
+    """
+    Constructs a LoadOpenface object.
+
+    Args:
+        interview_name (str): The name of the interview.
+        of_runs (pd.DataFrame): A DataFrame containing the OpenFace runs for the interview.
+    """
     notes = None
     report_generation_possible = True
 
@@ -226,6 +255,13 @@ def construct_insert_queries(
 
 
 def import_of_openface_db(config_file: Path, lof: LoadOpenface) -> LoadOpenface:
+    """
+    Imports OpenFace features into openface_db.
+
+    Args:
+        config_file (Path): Path to the config file.
+        lof (LoadOpenface): LoadOpenface object.
+    """
     queries: List[str] = []
 
     if lof.lof_report_generation_possible is True:
@@ -237,7 +273,8 @@ def import_of_openface_db(config_file: Path, lof: LoadOpenface) -> LoadOpenface:
                 csv_files_f = Path(lof.interviewer_of_processed_path).glob("*.csv")
                 csv_files = sorted(csv_files_f)
                 if len(csv_files) > 1:
-                    message = f"More than 1 OpenFace CSV file found for {lof.interview_name} interviewer"
+                    message = f"More than 1 OpenFace CSV file found for \
+{lof.interview_name} interviewer"
                     logger.error(message)
                     raise ValueError(message)
 
@@ -260,7 +297,8 @@ def import_of_openface_db(config_file: Path, lof: LoadOpenface) -> LoadOpenface:
                 csv_files_f = Path(lof.subject_of_processed_path).glob("*.csv")
                 csv_files = sorted(csv_files_f)
                 if len(csv_files) > 1:
-                    message = f"More than one OpenFace CSV file found for {lof.interview_name} subject"
+                    message = f"More than one OpenFace CSV file found for \
+{lof.interview_name} subject"
                     logger.error(message)
                     raise ValueError(message)
 
@@ -293,6 +331,13 @@ def import_of_openface_db(config_file: Path, lof: LoadOpenface) -> LoadOpenface:
 
 
 def log_load_openface(config_file: Path, lof: LoadOpenface) -> None:
+    """
+    Logs the results of the (another) OpenFace QC to the database.
+
+    Args:
+        config_file (Path): Path to the config file.
+        lof (LoadOpenface): LoadOpenface object.
+    """
     query = lof.to_sql()
 
     logger.info(f"Logging load_openface for {lof.interview_name}")
