@@ -36,6 +36,15 @@ class InterviewRole(Enum):
     INTERVIEWER = "interviewer"
     SUBJECT = "subject"
 
+    def __str__(self) -> str:
+        """
+        Return the string representation of the InterviewRole enum value.
+
+        Returns:
+            str: The string representation of the InterviewRole enum value.
+        """
+        return self.value
+
     @staticmethod
     def from_str(role: str) -> "InterviewRole":
         """

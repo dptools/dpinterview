@@ -71,6 +71,25 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[str]:
 
     result = db.fetch_record(config_file=config_file, query=sql_query)
 
+    if result is None:
+        sql_query = f"""
+            SELECT vs_path
+            FROM video_streams
+            WHERE vs_path NOT IN (
+                SELECT fm_source_path
+                FROM ffprobe_metadata
+            ) AND video_path IN (
+                SELECT destination_path FROM decrypted_files
+                JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+                JOIN interviews USING (interview_path)
+                WHERE interviews.study_id = '{study_id}'
+            )
+            ORDER BY RANDOM()
+            LIMIT 1;
+        """
+
+        result = db.fetch_record(config_file=config_file, query=sql_query)
+
     return result
 
 
