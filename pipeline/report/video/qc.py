@@ -113,7 +113,6 @@ def construct_sample_image_by_role(
     # Get a frame at the middle of the video
     # Get frame number from openface_features table
 
-    temp_file = tempfile.NamedTemporaryFile(suffix=".png")
     frame_number: Optional[int] = None
     frame_request: Optional[FrameRequest] = None
     retry_time = timedelta(minutes=5)
@@ -154,14 +153,26 @@ after {retry_counter} attempts"
             f"[bold red]Failed to get frame number for {interview_name} {role} \
 after {max_retires} attempts"
         )
-        temp_file.close()
         return
-    image.get_frame_by_number(
-        video_path=of_video, frame_number=frame_number, dest_image=Path(temp_file.name)
-    )
 
-    draw_sample_image(canvas=canvas, image_path=Path(temp_file.name), role=role)
-    temp_file.close()
+    with tempfile.NamedTemporaryFile(suffix=".png") as sample_frame:
+        image.get_frame_by_number(
+            video_path=of_video,
+            frame_number=frame_number,
+            dest_image=Path(sample_frame.name),
+        )
+
+        with tempfile.NamedTemporaryFile(suffix=".png") as deidentified_image:
+            image.draw_bars_over_image(
+                source_image=Path(sample_frame.name),
+                dest_image=Path(deidentified_image.name),
+                start_h=0.95,
+                end_h=1,
+                bar_color=(255, 255, 255),
+            )
+            draw_sample_image(
+                canvas=canvas, image_path=Path(deidentified_image.name), role=role
+            )
 
 
 def construct_openface_metadata_box_by_role(
@@ -188,7 +199,7 @@ def construct_openface_metadata_box_by_role(
     openface_info = ["OpenFace 2.2.0"]
 
     # Get current python version
-    python_version = sys.version.split(" ")[0]
+    python_version = sys.version.split(" ", maxsplit=1)[0]
 
     openface_info.append(f"Python {python_version}")
 

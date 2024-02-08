@@ -688,7 +688,7 @@ def construct_snapshots_bar(
                         # temp_file = tempfile.NamedTemporaryFile(suffix=".bmp")
                         # temp_file_name = temp_file.name
 
-                        image.draw_black_bars_over_image(
+                        image.draw_bars_over_image(
                             source_image=frame, dest_image=Path(temp_file.name)
                         )
                         frame = temp_file.name

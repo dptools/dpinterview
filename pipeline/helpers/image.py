@@ -131,11 +131,15 @@ def get_frame_by_number(
     cv2.imwrite(str(dest_image), frame)
 
 
-def draw_black_bars_over_image(
-    source_image: Path, dest_image: Path, start_h: float = 0.1, end_h: float = 0.4
+def draw_bars_over_image(
+    source_image: Path,
+    dest_image: Path,
+    start_h: float = 0.1,
+    end_h: float = 0.4,
+    bar_color: Tuple[int, int, int] = (0, 0, 0),
 ):
     """
-    Anonymizes an image by setting a the eyes portion to black.
+    Anonymizes an image by setting the eyes portion to black.
 
     Args:
         source_image (Path): The path to the source image.
@@ -144,6 +148,8 @@ def draw_black_bars_over_image(
             Defaults to 0.1.
         end_h (float, optional): The ending height ratio of the image to be set to black.
             Defaults to 0.4.
+        bar_color (Tuple[int, int, int], optional): The color to set the bars to.
+            Defaults to (0, 0, 0), which is black.
     """
     # Read the image
     img = cv2.imread(str(source_image))
@@ -154,7 +160,7 @@ def draw_black_bars_over_image(
     # Set all pixels between start_row and end_row to black
     start_row = int(height * start_h)
     end_row = int(height * end_h)
-    img[start_row:end_row, :] = 0
+    img[start_row:end_row, :] = bar_color
 
     # Save the cropped image
     cv2.imwrite(str(dest_image), img)
