@@ -22,13 +22,11 @@ except ValueError:
 
 import logging
 from typing import Optional, Tuple, List
-import math
 import tempfile
 
 from rich.logging import RichHandler
-import cv2
 
-from pipeline.helpers import utils, db, ffmpeg
+from pipeline.helpers import utils, db, ffmpeg, image
 from pipeline.helpers.timer import Timer
 from pipeline import orchestrator, data
 from pipeline.models.video_qqc import VideoQuickQc
@@ -90,93 +88,6 @@ def get_file_to_process(
     return video_path, duration
 
 
-def check_if_image_has_black_bars(
-    image_file: Path, bars_height: float = 0.2, threshold: float = 0.8
-) -> bool:
-    """
-    Checks if an image has black bars.
-
-    Checks if top and bottom {threshold} of the image has black pixels, if majority of the
-    pixels are black, then the image has black bars.
-
-    Args:
-        image_file (Path): Path to image file
-        bars_height (float, optional): Height of the top and bottom bars. Defaults to 0.2.
-            - 0.2 means 20% of the image height
-        threshold (float, optional): Threshold to determine if the image has black bars.
-            Defaults to 0.8.
-            - If the ratio of black pixels to total pixels is greater than the threshold,
-            then the image has black bars.
-
-    Returns:
-        bool: True if image has black bars, False otherwise
-    """
-    image = cv2.imread(str(image_file))
-    height, width, _ = image.shape  # height, width, channels
-
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Get top and bottom bars
-    bar_height = int(height * bars_height)
-    top_pixels = gray[0:bar_height, 0:width]
-    bottom_pixels = gray[height - bar_height: height, 0:width]
-
-    pixels_count = width * bar_height
-
-    top_black_pixels = pixels_count - cv2.countNonZero(top_pixels)
-    bottom_black_pixels = pixels_count - cv2.countNonZero(bottom_pixels)
-
-    total_black_pixels = top_black_pixels + bottom_black_pixels
-    total_pixels = pixels_count * 2
-
-    if total_black_pixels / total_pixels > threshold:
-        return True
-    else:
-        return False
-
-
-def get_black_bars_height(image_file: Path) -> float:
-    """
-    Gets the height of the black bars in the image.
-
-    Args:
-        image_file (Path): Path to image file
-    """
-    image = cv2.imread(str(image_file))
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # apply threshold to invert the image
-    _, thresh = cv2.threshold(gray, 3, 255, cv2.THRESH_BINARY_INV)
-
-    # find contours of the white regions
-    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    heights_y: List[Tuple[int, int]] = []
-    y_heights: List[Tuple[int, int]] = []
-
-    # loop over the contours
-    for c in contours:
-        # get the bounding rectangle of the contour
-        _, y, _, h = cv2.boundingRect(c)  # x, y, w, h
-        if h < 100:
-            continue
-        heights_y.append((h, y))
-        y_heights.append((y, h))
-
-    heights_y.sort(key=lambda x: x[0], reverse=False)
-    y_heights.sort(key=lambda x: x[0], reverse=False)
-
-    if y_heights[0][0] == 0:
-        return y_heights[0][1]
-    else:
-        # average heights or 2 highest bars
-        if len(heights_y) > 1:
-            height = math.ceil((heights_y[0][0] + heights_y[1][0]) / 2)
-        else:
-            height = heights_y[0][0]
-        return height
-
-
 def sanitize_black_bar_height(height: float) -> float:
     """
     Caps the black bar height at 180px
@@ -202,7 +113,7 @@ def check_black_bars(screenshots: List[Path]) -> bool:
     black_bar_count = 0
 
     for screenshot in screenshots:
-        has_black_bars = check_if_image_has_black_bars(image_file=screenshot)
+        has_black_bars = image.check_if_image_has_black_bars(image_file=screenshot)
         if has_black_bars:
             black_bar_count += 1
 
@@ -222,9 +133,9 @@ def get_black_bar_height(screenshots: List[Path]) -> int:
     black_bar_heights = []
 
     for screenshot in screenshots:
-        has_black_bars = check_if_image_has_black_bars(image_file=screenshot)
+        has_black_bars = image.check_if_image_has_black_bars(image_file=screenshot)
         if has_black_bars:
-            black_bar_height = get_black_bars_height(image_file=screenshot)
+            black_bar_height = image.get_black_bars_height(image_file=screenshot)
 
             if black_bar_height > 200:
                 black_bar_height = 180

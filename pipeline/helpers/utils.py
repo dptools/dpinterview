@@ -6,6 +6,7 @@ import logging
 import re
 from pathlib import Path
 from typing import List
+from datetime import datetime
 
 from rich.console import Console
 from rich.progress import (
@@ -17,6 +18,7 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
+import pandas as pd
 
 from pipeline.helpers import cli
 from pipeline.helpers.config import config
@@ -144,3 +146,62 @@ def camel_case_split(word: str) -> List[str]:
     parts = [part.lower() for part in parts]
 
     return parts
+
+
+def compute_relative_mean(
+    group_means: pd.Series, current_means: pd.Series
+) -> pd.Series:
+    """
+    Computes the relative mean difference between two pandas Series.
+
+    Args:
+        group_means (pd.Series): The means of a group of data.
+        current_means (pd.Series): The means of the current data.
+
+    Returns:
+        pd.Series: The relative mean difference between the two input Series.
+    """
+    return (group_means - current_means) * -1
+
+
+def datetime_time_to_float(time: datetime.time) -> float:  # type: ignore
+    """
+    Converts a datetime.time object to a float representing the number of seconds since midnight.
+
+    Args:
+        time (datetime.time): The time object to convert.
+
+    Returns:
+        float: The number of seconds since midnight as a float.
+    """
+    return time.hour * 3600 + time.minute * 60 + time.second + time.microsecond / 1e6
+
+
+def create_labels(start_time: float, end_time: float, num_of_labels: int):
+    """
+    Creates a list of labels for a given time range and number of labels.
+    E.g. create_labels(0, 60, 3) -> ["00:00", "00:30", "01:00"]
+
+    Args:
+        start_time (float): The start time of the range.
+        end_time (float): The end time of the range.
+        num_of_labels (int): The number of labels to create.
+
+    Returns:
+        list: A list of labels in the format "MM:SS".
+    """
+    interval = (end_time - start_time) / (num_of_labels - 1)
+
+    labels = []
+
+    for i in range(num_of_labels):
+        current_time = start_time + i * interval
+
+        minutes = int(current_time // 60)
+        seconds = int(current_time % 60)
+
+        label = f"{minutes:02d}:{seconds:02d}"
+
+        labels.append(label)
+
+    return labels

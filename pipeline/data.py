@@ -1,8 +1,14 @@
 """  Module contain helper functions specific to this data pipeline """
-from pathlib import Path
-from typing import Optional, List, Dict
 
-from pipeline.helpers import db, utils
+from datetime import datetime
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+import pandas as pd
+
+from pipeline.helpers import db, dpdash, utils
+from pipeline.models.interview_roles import InterviewRole
 
 
 def get_consent_date_from_subject_id(
@@ -126,3 +132,434 @@ def get_openface_datatypes(config_file: Path, csv_file: Path) -> Dict[str, str]:
             datatypes[col] = "FLOAT"
 
     return datatypes
+
+
+def get_openface_path(
+    config_file: Path,
+    interview_name: str,
+    role: InterviewRole,
+) -> Optional[Path]:
+    """
+    Get the path to the openface directory for the given interview, subject, and role.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+        subject_id (str): The ID of the subject.
+        study_id (str): The ID of the study.
+        role (InterviewRole): The role of the user.
+
+    Returns:
+        Path: The path to the openface directory.
+    """
+
+    dpdash_dict = dpdash.parse_dpdash_name(interview_name)
+    subject_id = dpdash_dict["subject"]
+    study_id = dpdash_dict["study"]
+
+    query = f"""
+    SELECT subject_of_processed_path, interviewer_of_processed_path
+    FROM load_openface
+    WHERE interview_name = '{interview_name}'
+        AND subject_id = '{subject_id}'
+        AND study_id = '{study_id}'
+    """
+
+    results = db.execute_sql(config_file=config_file, query=query)
+
+    if results.empty:
+        raise ValueError(
+            f"No openface path found for interview {interview_name}, \
+subject {subject_id}, study {study_id}"
+        )
+
+    match role:
+        case InterviewRole.SUBJECT:
+            openface_path = results.iloc[0]["subject_of_processed_path"]
+        case InterviewRole.INTERVIEWER:
+            openface_path = results.iloc[0]["interviewer_of_processed_path"]
+        case _:
+            raise ValueError(f"Invalid interview role: {role}")
+
+    try:
+        of_path = Path(openface_path)
+    except TypeError:
+        return None
+
+    if not of_path.exists():
+        raise FileNotFoundError(f"OpenFace path {of_path} does not exist")
+
+    return of_path
+
+
+def construct_frame_paths(
+    frame_numbers: List[Optional[int]],
+    interview_name: str,
+    role: InterviewRole,
+    config_file: Path,
+) -> List[Optional[Path]]:
+    """
+    Gets the paths to the frames for the given frame numbers.
+
+    Args:
+        frame_numbers (List[Optional[int]]): The frame numbers.
+        interview_name (str): The name of the interview.
+        subject_id (str): The ID of the subject.
+        study_id (str): The ID of the study.
+        role (InterviewRole): The role of the user.
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        List[Optional[Path]]: The paths to the frames.
+    """
+    frame_paths: List[Optional[Path]] = []
+
+    openface_path = get_openface_path(
+        config_file=config_file,
+        interview_name=interview_name,
+        role=role,
+    )
+
+    if openface_path is None:
+        raise FileNotFoundError(
+            f"No openface path found for interview {interview_name}"
+        )
+
+    frames_path = next(openface_path.glob("*aligned"))
+
+    for frame_number in frame_numbers:
+        if frame_number is None:
+            frame_paths.append(None)
+        else:
+            # Sample name: frame_det_00_000001.bmp
+            frame_file = f"frame_det_00_{frame_number:06d}.bmp"
+            frame_path = frames_path / frame_file
+
+            # Check if file exists
+            if not frame_path.exists():
+                frame_paths.append(None)
+            else:
+                frame_paths.append(frame_path)
+
+    return frame_paths
+
+
+def get_interview_visit_count(config_file: Path, interview_name: str) -> Optional[int]:
+    """
+    Get the visit count for the given interview.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+
+    Returns:
+        Optional[int]: The visit count if found, None otherwise.
+    """
+
+    dpdash_dict = dpdash.parse_dpdash_name(interview_name)
+
+    subject_id = dpdash_dict["subject"]
+
+    sql_query = f"""
+        SELECT buffer.interview_count FROM (
+            SELECT interview_name, interview_date,
+                DENSE_RANK() OVER(ORDER BY interview_date ASC) AS interview_count
+            FROM interviews AS osi
+            WHERE subject_id = '{subject_id}'
+        ) AS buffer
+        WHERE buffer.interview_name = '{interview_name}';
+    """
+
+    visit_count = db.fetch_record(config_file=config_file, query=sql_query)
+
+    if visit_count is None:
+        return None
+
+    return int(visit_count)
+
+
+def get_total_visits_for_subject(config_file: Path, subject_id: str) -> int:
+    """
+    Get the total number of visits for a subject.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        subject_id (str): The ID of the subject.
+
+    Returns:
+        int: The total number of visits for the subject.
+    """
+    query = f"""
+    SELECT COUNT(DISTINCT interview_name) AS total_visits
+    FROM interviews
+    WHERE subject_id = '{subject_id}';
+    """
+
+    results = db.fetch_record(config_file=config_file, query=query)
+
+    if results is None:
+        return 0
+
+    return int(results)
+
+
+def get_interview_datetime(config_file: Path, interview_name: str) -> datetime:
+    """
+    Get the datetime of the interview.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+
+    Returns:
+        datetime: The datetime of the interview.
+    """
+    query = f"""
+    SELECT interview_date
+    FROM interviews
+    WHERE interview_name = '{interview_name}';
+    """
+
+    results = db.fetch_record(config_file=config_file, query=query)
+
+    if results is None:
+        raise ValueError(f"No interview date found for interview {interview_name}")
+
+    interview_datetime = datetime.strptime(results, "%Y-%m-%d %H:%M:%S")
+
+    return interview_datetime
+
+
+def get_interview_type(config_file: Path, interview_name: str) -> str:
+    """
+    Get the type of the interview.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+
+    Returns:
+        str: The type of the interview.
+    """
+    query = f"""
+    SELECT interview_type
+    FROM interviews
+    WHERE interview_name = '{interview_name}';
+    """
+
+    results = db.fetch_record(config_file=config_file, query=query)
+
+    if results is None:
+        raise ValueError(f"No interview type found for interview {interview_name}")
+
+    return results
+
+
+def get_interview_stream(
+    config_file: Path, interview_name: str, role: InterviewRole
+) -> Optional[Path]:
+    """
+    Get the path to the video stream for the given interview and role.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+        role (InterviewRole): The role of the user.
+    """
+    of_path = get_openface_path(
+        config_file=config_file, interview_name=interview_name, role=role
+    )
+
+    stream_query = f"""
+        SELECT vs_path
+        FROM openface
+        WHERE of_processed_path = '{of_path}'
+    """
+
+    stream_path = db.fetch_record(config_file=config_file, query=stream_query)
+
+    if stream_path is None:
+        return None
+
+    return Path(stream_path)
+
+
+def get_interview_duration(config_file: Path, interview_name: str) -> int:
+    """
+    Get the duration of the interview.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+
+    Returns:
+        int: The duration of the interview in seconds.
+    """
+    stream_path = get_interview_stream(
+        config_file=config_file,
+        interview_name=interview_name,
+        role=InterviewRole.SUBJECT,
+    )
+
+    query = f"""
+    SELECT fm_duration
+    FROM ffprobe_metadata
+    WHERE fm_source_path = '{stream_path}';
+    """
+
+    results = db.fetch_record(config_file=config_file, query=query)
+
+    if results is None:
+        raise ValueError(f"No interview duration found for interview {interview_name}")
+
+    return int(float(results))
+
+
+def list_to_tuple(function: Callable) -> Any:
+    """Custom decorator function, to convert list to a tuple."""
+
+    def wrapper(*args, **kwargs) -> Any:
+        args = tuple(tuple(x) if isinstance(x, list) else x for x in args)
+        kwargs = {k: tuple(v) if isinstance(v, list) else v for k, v in kwargs.items()}
+        result = function(*args, **kwargs)
+        result = tuple(result) if isinstance(result, list) else result
+        return result
+
+    return wrapper
+
+
+@list_to_tuple
+@lru_cache(maxsize=32)
+def fetch_openface_features(
+    interview_name: str,
+    subject_id: str,
+    study_id: str,
+    role: InterviewRole,
+    cols: List[str],
+    config_file: Path,
+    only_success: bool = True,
+) -> pd.DataFrame:
+    """
+    Fetches OpenFace features for a given OSIR ID and role.
+
+    Args:
+        osir_id (str): The OSIR ID to fetch features for.
+        role (str): The role to fetch features for.
+        cols (List[str]): The list of columns to fetch.
+        config_file_path (str): The path to the configuration file.
+        only_success (bool, optional): Whether to fetch only successful features. Defaults to True.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the fetched features.
+    """
+
+    if only_success:
+        sql_query = f"""
+            SELECT
+                "{'", "'.join(cols)}"
+            FROM openface_features
+            WHERE success = TRUE AND
+                interview_name = '{interview_name}' AND
+                subject_id = '{subject_id}' AND
+                study_id = '{study_id}' AND
+                ir_role = '{role}';
+        """
+    else:
+        sql_query = f"""
+            SELECT
+                "{'", "'.join(cols)}"
+            FROM openface_features
+            WHERE interview_name = '{interview_name}' AND
+                subject_id = '{subject_id}' AND
+                study_id = '{study_id}' AND
+                ir_role = '{role}';
+        """
+
+    session_of_features = db.execute_sql(
+        config_file=config_file, query=sql_query, db="openface_db"
+    )
+
+    return session_of_features
+
+
+@list_to_tuple
+@lru_cache(maxsize=32)
+def fetch_openface_subject_distribution(
+    subject_id: str, cols: List[str], config_file: Path
+) -> pd.DataFrame:
+    """
+    Fetches the distribution of OpenFace features for a given subject in an interview.
+
+    Args:
+        interview_metadata (InterviewMetadata): Metadata for the interview.
+        cols (List[str]): List of column names to fetch from the OpenFace features table.
+        config_file_path (str): Path to the configuration file.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the distribution of OpenFace features
+            for the given subject.
+    """
+    sql_query = f"""
+        SELECT
+            "{'", "'.join(cols)}"
+        FROM openface_features AS openface
+        WHERE subject_id = '{subject_id}' AND
+            ir_role = 'subject' AND
+            openface.success = True;
+    """
+
+    subject_of_features = db.execute_sql(
+        config_file=config_file, query=sql_query, db="openface_db"
+    )
+
+    return subject_of_features
+
+
+def get_study_visits_count(config_file: Path, study_id: str) -> Optional[int]:
+    """
+    Get the number of visits for a given study.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The ID of the study.
+
+    Returns:
+        Optional[int]: The number of visits if found, None otherwise.
+    """
+    query = f"""
+    SELECT COUNT(DISTINCT interview_name) AS total_visits
+    FROM interviews
+    WHERE study_id = '{study_id}';
+    """
+
+    results = db.fetch_record(config_file=config_file, query=query)
+
+    if results is None:
+        return None
+
+    return int(results)
+
+
+def get_study_subjects_count(config_file: Path, study_id: str) -> Optional[int]:
+    """
+    Get the number of subjects for a given study.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The ID of the study.
+
+    Returns:
+        Optional[int]: The number of subjects if found, None otherwise.
+    """
+    query = f"""
+    SELECT COUNT(DISTINCT subject_id) AS total_subjects
+    FROM subjects
+    WHERE study_id = '{study_id}';
+    """
+
+    results = db.fetch_record(config_file=config_file, query=query)
+
+    if results is None:
+        return None
+
+    return int(results)
