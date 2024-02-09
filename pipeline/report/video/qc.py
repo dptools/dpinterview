@@ -300,6 +300,7 @@ def draw_qc_metrics_by_role(
 
     Raises:
         ValueError: If the role is invalid.
+        ValueError: If qc_metrics are not found for the given interview name and role.
 
     Returns:
         None
@@ -315,9 +316,9 @@ def draw_qc_metrics_by_role(
     orange_color = (1, 0.5, 0)
     red_color = (1, 0, 0)
 
-    if qc_metrics.successful_frames_percentage > 0.85:
+    if qc_metrics.successful_frames_percentage > 85:
         frames_color = green_color
-    elif qc_metrics.successful_frames_percentage > 0.5:
+    elif qc_metrics.successful_frames_percentage > 50:
         frames_color = orange_color
     else:
         frames_color = red_color

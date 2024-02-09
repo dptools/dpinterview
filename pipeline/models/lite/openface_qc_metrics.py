@@ -70,6 +70,11 @@ class OpenFaceQcMetrics:
         Returns:
             OpenFaceQcMetrics
                 An instance of OpenFaceQcMetrics.
+
+        Raises:
+            ValueError
+                If the OpenFace quality control metrics are not found for
+                the given interview name and role.
         """
 
         of_path = data.get_openface_path(
@@ -87,12 +92,17 @@ class OpenFaceQcMetrics:
         """
 
         results_df = db.execute_sql(config_file=config_file, query=sql_query)
-        successful_frames_percentage = results_df["sucessful_frames_percentage"].values[
-            0
-        ]
-        successful_frames_confidence_mean = results_df[
-            "successful_frames_confidence_mean"
-        ].values[0]
+        try:
+            successful_frames_percentage = results_df[
+                "sucessful_frames_percentage"
+            ].values[0]
+            successful_frames_confidence_mean = results_df[
+                "successful_frames_confidence_mean"
+            ].values[0]
+        except IndexError as e:
+            raise ValueError(
+                f"OpenFace quality control metrics not found for {interview_name} and {role}. OpenFace path: {of_path}"
+            ) from e
 
         return OpenFaceQcMetrics(
             interview_name=interview_name,
