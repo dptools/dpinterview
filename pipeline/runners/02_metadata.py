@@ -20,15 +20,15 @@ try:
 except ValueError:
     pass
 
+import argparse
 import logging
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 from rich.logging import RichHandler
 
-from pipeline.helpers import utils, db, ffprobe
-from pipeline import orchestrator, data
+from pipeline import data, orchestrator
+from pipeline.helpers import cli, db, ffprobe, utils
 from pipeline.models.ffprobe_metadata import FfprobeMetadata
-
 
 MODULE_NAME = "metadata"
 
@@ -114,7 +114,26 @@ def log_metadata(source: Path, metadata: Dict, config_file: Path) -> None:
 
 
 if __name__ == "__main__":
-    config_file = utils.get_config_file_path()
+    parser = argparse.ArgumentParser(
+        prog=MODULE_NAME, description="Gather metadata for files."
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, help="Path to the config file.", required=False
+    )
+
+    args = parser.parse_args()
+
+    # Check if parseer has config file
+    if args.config:
+        config_file = Path(args.config).resolve()
+        if not config_file.exists():
+            logger.error(f"Error: Config file '{config_file}' does not exist.")
+            sys.exit(1)
+    else:
+        if cli.confirm_action("Using default config file."):
+            config_file = utils.get_config_file_path()
+        else:
+            sys.exit(1)
     utils.configure_logging(
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )

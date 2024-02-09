@@ -24,16 +24,17 @@ try:
 except ValueError:
     pass
 
+import argparse
 import logging
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
 from rich.logging import RichHandler
 
-from pipeline.helpers import utils, db, ffmpeg, dpdash
+from pipeline import data, orchestrator
+from pipeline.helpers import cli, db, dpdash, ffmpeg, utils
 from pipeline.helpers.timer import Timer
-from pipeline import orchestrator, data
-from pipeline.models.video_streams import VideoStream
 from pipeline.models.interview_roles import InterviewRole
+from pipeline.models.video_streams import VideoStream
 
 MODULE_NAME = "split-streams"
 
@@ -209,7 +210,27 @@ def log_streams(config_file: Path, streams: List[VideoStream]) -> None:
 
 
 if __name__ == "__main__":
-    config_file = utils.get_config_file_path()
+    parser = argparse.ArgumentParser(
+        prog="decryption", description="Module to decrypt files."
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, help="Path to the config file.", required=False
+    )
+
+    args = parser.parse_args()
+
+    # Check if parseer has config file
+    if args.config:
+        config_file = Path(args.config).resolve()
+        if not config_file.exists():
+            logger.error(f"Error: Config file '{config_file}' does not exist.")
+            sys.exit(1)
+    else:
+        if cli.confirm_action("Using default config file."):
+            config_file = utils.get_config_file_path()
+        else:
+            sys.exit(1)
+
     utils.configure_logging(
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )

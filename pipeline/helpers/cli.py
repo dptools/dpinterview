@@ -276,3 +276,28 @@ def remove_directory(path: Path) -> None:
         return
 
     shutil.rmtree(path)
+
+
+def confirm_action(message: str, logger: Optional[logging.Logger] = None) -> bool:
+    """
+    Ask the user to confirm an action.
+
+    Args:
+        message (str): The message to display to the user.
+        logger (Optional[logging.Logger], optional): The logger to use for logging.
+            Defaults to None.
+
+    Returns:
+        bool: True if the user confirms the action, False otherwise.
+    """
+
+    if logger is None:
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+
+    logger.warning(message)
+    user_input = input("Do you want to continue? (yes/no): ")
+
+    result = user_input.lower() == "yes" or user_input.lower() == "y"
+
+    return result
