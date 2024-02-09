@@ -20,17 +20,18 @@ try:
 except ValueError:
     pass
 
+import argparse
 import logging
-from typing import Optional, Tuple, List
+from typing import List, Optional, Tuple
 
 import cryptease as crypt
 from rich.logging import RichHandler
 
-from pipeline import orchestrator, data
-from pipeline.helpers import db, dpdash, utils
+from pipeline import data, orchestrator
+from pipeline.helpers import db, dpdash, utils, cli
 from pipeline.helpers.config import config
-from pipeline.models.decrypted_files import DecryptedFile
 from pipeline.helpers.timer import Timer
+from pipeline.models.decrypted_files import DecryptedFile
 
 MODULE_NAME = "decryption"
 INSTANCE_NAME = MODULE_NAME
@@ -264,7 +265,28 @@ def log_decryption(
 
 
 if __name__ == "__main__":
-    config_file = utils.get_config_file_path()
+    parser = argparse.ArgumentParser(prog="decryption", description="Module to decrypt files.")
+    parser.add_argument(
+        '-c', '--config', type=str, help='Path to the config file.', required=False
+    )
+    parser.add_argument(
+        '-n', '--num_files_to_decrypt', type=int, help='Number of files to decrypt.', required=False
+    )
+
+    args = parser.parse_args()
+
+    # Check if parseer has config file
+    if args.config:
+        config_file = Path(args.config).resolve()
+        if not config_file.exists():
+            logger.error(f"Error: Config file '{config_file}' does not exist.")
+            sys.exit(1)
+    else:
+        if cli.confirm_action("Using default config file."):
+            config_file = utils.get_config_file_path()
+        else:
+            sys.exit(1)
+
     utils.configure_logging(
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )
@@ -277,11 +299,8 @@ if __name__ == "__main__":
     data_root = Path(config_params["data_root"])
 
     # Get decryption count from command line if specified
-    if len(sys.argv) > 2:
-        print(f"Usage: {sys.argv[0]} <num_files_to_decrypt>")
-        sys.exit(1)
-    elif len(sys.argv) == 2:
-        decrytion_count = int(sys.argv[1])
+    if args.num_files_to_decrypt:
+        decrytion_count = args.num_files_to_decrypt
     else:
         decrytion_count = orchestrator.get_decryption_count(config_file=config_file)
 

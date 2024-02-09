@@ -1,15 +1,25 @@
 #!/usr/bin/env python
+"""
+Walks through interview directories and imports the interview files into the database.
+
+The interview files are categorized into the following types:
+- Combined audio and video
+- Participant audio
+- Interviewer audio
+
+The files are then inserted into the database.
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -17,15 +27,16 @@ try:
 except ValueError:
     pass
 
+import argparse
 import logging
-from datetime import date, datetime, time
-from typing import List, Dict
 import re
+from datetime import date, datetime, time
+from typing import Dict, List
 
 from rich.logging import RichHandler
 
 from pipeline import data
-from pipeline.helpers import db, dpdash, utils
+from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
@@ -49,6 +60,17 @@ console = utils.get_console()
 def catogorize_audio_files(
     audio_files: List[Path], subject_id: str, known_interviewers: List[str]
 ) -> Dict[str, List[Path]]:
+    """
+    Categorizes the audio files into participant, interviewer, and combined audio files.
+
+    Determines the type of audio file based on the file name and the subject ID.
+    - If the file name contains the subject ID, it is categorized as a participant audio file.
+    - If the file name contains the interviewer's name, it is categorized as an
+        interviewer audio file.
+    - If the file name contains "audio_only", it is categorized as a combined audio file.
+
+    Defaults to uncategorized if the file name does not match any of the above criteria.
+    """
     files: Dict[str, List[Path]] = {}
 
     files["combined"] = []
@@ -329,7 +351,7 @@ def import_interviews(config_file: Path) -> None:
                 fetch_interview_files(interview=interview, config_file=config_file)
             )
 
-    # Generate the SQL queries
+    # Generate the SQL queries to import the interview files
     sql_queries = generate_queries(
         interviews=interviews, interview_files=interview_files
     )
@@ -341,7 +363,26 @@ def import_interviews(config_file: Path) -> None:
 
 
 if __name__ == "__main__":
-    config_file = utils.get_config_file_path()
+    parser = argparse.ArgumentParser(
+        prog=MODULE_NAME, description="Gather metadata for files."
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, help="Path to the config file.", required=False
+    )
+
+    args = parser.parse_args()
+
+    # Check if parseer has config file
+    if args.config:
+        config_file = Path(args.config).resolve()
+        if not config_file.exists():
+            logger.error(f"Error: Config file '{config_file}' does not exist.")
+            sys.exit(1)
+    else:
+        if cli.confirm_action("Using default config file."):
+            config_file = utils.get_config_file_path()
+        else:
+            sys.exit(1)
     utils.configure_logging(
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )

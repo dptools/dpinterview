@@ -1,11 +1,17 @@
-""" pipeline ochestration module """
+"""
+Pipeline ochestration module.
+"""
 
+import logging
 import sys
 import time
 from pathlib import Path
 
-from pipeline.helpers import db, utils
+from pipeline.helpers import db
 from pipeline.helpers.config import config
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def get_decryption_count(config_file: Path) -> int:
@@ -33,16 +39,14 @@ def snooze(config_file: Path) -> None:
     Returns:
         None
     """
-    console = utils.get_console()
-
     params = config(config_file, section="orchestration")
     snooze_time_seconds = int(params["snooze_time_seconds"])
 
     if snooze_time_seconds == 0:
-        console.log("[bold green]Snooze time is set to 0. Exiting...")
+        logger.info("[bold green]Snooze time is set to 0. Exiting...")
         sys.exit(0)
 
-    console.log(
+    logger.info(
         f"[bold green]No file to process. Snoozing for {snooze_time_seconds} seconds..."
     )
 
@@ -51,10 +55,10 @@ def snooze(config_file: Path) -> None:
     try:
         time.sleep(snooze_time_seconds)
     except KeyboardInterrupt:
-        console.log("[bold red]Snooze interrupted by user.")
-        console.log("[red]Interrupt again to exit.")
+        logger.info("[bold red]Snooze interrupted by user.")
+        logger.info("[red]Interrupt again to exit.")
         time.sleep(5)
-        console.log("[bold green]Resuming...")
+        logger.info("[bold green]Resuming...")
 
 
 def db_log(config_file: Path, module_name: str, message: str) -> None:
@@ -86,8 +90,7 @@ def request_decrytion(config_file: Path):
     Returns:
         None
     """
-    console = utils.get_console()
-    console.log("Requesting decryption...")
+    logger.info("Requesting decryption...")
 
     query = """
         UPDATE key_store
@@ -169,8 +172,7 @@ def check_if_decryption_requested(config_file: Path) -> bool:
     Returns:
         bool: True if decryption has been requested, False otherwise.
     """
-    console = utils.get_console()
-    console.log("Checking if decryption has been requested...", end="")
+    message = "Checking if decryption has been requested...\t"
 
     query = """
         SELECT value
@@ -181,21 +183,25 @@ def check_if_decryption_requested(config_file: Path) -> bool:
     result = db.fetch_record(config_file=config_file, query=query)
 
     if result == "enabled":
-        console.log("[green] yes")
+        message += "[green]yes"
+        logger.info(message)
         return True
     elif result == "disabled":
-        console.log("[red] no")
+        message += "[red]no"
+        logger.info(message)
         return False
     else:
         if result is None:
-            console.log("[green] yes")
-            console.log("[yellow] Initializing key_store table...", end="")
+            message += "[yellow]no"
+            logger.info(message)
+            logger.info("[yellow] Initializing key_store table...")
             put_key_store(config_file, "decryption", "enabled")
-            console.log("[green] done")
+            logger.info("[green] done")
             return True
         else:
-            console.log("[red] no")
-            console.log(
+            message += "[red]no"
+            logger.info(message)
+            logger.info(
                 f"[red] Unexpected value in key_store table: {result}. Exiting..."
             )
             raise ValueError

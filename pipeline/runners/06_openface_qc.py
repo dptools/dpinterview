@@ -20,14 +20,15 @@ try:
 except ValueError:
     pass
 
+import argparse
 import logging
-from typing import Optional, List
+from typing import List, Optional
 
-from rich.logging import RichHandler
 import pandas as pd
+from rich.logging import RichHandler
 
-from pipeline import orchestrator, data
-from pipeline.helpers import utils, db
+from pipeline import data, orchestrator
+from pipeline.helpers import cli, db, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.openface_qc import OpenfaceQC
 
@@ -158,7 +159,26 @@ def log_openface_qc(config_file: Path, openface_qc_result: OpenfaceQC) -> None:
 
 
 if __name__ == "__main__":
-    config_file = utils.get_config_file_path()
+    parser = argparse.ArgumentParser(
+        prog="decryption", description="Module to decrypt files."
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, help="Path to the config file.", required=False
+    )
+    args = parser.parse_args()
+
+    # Check if parseer has config file
+    if args.config:
+        config_file = Path(args.config).resolve()
+        if not config_file.exists():
+            logger.error(f"Error: Config file '{config_file}' does not exist.")
+            sys.exit(1)
+    else:
+        if cli.confirm_action("Using default config file."):
+            config_file = utils.get_config_file_path()
+        else:
+            sys.exit(1)
+
     utils.configure_logging(
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )
