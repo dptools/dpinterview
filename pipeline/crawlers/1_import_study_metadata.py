@@ -1,15 +1,20 @@
 #!/usr/bin/env python
+"""
+Loads the study metadata into the database.
+
+Populates the 'study' and 'subject' tables with the study metadata CSV file.
+"""
 
 import sys
 from pathlib import Path
 
 file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
     if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:
@@ -17,18 +22,18 @@ try:
 except ValueError:
     pass
 
+import argparse
 import logging
 from datetime import datetime
 from typing import List
 
-from rich.logging import RichHandler
 import pandas as pd
+from rich.logging import RichHandler
 
-from pipeline.helpers import utils, db
+from pipeline.helpers import cli, db, utils
 from pipeline.helpers.config import config
-
-from pipeline.models.subjects import Subject
 from pipeline.models.study import Study
+from pipeline.models.subjects import Subject
 
 MODULE_NAME = "import_study_metadata"
 INSTANCE_NAME = MODULE_NAME
@@ -45,7 +50,17 @@ logging.basicConfig(**logargs)
 console = utils.get_console()
 
 
-def insert_study(config_file: Path, study_id: str):
+def insert_study(config_file: Path, study_id: str) -> None:
+    """
+    Inserts the study into the database.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The ID of the study.
+
+    Returns:
+        None
+    """
     study = Study(study_id=study_id)
 
     logger.info(f"Inserting study: {study_id}")
@@ -71,11 +86,11 @@ def get_study_metadata(config_file: Path, study_id: str) -> pd.DataFrame:
 
     # Construct path to study metadata
     params = config(path=config_file, section="general")
-    DATA_ROOT = params["data_root"]
+    data_root = params["data_root"]
 
     metadata_filename = f"{study_id}_metadata.csv"
 
-    study_metadata = Path(DATA_ROOT, "GENERAL", study_id, metadata_filename)
+    study_metadata = Path(data_root, "GENERAL", study_id, metadata_filename)
 
     # Check if study_metadata exists
     if not study_metadata.exists():
@@ -103,7 +118,7 @@ def fetch_subjects(config_file: Path, study_id: str) -> List[Subject]:
     study_metadata = get_study_metadata(config_file=config_file, study_id=study_id)
 
     subjects: List[Subject] = []
-    for index, row in study_metadata.iterrows():
+    for _, row in study_metadata.iterrows():
         # Get required fields
         required_fields = ["Subject ID", "Active", "Consent", "Study"]
 
@@ -163,7 +178,27 @@ def insert_subjects(config_file: Path, subjects: List[Subject]):
 
 
 if __name__ == "__main__":
-    config_file = utils.get_config_file_path()
+    parser = argparse.ArgumentParser(
+        prog=MODULE_NAME, description="Gather metadata for files."
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, help="Path to the config file.", required=False
+    )
+
+    args = parser.parse_args()
+
+    # Check if parseer has config file
+    if args.config:
+        config_file = Path(args.config).resolve()
+        if not config_file.exists():
+            logger.error(f"Error: Config file '{config_file}' does not exist.")
+            sys.exit(1)
+    else:
+        if cli.confirm_action("Using default config file."):
+            config_file = utils.get_config_file_path()
+        else:
+            sys.exit(1)
+
     utils.configure_logging(
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )
