@@ -32,7 +32,7 @@ from rich.logging import RichHandler
 from pipeline.helpers import cli, db, utils
 from pipeline import healer
 
-MODULE_NAME = "pipeline.runners.study_specific.bls.72_clinical_scores_import"
+MODULE_NAME = "pipeline.runners.73_consolidate_metrics"
 logger = logging.getLogger(MODULE_NAME)
 logargs = {
     "level": logging.DEBUG,
@@ -173,8 +173,22 @@ def consolidate_metrics(config_file: Path) -> None:
     logger.info(f"Exporting consolidated CSV to {csv_path}")
     metrics_df.to_csv(csv_path, index=False)
 
-    logger.info(f"Exporting consolidated HTML to {html_path}")
-    metrics_df.to_html(html_path, index=False)
+    logger.info(f"Exporting trimmed data as HTML to {html_path}")
+
+    # Drop all columns that start with:
+    #  - "openface_metrics.correlations"
+    #  -  "openface_metrics.std"
+    #  -  "openface_metrics.mean"
+    slim_metrics_df = metrics_df.loc[
+        :, ~metrics_df.columns.str.startswith("openface_metrics.correlations")
+    ]
+    slim_metrics_df = slim_metrics_df.loc[
+        :, ~slim_metrics_df.columns.str.startswith("openface_metrics.std")
+    ]
+    slim_metrics_df = slim_metrics_df.loc[
+        :, ~slim_metrics_df.columns.str.startswith("openface_metrics.mean")
+    ]
+    slim_metrics_df.to_html(html_path, index=False)
 
 
 if __name__ == "__main__":
