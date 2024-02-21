@@ -5,7 +5,7 @@ Generates a report for the Interview.
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -25,7 +25,7 @@ def generate_report(
     interview_name: str,
     dest_file_name: Path,
     config_file: Path,
-) -> None:
+) -> Optional[str]:
     """
     Generates a report for the Interview.
 
@@ -35,7 +35,7 @@ def generate_report(
         config_file (Path): Path to the config file.
 
     Returns:
-        None
+        None if the report was generated successfully, else an error message.
     """
     console = utils.get_console()
 
@@ -139,8 +139,9 @@ def generate_report(
 
         # Check if the duration is NaN
         if np.isnan(duration):
-            console.log("Skipping report generation. Duration is NaN.")
-            return
+            message = "Skipping report generation. Duration is NaN."
+            console.log(message)
+            return message
 
         console.log(f"Interview duration: {duration:.2f} seconds")
         seconds_per_page = bin_size * bins_per_page

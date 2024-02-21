@@ -27,7 +27,7 @@ from typing import List, Optional
 
 from rich.logging import RichHandler
 
-from pipeline import data, orchestrator
+from pipeline import data, healer, orchestrator
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.pdf_reports import PdfReport
@@ -131,7 +131,9 @@ def construct_report_path(config_file: Path, interview_name: str) -> Path:
     return report_path
 
 
-def generate_report(config_file: Path, interview_name: str, report_path: Path) -> None:
+def generate_report(
+    config_file: Path, interview_name: str, report_path: Path
+) -> Optional[str]:
     """
     Generate the report.
 
@@ -139,16 +141,19 @@ def generate_report(config_file: Path, interview_name: str, report_path: Path) -
         config_file (Path): The path to the config file.
         interview_name (str): The interview name.
         report_path (Path): The path to the report.
+
+    Returns:
+        Optional[str]: The error message, if any.
     """
     logger.info(f"Generating report for {interview_name}...")
 
-    report.generate_report(
+    error_message = report.generate_report(
         config_file=config_file,
         interview_name=interview_name,
         dest_file_name=report_path,
     )
 
-    return
+    return error_message
 
 
 def log_pdf_report(config_file: Path, pdf_report: PdfReport) -> None:
@@ -232,7 +237,7 @@ if __name__ == "__main__":
         )
 
         with Timer() as timer:
-            generate_report(
+            error_message = generate_report(
                 config_file=config_file,
                 interview_name=interview_name,
                 report_path=report_path,
@@ -240,6 +245,17 @@ if __name__ == "__main__":
 
         pr_generation_time = timer.duration
         logger.info(f"Generated report in {pr_generation_time:.2f} seconds")
+
+        if error_message:
+            logger.warning(
+                f"Error generating report for {interview_name}: {error_message}"
+            )
+            healer.set_report_generation_not_possible(
+                config_file=config_file,
+                interview_name=interview_name,
+                reason=error_message,
+            )
+            continue
 
         pdf_report = PdfReport(
             interview_name=interview_name,
