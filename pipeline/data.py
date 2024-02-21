@@ -9,6 +9,7 @@ import pandas as pd
 
 from pipeline.helpers import db, dpdash, utils
 from pipeline.models.interview_roles import InterviewRole
+from pipeline import constants
 
 
 def get_consent_date_from_subject_id(
@@ -563,3 +564,127 @@ def get_study_subjects_count(config_file: Path, study_id: str) -> Optional[int]:
         return None
 
     return int(results)
+
+
+def fetch_openface_qc(
+    interview_name: str,
+    ir_role: InterviewRole,
+    config_file: Path
+) -> pd.DataFrame:
+    """
+    Get the successful frames percentage and confidence mean for a given interview and role.
+
+    Args:
+        interview_name (str): The name of the interview.
+        ir_role (InterviewRole): The role of the user.
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the successful frames percentage and confidence mean.
+    """
+    processed_path = get_openface_path(
+        config_file=config_file, interview_name=interview_name, role=ir_role
+    )
+
+    sql_query = f"""
+        SELECT
+            sucessful_frames_percentage,
+            successful_frames_confidence_mean
+        FROM openface_qc
+        WHERE of_processed_path = '{processed_path}'
+    """
+
+    df = db.execute_sql(config_file=config_file, query=sql_query)
+
+    return df
+
+
+def add_facial_expressivity_metric(
+    df: pd.DataFrame, fau_cols: List[str]
+) -> pd.DataFrame:
+    """
+    Adds the facial expressivity metric to a DataFrame containing OpenFace features.
+
+    Facial expressivity is defined as the average of the action units.
+
+    Args:
+        df (pd.DataFrame): A DataFrame containing OpenFace features.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing OpenFace features with the facial expressivity metric added.
+    """
+
+    df["facial_expressivity"] = df[fau_cols].mean(axis=1)
+
+    return df
+
+
+def construct_openface_metrics(session_openface_features: pd.DataFrame) -> Dict:
+    """
+    Computes the mean, standard deviation, and correlations of OpenFace features.
+
+    Args:
+        session_openface_features (pd.DataFrame): A DataFrame containing OpenFace features.
+
+    Returns:
+        Dict: A dictionary containing the mean, standard deviation, and correlations of OpenFace features.
+    """
+    POSE_COLS = constants.POSE_COLS
+    AU_COLS = constants.AU_COLS
+
+    openface_features = dict()
+    start_time = session_openface_features["timestamp"].min()  # 00:00:00
+    end_time = session_openface_features["timestamp"].max()  # 00:10:00
+
+    try:
+        start_time = datetime.combine(datetime.min, start_time)
+        end_time = datetime.combine(datetime.min, end_time)
+    except TypeError as e:
+        # console.print(f"start_time: {start_time}")
+        # console.print(f"end_time: {end_time}")
+        # console.print(f"Skipping due to {e}")
+        raise ValueError("start_time or end_time is None") from e
+
+    duration = end_time - start_time
+    openface_features["duration"] = duration
+    openface_features["start_time"] = start_time.time()
+    openface_features["end_time"] = end_time.time()
+
+    session_openface_features.drop(columns=["timestamp"], inplace=True)
+
+    session_openface_features = add_facial_expressivity_metric(
+        session_openface_features, AU_COLS
+    )
+
+    of_cols = POSE_COLS + AU_COLS + ["facial_expressivity"]
+    session_means = session_openface_features.mean(axis=0)
+    session_std = session_openface_features.std(axis=0)
+
+    means = dict()
+    stds = dict()
+    for col in of_cols:
+        col_mean = session_means[col]
+        col_std = session_std[col]
+
+        means[col] = col_mean
+        stds[col] = col_std
+
+    openface_features["mean"] = means
+    openface_features["std"] = stds
+
+    au_features = session_openface_features[AU_COLS]
+    au_corr = au_features.corr()
+
+    correlations = dict()
+    for i in range(len(AU_COLS)):
+        for j in range(len(AU_COLS)):
+            if i == j:
+                continue
+
+            correlations[AU_COLS[i] + "_vs_" + AU_COLS[j] + "_corr"] = au_corr.iloc[
+                i, j
+            ]
+
+    openface_features["correlations"] = correlations
+
+    return openface_features

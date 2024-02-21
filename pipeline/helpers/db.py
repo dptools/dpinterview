@@ -73,7 +73,13 @@ def sanitize_json(json_dict: dict) -> str:
     for key, value in json_dict.items():
         if isinstance(value, str):
             json_dict[key] = santize_string(value)
-    return json.dumps(json_dict)
+
+    json_str = json.dumps(json_dict, default=str)
+
+    # Replace NaN with NULL
+    json_str = json_str.replace("NaN", "null")
+
+    return json_str
 
 
 def execute_queries(
