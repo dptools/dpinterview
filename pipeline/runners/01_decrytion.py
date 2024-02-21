@@ -261,7 +261,7 @@ def log_decryption(
 
     query = decrypted_file.to_sql()
 
-    db.execute_queries(config_file=config_file, queries=[query], logger=logger)
+    db.execute_queries(config_file=config_file, queries=[query])
 
 
 if __name__ == "__main__":

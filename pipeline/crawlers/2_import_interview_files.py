@@ -358,7 +358,7 @@ def import_interviews(config_file: Path) -> None:
 
     # Execute the SQL queries
     db.execute_queries(
-        config_file=config_file, queries=sql_queries, logger=logger, show_commands=False
+        config_file=config_file, queries=sql_queries, show_commands=False
     )
 
 

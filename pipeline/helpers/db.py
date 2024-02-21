@@ -14,6 +14,8 @@ import sqlalchemy
 from pipeline.helpers.config import config
 from pipeline.helpers import utils
 
+logger = logging.getLogger(__name__)
+
 
 def handle_null(query: str) -> str:
     """
@@ -80,7 +82,6 @@ def execute_queries(
     show_commands=True,
     show_progress=False,
     silent=False,
-    logger: Optional[logging.Logger] = None,
     db: str = "postgresql",
 ) -> list:
     """
@@ -98,11 +99,6 @@ def execute_queries(
     Returns:
         list: A list of tuples containing the results of the executed queries.
     """
-
-    if logger is None:
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-
     conn = None
     command = None
     output = []
