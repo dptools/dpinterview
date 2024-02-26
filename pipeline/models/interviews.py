@@ -17,6 +17,8 @@ class InterviewType(Enum):
 
     ONSITE = "onsite"
     OFFSITE = "offsite"
+    OPEN = "open"
+    PSYCHS = "psychs"
 
     @staticmethod
     def init_table_query() -> List[str]:
@@ -30,9 +32,14 @@ class InterviewType(Enum):
         );
         """
 
-        populate_sql_query = """
+        populate_sql_query = f"""
         INSERT INTO interview_types (interview_type)
-        VALUES ('onsite'), ('offsite');
+        VALUES
+            ('{InterviewType.ONSITE.value}'),
+            ('{InterviewType.OFFSITE.value}'),
+            ('{InterviewType.OPEN.value}'),
+            ('{InterviewType.PSYCHS.value}')
+        ON CONFLICT (interview_type) DO NOTHING;
         """
 
         sql_queries: List[str] = [create_sql_query, populate_sql_query]

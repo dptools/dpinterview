@@ -12,6 +12,29 @@ from pipeline.models.interview_roles import InterviewRole
 from pipeline import constants
 
 
+def get_all_studies(config_file: Path) -> List[str]:
+    """
+    Gets all the study IDs from the database.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        List[str]: A list of study IDs.
+    """
+    query = """
+        SELECT study_id
+        FROM study
+        ORDER BY study_id;
+    """
+
+    results = db.execute_sql(config_file=config_file, query=query)
+
+    study_ids = results["study_id"].tolist()
+
+    return study_ids
+
+
 def get_consent_date_from_subject_id(
     config_file: Path, subject_id: str, study_id
 ) -> Optional[str]:
@@ -567,9 +590,7 @@ def get_study_subjects_count(config_file: Path, study_id: str) -> Optional[int]:
 
 
 def fetch_openface_qc(
-    interview_name: str,
-    ir_role: InterviewRole,
-    config_file: Path
+    interview_name: str, ir_role: InterviewRole, config_file: Path
 ) -> pd.DataFrame:
     """
     Get the successful frames percentage and confidence mean for a given interview and role.
