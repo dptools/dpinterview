@@ -383,6 +383,36 @@ class FfprobeMetadata:
 
         return query
 
+    @staticmethod
+    def drop_row_query(source_path: Path) -> List[str]:
+        """
+        Return the SQL queries to delete a row from the 'ffprobe_metadata' table.
+        Also deletes the video and audio streams from the ffprobe_metadata_video and ffprobe_metadata_audio tables.
+
+        Args:
+            source_path (Path): Source path of the file.
+
+        Returns:
+            str: SQL query to delete the row.
+        """
+
+        queries = [
+            f"""
+            DELETE FROM ffprobe_metadata_video
+            WHERE fmv_source_path = '{source_path}';
+            """,
+            f"""
+            DELETE FROM ffprobe_metadata_audio
+            WHERE fma_source_path = '{source_path}';
+            """,
+            f"""
+            DELETE FROM ffprobe_metadata
+            WHERE fm_source_path = '{source_path}';
+            """,
+        ]
+
+        return queries
+
     def to_sql(self) -> List[str]:
         """
         Convert the ffprobe metadata to a list of SQL queries.

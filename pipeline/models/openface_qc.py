@@ -117,6 +117,23 @@ class OpenfaceQC:
         """
         return sql_query
 
+    @staticmethod
+    def drop_row_query(of_processed_path: Path) -> str:
+        """
+        Return the SQL query to delete a row from the 'openface_qc' table.
+
+        Args:
+            of_processed_path (Path): Path to the processed video
+
+        Returns:
+            str: SQL query to delete the row
+        """
+        sql_query = f"""
+        DELETE FROM openface_qc
+        WHERE of_processed_path = '{of_processed_path}';
+        """
+        return sql_query
+
     def to_sql(self) -> str:
         """
         Return the SQL query to insert the object into the 'openface' table.

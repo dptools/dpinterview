@@ -85,6 +85,18 @@ class VideoQuickQc:
 
         return sql_query
 
+    @staticmethod
+    def drop_row_query(video_path: Path) -> str:
+        """
+        Return the SQL query to delete a row from the 'video_quick_qc' table.
+        """
+        sql_query = f"""
+        DELETE FROM video_quick_qc
+        WHERE video_path = '{video_path}';
+        """
+
+        return sql_query
+
     def to_sql(self):
         """
         Return the SQL query to insert the VideoQuickQc object into the 'video_quick_qc' table.

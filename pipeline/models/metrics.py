@@ -79,6 +79,23 @@ class Metrics:
         """
         return sql_query
 
+    @staticmethod
+    def drop_row_query(interview_name: str) -> str:
+        """
+        Return the SQL query to drop a row from the 'metrics' table.
+
+        Args:
+            interview_name (str): Name of the interview
+
+        Returns:
+            str: SQL query to delete the row
+        """
+        sql_query = f"""
+        DELETE FROM metrics
+        WHERE interview_name = '{interview_name}';
+        """
+        return sql_query
+
     def to_sql(self) -> str:
         """
         Return the SQL query to insert the object into the 'openface' table.

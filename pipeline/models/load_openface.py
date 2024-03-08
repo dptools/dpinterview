@@ -107,6 +107,22 @@ class LoadOpenface:
         """
         return sql_query
 
+    @staticmethod
+    def drop_row_query(interview_name: str) -> str:
+        """
+        Return the SQL query to delete a row from the 'load_openface' table.
+
+        Args:
+            interview_name (str): Name of the interview
+
+        Returns:
+            str: SQL query to delete the row
+        """
+        sql_query = f"""
+        DELETE FROM load_openface WHERE interview_name = '{interview_name}';
+        """
+        return sql_query
+
     def to_sql(self) -> str:
         """
         Return the SQL query to insert the object into the 'load_openface' table.
