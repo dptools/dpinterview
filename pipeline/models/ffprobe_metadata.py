@@ -330,7 +330,7 @@ class FfprobeMetadata:
                     '{stream['start_time']}',
                     '{duration}',
                     {stream['extradata_size']}
-                );
+                ) ON CONFLICT (fmv_source_path) DO NOTHING;
             """
         elif stream["codec_type"] == "audio":
             query = f"""
@@ -376,7 +376,7 @@ class FfprobeMetadata:
                     '{stream['start_time']}',
                     '{duration}',
                     {stream['extradata_size']}
-                );
+                ) ON CONFLICT (fma_source_path) DO NOTHING;
             """
         else:
             raise ValueError(f"Unknown codec_type: {stream['codec_type']}")
@@ -417,7 +417,7 @@ class FfprobeMetadata:
                 '{format_dict['bit_rate']}',
                 '{format_dict['probe_score']}',
                 '{db.santize_string(str(format_dict['tags']))}'
-            );
+            ) ON CONFLICT (fm_source_path) DO NOTHING;
         """
 
         sql_queries.append(query)

@@ -34,8 +34,9 @@ from datetime import date, datetime, time
 from typing import Dict, List
 
 from rich.logging import RichHandler
+from rich.progress import Progress
 
-from pipeline import data
+from pipeline import data, orchestrator
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.models.files import File
@@ -186,7 +187,9 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
     return interview_files
 
 
-def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
+def fetch_interviews(
+    config_file: Path, subject_id: str, study_id: str
+) -> List[Interview]:
     """
     Fetches the interviews for a given subject ID.
 
@@ -199,32 +202,38 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
     """
     config_params = config(path=config_file, section="general")
     data_root = Path(config_params["data_root"])
-    study_id = config_params["study"]
 
     study_path: Path = data_root / "PROTECTED" / study_id
     interview_types: List[InterviewType] = [InterviewType.OPEN, InterviewType.PSYCHS]
 
+    interviews: List[Interview] = []
     for interview_type in interview_types:
-        interview_type_path = study_path / subject_id / interview_type.value / "raw"
+        interview_type_path = (
+            study_path / "raw" / subject_id / "interviews" / interview_type.value
+        )
 
         if not interview_type_path.exists():
             logger.warning(
-                f"Could not find {interview_type.value} interviews for {subject_id}"
+                f"{subject_id}: Could not find {interview_type.value} interviews: \
+{interview_type_path} does not exist."
             )
-            return []
-
-        interviews: List[Interview] = []
+            continue
         interview_dirs = [d for d in interview_type_path.iterdir() if d.is_dir()]
 
         for interview_dir in interview_dirs:
             base_name = interview_dir.name
             parts = base_name.split(" ")
 
-            date_dt = date.fromisoformat(parts[0])
-            # Time is of the form HH.MM.SS
-            time_dt = time.fromisoformat(parts[1].replace(".", ":"))
-            interview_datetime = datetime.combine(date_dt, time_dt)
-
+            try:
+                date_dt = date.fromisoformat(parts[0])
+                # Time is of the form HH.MM.SS
+                time_dt = time.fromisoformat(parts[1].replace(".", ":"))
+                interview_datetime = datetime.combine(date_dt, time_dt)
+            except ValueError:
+                logger.warning(
+                    f"{subject_id}: Could not parse date and time from {base_name}. Skipping..."
+                )
+                continue
             consent_date_s = data.get_consent_date_from_subject_id(
                 config_file=config_file, subject_id=subject_id, study_id=study_id
             )
@@ -236,8 +245,7 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
             interview_name = dpdash.get_dpdash_name(
                 study=study_id,
                 subject=subject_id,
-                data_type=f"{interview_type}Interview",
-                category=None,
+                data_type=f"{interview_type.value}Interview",
                 consent_date=consent_date,
                 event_date=interview_datetime,
             )
@@ -256,7 +264,11 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
     return interviews
 
 
-def generate_queries(interviews: List[Interview], interview_files: List[InterviewFile]):
+def generate_queries(
+    interviews: List[Interview],
+    interview_files: List[InterviewFile],
+    progress: Progress,
+) -> List[str]:
     """
     Generates the SQL queries to insert the interview files into the database.
 
@@ -268,12 +280,11 @@ def generate_queries(interviews: List[Interview], interview_files: List[Intervie
     files: List[File] = []
 
     logger.info("Hashing files...")
-    with utils.get_progress_bar() as progress:
-        task = progress.add_task("Hashing files...", total=len(interview_files))
-        for interview_file in interview_files:
-            progress.update(task, advance=1)
-            file = File(file_path=interview_file.interview_file)
-            files.append(file)
+    task = progress.add_task("Hashing files...", total=len(interview_files))
+    for interview_file in interview_files:
+        progress.update(task, advance=1)
+        file = File(file_path=interview_file.interview_file)
+        files.append(file)
 
     sql_queries = []
     logger.info("Generating SQL queries...")
@@ -292,7 +303,7 @@ def generate_queries(interviews: List[Interview], interview_files: List[Intervie
     return sql_queries
 
 
-def import_interviews(config_file: Path, study_id: str) -> None:
+def import_interviews(config_file: Path, study_id: str, progress: Progress) -> None:
     """
     Imports the interviews into the database.
 
@@ -307,35 +318,39 @@ def import_interviews(config_file: Path, study_id: str) -> None:
     logger.info(f"Fetching interviews for {study_id}")
     interviews: List[Interview] = []
 
-    with utils.get_progress_bar() as progress:
-        task = progress.add_task(
-            "Fetching interviews for subjects", total=len(subjects)
+    task = progress.add_task("Fetching interviews for subjects", total=len(subjects))
+    for subject_id in subjects:
+        progress.update(
+            task, advance=1, description=f"Fetching {subject_id}'s interviews..."
         )
-        for subject_id in subjects:
-            progress.update(
-                task, advance=1, description=f"Fetching {subject_id}'s interviews..."
+        interviews.extend(
+            fetch_interviews(
+                config_file=config_file, subject_id=subject_id, study_id=study_id
             )
-            interviews.extend(
-                fetch_interviews(config_file=config_file, subject_id=subject_id)
-            )
+        )
 
-        # Get the interview files
-        logger.info("Fetching interview files...")
-        interview_files: List[InterviewFile] = []
+    # Get the interview files
+    logger.info("Fetching interview files...")
+    interview_files: List[InterviewFile] = []
 
-        task = progress.add_task("Fetching interview files...", total=len(interviews))
-        for interview in interviews:
-            progress.update(task, advance=1)
-            interview_files.extend(fetch_interview_files(interview=interview))
+    num_interviews = 2
+    interview_counter = 0
+    task = progress.add_task("Fetching interview files...", total=len(interviews))
+    for interview in interviews:
+        if interview_counter > num_interviews:
+            break
+        interview_counter += 1
+        progress.update(task, advance=1)
+        interview_files.extend(fetch_interview_files(interview=interview))
 
     # Generate the SQL queries to import the interview files
     sql_queries = generate_queries(
-        interviews=interviews, interview_files=interview_files
+        interviews=interviews, interview_files=interview_files, progress=progress
     )
 
     # Execute the SQL queries
     db.execute_queries(
-        config_file=config_file, queries=sql_queries, show_commands=False
+        config_file=config_file, queries=sql_queries
     )
 
 
@@ -367,9 +382,17 @@ if __name__ == "__main__":
     console.rule(f"[bold red]{MODULE_NAME}")
     logger.info(f"Using config file: {config_file}")
 
-    study_ids = data.get_all_studies(config_file=config_file)
-
-    for study_id in study_ids:
-        import_interviews(config_file=config_file, study_id=study_id)
+    study_ids = orchestrator.get_studies(config_file=config_file)
+    with utils.get_progress_bar() as progress:
+        study_task = progress.add_task("Importing interviews...", total=len(study_ids))
+        for study_id in study_ids:
+            progress.update(
+                study_task,
+                advance=1,
+                description=f"Importing interviews for {study_id}...",
+            )
+            import_interviews(
+                config_file=config_file, study_id=study_id, progress=progress
+            )
 
     logger.info("[bold green]Done!", extra={"markup": True})

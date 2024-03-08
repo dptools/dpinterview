@@ -30,6 +30,7 @@ from typing import List
 import pandas as pd
 from rich.logging import RichHandler
 
+from pipeline import orchestrator
 from pipeline.helpers import cli, db, utils
 from pipeline.helpers.config import config
 from pipeline.models.study import Study
@@ -175,36 +176,6 @@ def insert_subjects(config_file: Path, subjects: List[Subject]):
     db.execute_queries(config_file=config_file, queries=queries, show_commands=False)
 
 
-def get_studies(config_file: Path) -> List[str]:
-    """
-    Gets the list of studies PHOENIX
-
-    Args:
-        config_file (Path): The path to the configuration file.
-
-    Returns:
-        List[str]: The list of studies.
-    """
-    params = config(path=config_file, section="general")
-    data_root = params["data_root"]
-
-    studies = [d.name for d in Path(data_root, "GENERAL").iterdir() if d.is_dir()]
-
-    # Check if study metadata exists
-    if not studies:
-        logger.error(f"No studies found in {data_root}.")
-        raise FileNotFoundError(f"No studies found in {data_root}")
-
-    for study in studies:
-        try:
-            get_study_metadata(config_file=config_file, study_id=study)
-        except FileNotFoundError:
-            logger.warning(f"Study {study} has no metadata file.")
-            studies.remove(study)
-
-    return studies
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog=MODULE_NAME, description="Gather metadata for files."
@@ -234,7 +205,7 @@ if __name__ == "__main__":
     console.rule(f"[bold red]{MODULE_NAME}")
     logger.info(f"Using config file: {config_file}")
 
-    studies = get_studies(config_file=config_file)
+    studies = orchestrator.get_studies(config_file=config_file)
 
     for study_id in studies:
         logger.info(f"Study ID: {study_id}")

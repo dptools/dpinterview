@@ -27,7 +27,7 @@ from typing import List, Optional
 import pandas as pd
 from rich.logging import RichHandler
 
-from pipeline import data, orchestrator
+from pipeline import data, orchestrator, healer
 from pipeline.helpers import cli, db, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.openface_qc import OpenfaceQC
@@ -187,11 +187,13 @@ if __name__ == "__main__":
     logger.info(f"Using config file: {config_file}")
 
     config_params = utils.config(config_file, section="general")
-    study_id = config_params["study"]
+    studies = orchestrator.get_studies(config_file=config_file)
 
     COUNTER = 0
 
     logger.info("[bold green]Starting openface_qc loop...", extra={"markup": True})
+    study_id = studies[0]
+    logger.info(f"Statring with study: {study_id}")
 
     while True:
         # Get file to process
@@ -200,18 +202,24 @@ if __name__ == "__main__":
         )
 
         if file_to_process is None:
-            # Log if any files were processed
-            if COUNTER > 0:
-                data.log(
-                    config_file=config_file,
-                    module_name=MODULE_NAME,
-                    message=f"Ran OpenFace QC on {COUNTER} files.",
-                )
-                COUNTER = 0
+            if study_id == studies[-1]:
+                # Log if any files were processed
+                if COUNTER > 0:
+                    data.log(
+                        config_file=config_file,
+                        module_name=MODULE_NAME,
+                        message=f"Ran OpenFace QC on {COUNTER} files.",
+                    )
+                    COUNTER = 0
 
-            # Snooze if no files to process
-            orchestrator.snooze(config_file=config_file)
-            continue
+                # Snooze if no files to process
+                orchestrator.snooze(config_file=config_file)
+                study_id = studies[0]
+                continue
+            else:
+                study_id = studies[studies.index(study_id) + 1]
+                logger.info(f"Switching to study: {study_id}")
+                continue
 
         COUNTER += 1
         logger.info(
@@ -219,8 +227,14 @@ if __name__ == "__main__":
             extra={"markup": True},
         )
 
-        with Timer() as timer:
-            openface_qc_result = openface_qc(of_processed_path=file_to_process)
+        try:
+            with Timer() as timer:
+                openface_qc_result = openface_qc(of_processed_path=file_to_process)
 
-        openface_qc_result.ofqc_process_time = timer.duration
-        log_openface_qc(config_file=config_file, openface_qc_result=openface_qc_result)
+            openface_qc_result.ofqc_process_time = timer.duration
+            log_openface_qc(
+                config_file=config_file, openface_qc_result=openface_qc_result
+            )
+        except FileNotFoundError as e:
+            logger.error(e)
+            healer.clean_openface(config_file=config_file, openface_dir=file_to_process)

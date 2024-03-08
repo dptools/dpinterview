@@ -68,7 +68,7 @@ class File:
             file_size_mb FLOAT NOT NULL,
             file_path TEXT PRIMARY KEY,
             m_time TIMESTAMP NOT NULL,
-            md5 TEXT NOT NULL UNIQUE
+            md5 TEXT NOT NULL
         );
         """
 

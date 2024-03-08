@@ -98,8 +98,7 @@ def construct_report_path(config_file: Path, interview_name: str) -> Path:
     Returns:
         Path: The path to the report.
     """
-    config_params = utils.config(path=config_file, section="general")
-    data_root = Path(config_params["data_root"])
+    data_root = orchestrator.get_data_root(config_file=config_file)
 
     dpdash_dict = dpdash.parse_dpdash_name(interview_name)
 
@@ -198,13 +197,15 @@ if __name__ == "__main__":
     logger.info(f"Using config file: {config_file}")
 
     config_params = utils.config(config_file, section="general")
-    study_id = config_params["study"]
+    studies = orchestrator.get_studies(config_file=config_file)
 
     COUNTER = 0
 
     logger.info(
         "[bold green]Starting report_generation loop...", extra={"markup": True}
     )
+    study_id = studies[0]
+    logger.info(f"Statring with study: {study_id}")
 
     while True:
         # Get interview name to process
@@ -213,18 +214,25 @@ if __name__ == "__main__":
         )
 
         if interview_name is None:
-            # Log if any reports were generated
-            if COUNTER > 0:
-                data.log(
-                    config_file=config_file,
-                    module_name=MODULE_NAME,
-                    message=f"Generated {COUNTER} reports.",
-                )
-                COUNTER = 0
+            if study_id == studies[-1]:
+                # Log if any reports were generated
+                if COUNTER > 0:
+                    data.log(
+                        config_file=config_file,
+                        module_name=MODULE_NAME,
+                        message=f"Generated {COUNTER} reports.",
+                    )
+                    COUNTER = 0
 
-            # Snooze if no interviews to process
-            orchestrator.snooze(config_file=config_file)
-            continue
+                # Snooze if no interviews to process
+                orchestrator.snooze(config_file=config_file)
+                study_id = studies[0]
+                logger.info(f"Restarting with study: {study_id}")
+                continue
+            else:
+                study_id = studies[studies.index(study_id) + 1]
+                logger.info(f"Switching to study: {study_id}")
+                continue
 
         COUNTER += 1
         logger.info(

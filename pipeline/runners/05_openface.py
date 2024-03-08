@@ -144,8 +144,7 @@ def construct_output_path(config_file: Path, video_path: Path) -> Path:
         config_file (Path): Path to config file
         video_path (Path): Path to video
     """
-    config_params = utils.config(path=config_file, section="general")
-    data_root = Path(config_params["data_root"])
+    data_root = orchestrator.get_data_root(config_file=config_file)
 
     base_name = Path(video_path).name
     # Remove extension
@@ -166,7 +165,7 @@ def construct_output_path(config_file: Path, video_path: Path) -> Path:
         "PROTECTED",
         dp_dash_dict["study"],  # type: ignore
         dp_dash_dict["subject"],  # type: ignore
-        data_type,
+        data_type,  # type: ignore
         "processed",
         "openface",
         base_name,
@@ -263,11 +262,7 @@ def run_openface(
             progress.add_task("[green]Running OpenFace...", total=None)
 
             non_completed = False
-            cli.execute_commands(
-                command_array=command_array,
-                on_fail=_on_fail,
-                logger=logger,
-            )
+            cli.execute_commands(command_array=command_array, on_fail=_on_fail)
 
     return
 
@@ -354,11 +349,13 @@ if __name__ == "__main__":
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )
 
+    orchestrator.redirect_temp_dir(config_file=config_file)
+
     console.rule(f"[bold red]{MODULE_NAME}")
     logger.info(f"Using config file: {config_file}")
 
     config_params = utils.config(config_file, section="general")
-    study_id = config_params["study"]
+    studyies = orchestrator.get_studies(config_file=config_file)
 
     INSTANCE_NAME = utils.get_instance_name(
         module_name=INSTANCE_NAME, process_name=sys.argv[0]
@@ -368,6 +365,8 @@ if __name__ == "__main__":
     SKIP_COUNTER = 0
 
     logger.info("[bold green]Starting OpenFace loop...", extra={"markup": True})
+    study_id = studyies[0]
+    logger.info(f"Staring with study: {study_id}")
 
     STASH: Optional[Tuple[Path, InterviewRole, Path]] = None
 
@@ -382,10 +381,17 @@ if __name__ == "__main__":
             )
 
         if file_to_process is None:
-            console.log("[bold green] No file to process.")
-            await_decrytion(config_file=config_file, counter=COUNTER)
-            COUNTER = 0
-            continue
+            if study_id == studyies[-1]:
+                logger.info("[bold green] No file to process.")
+                await_decrytion(config_file=config_file, counter=COUNTER)
+                COUNTER = 0
+                study_id = studyies[0]
+                logger.info(f"Restarting with study: {study_id}")
+                continue
+            else:
+                study_id = studyies[studyies.index(study_id) + 1]
+                logger.info(f"[bold green]Switching to study: {study_id}")
+                continue
 
         video_stream_path, interview_role, video_path = file_to_process
 
