@@ -166,6 +166,16 @@ if __name__ == "__main__":
                 file_path_to_process=video_stream_path,
                 output_path=openface_path,
             )
+        of_duration = timer.duration
+
+        # Run OpenFace overlay (re-runs OpenFace on face-aligned frames)
+        with Timer() as timer:
+            openface.run_openface_overlay(
+                config_file=config_file,
+                openface_path=openface_path,
+                output_video_path=openface_path / "openface_aligned.mp4",
+            )
+        overlay_duration = timer.duration
 
         # Log to DB
         openface.log_openface(
@@ -174,8 +184,11 @@ if __name__ == "__main__":
             interview_role=interview_role,
             video_path=video_path,
             openface_path=openface_path,
-            process_time=timer.duration,
+            openface_process_time=of_duration,
+            overlay_process_time=overlay_duration,
         )
+
+        openface.clean_up_after_openface(openface_path=openface_path)
 
         # Get other stream to process
         logger.info(f"Checking for other stream to process from {video_path}")

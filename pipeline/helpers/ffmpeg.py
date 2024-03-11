@@ -125,3 +125,39 @@ def crop_video(
             command_array=cli_command_array,
             on_fail=_on_fail,
         )
+
+
+def images_to_vid(
+    image_dir: Path,
+    output_file: Path,
+    frame_rate: int = 25,
+    images_pattern: str = "frame_det_00_%06d.bmp",
+) -> None:
+    """
+    Convert a sequence of images to a video using FFmpeg.
+
+    Args:
+        image_dir (Path): The directory containing the images.
+        output_file (Path): The path to the output video file.
+
+    Returns:
+        None
+    """
+
+    cli_command_array = [
+        "ffmpeg",
+        "-y",  # overwrite output file if it exists
+        "-framerate",
+        str(frame_rate),
+        "-i",
+        f"{image_dir}/{images_pattern}",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        output_file,
+    ]
+
+    with utils.get_progress_bar() as progress:
+        progress.add_task("[green]Converting images to video...", total=None)
+        cli.execute_commands(command_array=cli_command_array)

@@ -50,12 +50,14 @@ class Openface:
         video_path: Path,
         of_processed_path: Path,
         of_process_time: Optional[float] = None,
+        of_overlay_provess_time: Optional[float] = None,
     ):
         self.vs_path = vs_path
         self.ir_role = ir_role
         self.video_path = video_path
         self.of_processed_path = of_processed_path
         self.of_process_time: Optional[float] = of_process_time
+        self.of_overlay_provess_time: Optional[float] = of_overlay_provess_time
         self.of_timestamp = datetime.now()
 
     def __repr__(self):
@@ -76,6 +78,7 @@ class Openface:
             video_path TEXT NOT NULL,
             of_processed_path TEXT NOT NULL UNIQUE,
             of_process_time REAL,
+            of_overlay_provess_time REAL,
             of_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (video_path, ir_role) REFERENCES video_streams (video_path, ir_role)
         );
@@ -153,14 +156,28 @@ class Openface:
         else:
             process_time = str(self.of_process_time)
 
+        if self.of_overlay_provess_time is None:
+            overlay_process_time = "NULL"
+        else:
+            overlay_process_time = str(self.of_overlay_provess_time)
+
         sql_query = f"""
-        INSERT INTO openface (vs_path, ir_role, video_path, of_processed_path, of_process_time)
+        INSERT INTO openface (
+            vs_path,
+            ir_role,
+            video_path,
+            of_processed_path,
+            of_process_time,
+            of_overlay_provess_time,
+            of_timestamp)
         VALUES (
             '{self.vs_path}',
             '{self.ir_role.value}',
             '{self.video_path}',
             '{self.of_processed_path}',
-            {process_time}
+            {process_time},
+            {overlay_process_time},
+            '{self.of_timestamp}'
         );
         """
 
