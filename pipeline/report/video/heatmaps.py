@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from reportlab.pdfgen import canvas
 
-from pipeline import constants, data
+from pipeline import constants, core
 from pipeline.helpers import image, pdf, utils
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.lite.cluster_bar_config import ClusterBarsConfig
@@ -884,7 +884,7 @@ def construct_heatmap_by_role(
         frame_frequency=frame_frequency,
         config_file=config_file,
     )
-    frame_paths = data.construct_frame_paths(
+    frame_paths = core.construct_frame_paths(
         frame_numbers=frame_numbers,
         interview_name=interview_name,
         role=role,

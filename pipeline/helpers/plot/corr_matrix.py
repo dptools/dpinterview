@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from pipeline import data
+from pipeline import core
 from pipeline.helpers import dpdash
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.lite.heatmap_config import HeatmapConfig
@@ -137,7 +137,7 @@ def generate_correlation_matric(
     subject_id = dpdash_dict["subject"]
     study_id = dpdash_dict["study"]
 
-    of_fau_session = data.fetch_openface_features(
+    of_fau_session = core.fetch_openface_features(
         interview_name=interview_name,
         subject_id=subject_id,
         study_id=study_id,
@@ -148,7 +148,7 @@ def generate_correlation_matric(
 
     match role:
         case InterviewRole.SUBJECT:
-            of_fau_dist = data.fetch_openface_subject_distribution(
+            of_fau_dist = core.fetch_openface_subject_distribution(
                 subject_id=subject_id,
                 cols=au_cols,
                 config_file=config_file_path,

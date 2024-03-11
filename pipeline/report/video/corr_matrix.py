@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from reportlab.pdfgen import canvas
 
-from pipeline import data
+from pipeline import core
 from pipeline.helpers import dpdash, pdf, utils
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.lite.interview_metadata import InterviewMetadata
@@ -323,7 +323,7 @@ def construct_pose_mean_tables_by_role(
     study_id = dpdash_dict["study"]
     subject_id = dpdash_dict["subject"]
 
-    session_of_pose_features = data.fetch_openface_features(
+    session_of_pose_features = core.fetch_openface_features(
         interview_name=interview_name,
         subject_id=subject_id,
         study_id=study_id,
@@ -337,7 +337,7 @@ def construct_pose_mean_tables_by_role(
 
     match role:
         case InterviewRole.SUBJECT:
-            subject_of_pose_features = data.fetch_openface_subject_distribution(
+            subject_of_pose_features = core.fetch_openface_subject_distribution(
                 subject_id=subject_id,
                 cols=required_cols,
                 config_file=config_file,
@@ -525,7 +525,7 @@ def construct_fau_z_scores_table_by_role(
     study_id = dp_dast_dict["study"]
     subject_id = dp_dast_dict["subject"]
 
-    session_of_pose_features = data.fetch_openface_features(
+    session_of_pose_features = core.fetch_openface_features(
         interview_name=interview_name,
         subject_id=subject_id,
         study_id=study_id,
@@ -557,7 +557,7 @@ def construct_fau_z_scores_table_by_role(
 
     if role is InterviewRole.SUBJECT:
         # Compute Subject Z Score
-        subject_of_pose_features = data.fetch_openface_subject_distribution(
+        subject_of_pose_features = core.fetch_openface_subject_distribution(
             subject_id=subject_id,
             cols=au_cols,
             config_file=config_file,

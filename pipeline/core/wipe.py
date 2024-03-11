@@ -7,7 +7,7 @@ from typing import List, Optional
 import logging
 
 from pipeline.helpers import cli, db, utils
-from pipeline import data
+from pipeline import core
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.pdf_reports import PdfReport
 from pipeline.models.load_openface import LoadOpenface
@@ -145,7 +145,7 @@ def get_interview_files(
     of_paths: List[Path] = []
     for role in roles:
         try:
-            stream = data.get_interview_stream(
+            stream = core.get_interview_stream(
                 config_file=config_file,
                 interview_name=interview_name,
                 role=role,
@@ -159,7 +159,7 @@ def get_interview_files(
             streams.append(stream)
 
         try:
-            of_path = data.get_openface_path(
+            of_path = core.get_openface_path(
                 config_file=config_file,
                 interview_name=interview_name,
                 role=role,
@@ -173,7 +173,7 @@ def get_interview_files(
             of_paths.append(of_path)
 
     try:
-        report_path = data.get_pdf_report_path(
+        report_path = core.get_pdf_report_path(
             config_file=config_file,
             interview_name=interview_name,
             report_version=version,
@@ -241,7 +241,7 @@ def drop_interview_queries(
     of_paths: List[Path] = []
     for role in roles:
         try:
-            stream = data.get_interview_stream(
+            stream = core.get_interview_stream(
                 config_file=config_file,
                 interview_name=interview_name,
                 role=role,
@@ -255,7 +255,7 @@ def drop_interview_queries(
             streams.append(stream)
 
         try:
-            of_path = data.get_openface_path(
+            of_path = core.get_openface_path(
                 config_file=config_file,
                 interview_name=interview_name,
                 role=role,

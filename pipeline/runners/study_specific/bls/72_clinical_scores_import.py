@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from rich.logging import RichHandler
 
-from pipeline import constants, data
+from pipeline import constants, core
 from pipeline.helpers import cli, db, utils
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.metrics import Metrics
@@ -311,7 +311,7 @@ def get_openface_metrics(
         Dict[str, Any]: The OpenFace metrics.
     """
 
-    of_data = data.fetch_openface_features(
+    of_data = core.fetch_openface_features(
         config_file=config_file,
         interview_name=interview_name,
         subject_id=subject_id,
@@ -320,9 +320,9 @@ def get_openface_metrics(
         cols=constants.POSE_COLS + constants.AU_COLS + ["timestamp"],
     )
 
-    of_metrics = data.construct_openface_metrics(session_openface_features=of_data)
+    of_metrics = core.construct_openface_metrics(session_openface_features=of_data)
 
-    qc_df = data.fetch_openface_qc(
+    qc_df = core.fetch_openface_qc(
         interview_name=interview_name,
         ir_role=InterviewRole.SUBJECT,
         config_file=config_file,

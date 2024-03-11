@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List
 from datetime import timedelta
 
-from pipeline import data
+from pipeline import core
 from pipeline.helpers import dpdash
 from pipeline.models.interview_roles import InterviewRole
 
@@ -129,30 +129,30 @@ class InterviewMetadata:
         study_time = study_time[3:]  # type: ignore Remove "day" prefix
         study_day = int(study_time)  # type: ignore
 
-        visit_count = data.get_interview_visit_count(
+        visit_count = core.get_interview_visit_count(
             config_file=config_file, interview_name=interview_name
         )
-        total_visits = data.get_total_visits_for_subject(
+        total_visits = core.get_total_visits_for_subject(
             config_file=config_file, subject_id=subject  # type: ignore
         )
 
-        interview_type = data.get_interview_type(
+        interview_type = core.get_interview_type(
             config_file=config_file, interview_name=interview_name
         )
 
-        interview_duration = data.get_interview_duration(
+        interview_duration = core.get_interview_duration(
             config_file=config_file, interview_name=interview_name
         )  # seconds
         interview_duration_td = timedelta(seconds=interview_duration)
 
-        interview_datetime = data.get_interview_datetime(
+        interview_datetime = core.get_interview_datetime(
             config_file=config_file, interview_name=interview_name
         )
         # split the datetime object into date and time
         # date = interview_datetime.date()
         time = interview_datetime.time()
 
-        interviewer_of = data.get_openface_path(
+        interviewer_of = core.get_openface_path(
             config_file=config_file,
             interview_name=interview_name,
             role=InterviewRole.INTERVIEWER,

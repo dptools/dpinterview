@@ -27,7 +27,7 @@ import shutil
 
 from rich.logging import RichHandler
 
-from pipeline import data, orchestrator
+from pipeline import core, orchestrator
 from pipeline.helpers import db, dpdash, utils, cli
 from pipeline.helpers.config import config
 from pipeline.helpers.timer import Timer
@@ -322,7 +322,7 @@ if __name__ == "__main__":
 
                     if study_id == studies[-1]:
                         # Log to database
-                        data.log(
+                        core.log(
                             config_file=config_file,
                             module_name=MODULE_NAME,
                             message=f"Decrypted {COUNTER} files.",
@@ -377,7 +377,7 @@ if __name__ == "__main__":
 
             logger.info(f"Decrypted {COUNTER} files.")
             # Log to database
-            data.log(
+            core.log(
                 config_file=config_file,
                 module_name=MODULE_NAME,
                 message=f"Decrypted {COUNTER} files.",

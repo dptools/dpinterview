@@ -30,7 +30,7 @@ import pandas as pd
 from rich.logging import RichHandler
 from tqdm import tqdm
 
-from pipeline import data, orchestrator
+from pipeline import core, orchestrator
 from pipeline.helpers import cli, db, dpdash, ffprobe, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.load_openface import LoadOpenface
@@ -185,7 +185,7 @@ def construct_load_openface(
         subject_of_path = of_runs[of_runs["ir_role"] == "subject"][
             "of_processed_path"
         ].iloc[0]
-        vs_path = data.get_interview_stream_from_openface_path(
+        vs_path = core.get_interview_stream_from_openface_path(
             config_file=config_file,
             of_path=subject_of_path,
         )
@@ -203,7 +203,7 @@ def construct_load_openface(
         interviewer_of_path = of_runs[of_runs["ir_role"] == "interviewer"][
             "of_processed_path"
         ].iloc[0]
-        vs_path = data.get_interview_stream_from_openface_path(
+        vs_path = core.get_interview_stream_from_openface_path(
             config_file=config_file,
             of_path=interviewer_of_path,
         )
@@ -253,7 +253,7 @@ def construct_insert_queries(
     df = pd.read_csv(csv_file, on_bad_lines="skip")
 
     # Get datatypes
-    datatypes = data.get_openface_datatypes(config_file, csv_file)
+    datatypes = core.get_openface_datatypes(config_file, csv_file)
     cols = df.columns
 
     # Cast data to correct datatype
@@ -441,7 +441,7 @@ if __name__ == "__main__":
             if study_id == studies[-1]:
                 # Log if any files were processed
                 if COUNTER > 0:
-                    data.log(
+                    core.log(
                         config_file=config_file,
                         module_name=MODULE_NAME,
                         message=f"Loaded OpenFace features for {COUNTER} interviews.",

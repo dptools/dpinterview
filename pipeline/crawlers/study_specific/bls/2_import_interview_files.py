@@ -35,7 +35,7 @@ from typing import Dict, List
 
 from rich.logging import RichHandler
 
-from pipeline import data
+from pipeline import core
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.models.files import File
@@ -244,7 +244,7 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
         time_dt = time.fromisoformat(parts[1].replace(".", ":"))
         interview_datetime = datetime.combine(date_dt, time_dt)
 
-        consent_date_s = data.get_consent_date_from_subject_id(
+        consent_date_s = core.get_consent_date_from_subject_id(
             config_file=config_file, subject_id=subject_id, study_id=study_id
         )
         if consent_date_s is None:
@@ -322,7 +322,7 @@ def import_interviews(config_file: Path) -> None:
     study_id = config_params["study"]
 
     # Get the subjects
-    subjects = data.get_subject_ids(config_file=config_file, study_id=study_id)
+    subjects = core.get_subject_ids(config_file=config_file, study_id=study_id)
 
     # Get the interviews
     logger.info(f"Fetching interviews for {study_id}")

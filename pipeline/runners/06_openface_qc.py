@@ -27,7 +27,7 @@ from typing import List, Optional
 import pandas as pd
 from rich.logging import RichHandler
 
-from pipeline import data, orchestrator, healer
+from pipeline import core, orchestrator, healer
 from pipeline.helpers import cli, db, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.openface_qc import OpenfaceQC
@@ -205,7 +205,7 @@ if __name__ == "__main__":
             if study_id == studies[-1]:
                 # Log if any files were processed
                 if COUNTER > 0:
-                    data.log(
+                    core.log(
                         config_file=config_file,
                         module_name=MODULE_NAME,
                         message=f"Ran OpenFace QC on {COUNTER} files.",

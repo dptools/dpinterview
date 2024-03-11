@@ -27,7 +27,7 @@ import os
 from rich.logging import RichHandler
 
 from pipeline.helpers import utils, db
-from pipeline import data
+from pipeline import core
 
 MODULE_NAME = "init_db"
 INSTANCE_NAME = MODULE_NAME
@@ -88,7 +88,7 @@ def generate_create_query(config_file: Path, csv_file: Path) -> str:
         config_file (Path): Path to the config file.
         csv_file (Path): Path to the sample csv file (OpenFace output).
     """
-    datatypes = data.get_openface_datatypes(config_file=config_file, csv_file=csv_file)
+    datatypes = core.get_openface_datatypes(config_file=config_file, csv_file=csv_file)
 
     query = """
         CREATE TABLE IF NOT EXISTS openface_features (

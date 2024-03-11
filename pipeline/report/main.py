@@ -12,7 +12,7 @@ import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
-from pipeline import constants, data
+from pipeline import constants, core
 from pipeline.helpers import dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.helpers.plot import corr_matrix, heatmaps
@@ -66,7 +66,7 @@ def generate_report(
     # Fetch OpenFace features for PT and INT from DB
     with console.status("Fetching OpenFace features...") as status:
         status.update("Fetching OpenFace features for subject...")
-        of_pt_session = data.fetch_openface_features(
+        of_pt_session = core.fetch_openface_features(
             interview_name=interview_name,
             subject_id=subject_id,
             study_id=study_id,
@@ -83,7 +83,7 @@ def generate_report(
 
         if interview_metadata.has_interviewer_stream:
             status.update("Fetching OpenFace features for interviewer...")
-            of_int_session = data.fetch_openface_features(
+            of_int_session = core.fetch_openface_features(
                 interview_name=interview_name,
                 subject_id=subject_id,
                 study_id=study_id,

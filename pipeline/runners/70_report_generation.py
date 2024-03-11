@@ -27,7 +27,7 @@ from typing import List, Optional
 
 from rich.logging import RichHandler
 
-from pipeline import data, healer, orchestrator
+from pipeline import core, healer, orchestrator
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.pdf_reports import PdfReport
@@ -105,7 +105,7 @@ def construct_report_path(config_file: Path, interview_name: str) -> Path:
     study_id: str = dpdash_dict["study"]  # type: ignore
     subject_id: str = dpdash_dict["subject"]  # type: ignore
 
-    interview_type = data.get_interview_type(
+    interview_type = core.get_interview_type(
         interview_name=interview_name, config_file=config_file
     )
 
@@ -217,7 +217,7 @@ if __name__ == "__main__":
             if study_id == studies[-1]:
                 # Log if any reports were generated
                 if COUNTER > 0:
-                    data.log(
+                    core.log(
                         config_file=config_file,
                         module_name=MODULE_NAME,
                         message=f"Generated {COUNTER} reports.",

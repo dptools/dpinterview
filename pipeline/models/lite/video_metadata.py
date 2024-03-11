@@ -3,7 +3,7 @@ Represents metadata for a Video.
 """
 from pathlib import Path
 
-from pipeline import data
+from pipeline import core
 from pipeline.helpers import db
 from pipeline.models.interview_roles import InterviewRole
 
@@ -61,7 +61,7 @@ class VideoMetadata:
             config_file (Path): Path to the config file.
             interview_name (str): Name of the interview.
         """
-        vs_path = data.get_interview_stream(
+        vs_path = core.get_interview_stream(
             config_file=config_file, interview_name=interview_name, role=role
         )
 

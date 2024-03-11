@@ -27,7 +27,7 @@ from typing import List
 from rich.logging import RichHandler
 
 # from pipeline import data
-from pipeline.data import wipe
+from pipeline.core import wipe
 from pipeline.helpers import cli, db, utils
 from pipeline.helpers.timer import Timer
 

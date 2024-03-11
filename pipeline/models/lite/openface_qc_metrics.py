@@ -4,7 +4,7 @@ Represents OpenFace Quality Control metrics for a Openface Run
 
 from pathlib import Path
 
-from pipeline import data
+from pipeline import core
 from pipeline.helpers import db
 from pipeline.models.interview_roles import InterviewRole
 
@@ -77,7 +77,7 @@ class OpenFaceQcMetrics:
                 the given interview name and role.
         """
 
-        of_path = data.get_openface_path(
+        of_path = core.get_openface_path(
             config_file=config_file, interview_name=interview_name, role=role
         )
 

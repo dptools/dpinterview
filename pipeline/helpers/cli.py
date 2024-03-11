@@ -54,6 +54,28 @@ def redirect_temp_dir(new_temp_dir: Path) -> None:
     logger.debug("Temporary directory set to: %s", temp_dir_str)
 
 
+def set_environment_variable(variable: str, value: str, overwrite: bool = True) -> None:
+    """
+    Set an environment variable.
+
+    Args:
+        variable (str): The name of the environment variable to set.
+        value (str): The value to set the environment variable to.
+        overwrite (bool, optional): Whether to overwrite the environment variable if it already exists.
+            Defaults to True.
+
+    Returns:
+        None
+    """
+    if overwrite or variable not in os.environ:
+        os.environ[variable] = value
+        logger.debug(f"Environment variable set: {variable}={value}")
+    else:
+        logger.debug(
+            f"Environment variable not set (already exists): {variable}={os.environ[variable]}"
+        )
+
+
 def chown(file_path: Path, user: str, group: str) -> None:
     """
     Changes the ownership of a file.
@@ -211,7 +233,7 @@ def singularity_run(config_file: Path, command_array: list) -> list:
 
     # Check if singularity_image_path exists
     if not Path(singularity_image_path).is_file():
-        print("could not read file: " + singularity_image_path)
+        logger.error("Could not read file: " + singularity_image_path)
         sys.exit(1)
 
     command_array = [

@@ -10,7 +10,7 @@ from typing import Optional
 
 from reportlab.pdfgen import canvas
 
-from pipeline import data
+from pipeline import core
 from pipeline.helpers import dpdash, image, pdf, utils
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.lite.frame_request import FrameRequest
@@ -97,7 +97,7 @@ def construct_sample_image_by_role(
     Returns:
         None
     """
-    of_path = data.get_openface_path(
+    of_path = core.get_openface_path(
         interview_name=interview_name, role=role, config_file=config_file
     )
 

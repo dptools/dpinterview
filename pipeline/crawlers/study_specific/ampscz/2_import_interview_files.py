@@ -36,7 +36,7 @@ from typing import Dict, List
 from rich.logging import RichHandler
 from rich.progress import Progress
 
-from pipeline import data, orchestrator
+from pipeline import core, orchestrator
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.models.files import File
@@ -234,7 +234,7 @@ def fetch_interviews(
                     f"{subject_id}: Could not parse date and time from {base_name}. Skipping..."
                 )
                 continue
-            consent_date_s = data.get_consent_date_from_subject_id(
+            consent_date_s = core.get_consent_date_from_subject_id(
                 config_file=config_file, subject_id=subject_id, study_id=study_id
             )
             if consent_date_s is None:
@@ -312,7 +312,7 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     """
 
     # Get the subjects
-    subjects = data.get_subject_ids(config_file=config_file, study_id=study_id)
+    subjects = core.get_subject_ids(config_file=config_file, study_id=study_id)
 
     # Get the interviews
     logger.info(f"Fetching interviews for {study_id}")

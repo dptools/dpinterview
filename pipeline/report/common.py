@@ -7,7 +7,7 @@ from typing import List
 
 from reportlab.pdfgen import canvas
 
-from pipeline import data
+from pipeline import core
 from pipeline.helpers import pdf
 from pipeline.models.lite.interview_metadata import InterviewMetadata
 from pipeline.models.lite.ticks_config import TicksConfig
@@ -168,10 +168,10 @@ def print_visit_and_participant_metadata(
     n_of_bot_vid = heatmap_legend_bottom_vid - 4
     n_of_bot_aud = heatmap_legend_bottom_aud - 4
 
-    study_visits_count = data.get_study_visits_count(
+    study_visits_count = core.get_study_visits_count(
         study_id=study_id, config_file=config_file
     )
-    study_subjects_count = data.get_study_subjects_count(
+    study_subjects_count = core.get_study_subjects_count(
         study_id=study_id, config_file=config_file
     )
     n_of_text = (

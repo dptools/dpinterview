@@ -20,6 +20,8 @@ from pipeline.models.video_streams import VideoStream
 from pipeline.models.openface import Openface
 from pipeline.models.openface_qc import OpenfaceQC
 from pipeline.models.load_openface import LoadOpenface
+from pipeline.models.pdf_reports import PdfReport
+from pipeline.models.ffprobe_metadata import FfprobeMetadata
 
 from pipeline.helpers import db
 
@@ -53,7 +55,8 @@ def init_db(config_file: Path):
     Args:
         config_file (Path): Path to the config file.
     """
-    drop_queries: List[str] = [
+    drop_queries_l: List[Union[str, List[str]]] = [
+        PdfReport.drop_table_query(),
         LoadOpenface.drop_table_query(),
         OpenfaceQC.drop_table_query(),
         Openface.drop_table_query(),
@@ -69,6 +72,7 @@ def init_db(config_file: Path):
         Study.drop_table_query(),
         KeyStore.drop_table_query(),
         Log.drop_table_query(),
+        FfprobeMetadata.drop_table_query(),
     ]
 
     create_queries_l: List[Union[str, List[str]]] = [
@@ -87,7 +91,11 @@ def init_db(config_file: Path):
         Openface.init_table_query(),
         OpenfaceQC.init_table_query(),
         LoadOpenface.init_table_query(),
+        PdfReport.init_table_query(),
+        FfprobeMetadata.init_table_query(),
     ]
+
+    drop_queries = flatten_list(drop_queries_l)
     create_queries = flatten_list(create_queries_l)
 
     sql_queries: List[str] = drop_queries + create_queries
