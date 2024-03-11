@@ -291,7 +291,9 @@ def run_openface_overlay(
 
     params: List[Tuple[Path, Path, int]] = []
 
-    with tempfile.TemporaryDirectory() as temp_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="openface_overlay_"
+    ) as temp_dir:
         temp_dir_path = Path(temp_dir)
         for img in image_files:
             output_img = temp_dir_path / img.name
