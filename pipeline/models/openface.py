@@ -92,6 +92,57 @@ class Openface:
         """
         return sql_query
 
+    @staticmethod
+    def drop_row_query(of_processed_path: Path) -> str:
+        """
+        Return the SQL query to delete a row from the 'openface' table.
+
+        Args:
+            of_processed_path (Path): Path to the processed video
+
+        Returns:
+            str: SQL query to delete the row
+        """
+        sql_query = f"""
+        DELETE FROM openface
+        WHERE of_processed_path = '{of_processed_path}';
+        """
+        return sql_query
+
+    @staticmethod
+    def drop_row_query_v(video_path: Path) -> str:
+        """
+        Return the SQL query to delete a row from the 'openface' table.
+
+        Args:
+            video_path (Path): Path to the source video
+
+        Returns:
+            str: SQL query to delete the row
+        """
+        sql_query = f"""
+        DELETE FROM openface
+        WHERE video_path = '{video_path}';
+        """
+        return sql_query
+
+    @staticmethod
+    def drop_row_query_vs(vs_path: Path) -> str:
+        """
+        Return the SQL query to delete a row from the 'openface' table.
+
+        Args:
+            video_path (Path): Path to the video stream
+
+        Returns:
+            str: SQL query to delete the row
+        """
+        sql_query = f"""
+        DELETE FROM openface
+        WHERE vs_path = '{vs_path}';
+        """
+        return sql_query
+
     def to_sql(self) -> str:
         """
         Return the SQL query to insert the object into the 'openface' table.

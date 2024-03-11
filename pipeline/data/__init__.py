@@ -1,4 +1,6 @@
-"""  Module contain helper functions specific to this data pipeline """
+"""
+Module contain helper functions specific to this data pipeline
+"""
 
 from datetime import datetime
 from functools import lru_cache
@@ -567,9 +569,7 @@ def get_study_subjects_count(config_file: Path, study_id: str) -> Optional[int]:
 
 
 def fetch_openface_qc(
-    interview_name: str,
-    ir_role: InterviewRole,
-    config_file: Path
+    interview_name: str, ir_role: InterviewRole, config_file: Path
 ) -> pd.DataFrame:
     """
     Get the successful frames percentage and confidence mean for a given interview and role.
@@ -611,7 +611,8 @@ def add_facial_expressivity_metric(
         df (pd.DataFrame): A DataFrame containing OpenFace features.
 
     Returns:
-        pd.DataFrame: A DataFrame containing OpenFace features with the facial expressivity metric added.
+        pd.DataFrame: A DataFrame containing OpenFace features with the
+            facial expressivity metric added.
     """
 
     df["facial_expressivity"] = df[fau_cols].mean(axis=1)
@@ -627,10 +628,11 @@ def construct_openface_metrics(session_openface_features: pd.DataFrame) -> Dict:
         session_openface_features (pd.DataFrame): A DataFrame containing OpenFace features.
 
     Returns:
-        Dict: A dictionary containing the mean, standard deviation, and correlations of OpenFace features.
+        Dict: A dictionary containing the mean, standard deviation, and
+            correlations of OpenFace features.
     """
-    POSE_COLS = constants.POSE_COLS
-    AU_COLS = constants.AU_COLS
+    pose_cols = constants.POSE_COLS
+    au_cols = constants.AU_COLS
 
     openface_features = dict()
     start_time = session_openface_features["timestamp"].min()  # 00:00:00
@@ -653,10 +655,10 @@ def construct_openface_metrics(session_openface_features: pd.DataFrame) -> Dict:
     session_openface_features.drop(columns=["timestamp"], inplace=True)
 
     session_openface_features = add_facial_expressivity_metric(
-        session_openface_features, AU_COLS
+        session_openface_features, au_cols
     )
 
-    of_cols = POSE_COLS + AU_COLS + ["facial_expressivity"]
+    of_cols = pose_cols + au_cols + ["facial_expressivity"]
     session_means = session_openface_features.mean(axis=0)
     session_std = session_openface_features.std(axis=0)
 
@@ -672,19 +674,47 @@ def construct_openface_metrics(session_openface_features: pd.DataFrame) -> Dict:
     openface_features["mean"] = means
     openface_features["std"] = stds
 
-    au_features = session_openface_features[AU_COLS]
+    au_features = session_openface_features[au_cols]
     au_corr = au_features.corr()
 
     correlations = dict()
-    for i in range(len(AU_COLS)):
-        for j in range(len(AU_COLS)):
+    for i in range(len(au_cols)):
+        for j in range(len(au_cols)):
             if i == j:
                 continue
 
-            correlations[AU_COLS[i] + "_vs_" + AU_COLS[j] + "_corr"] = au_corr.iloc[
+            correlations[au_cols[i] + "_vs_" + au_cols[j] + "_corr"] = au_corr.iloc[
                 i, j
             ]
 
     openface_features["correlations"] = correlations
 
     return openface_features
+
+
+def get_pdf_report_path(
+    config_file: Path, interview_name: str, report_version: str
+) -> Optional[Path]:
+    """
+    Get the path to the PDF report for the given interview
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+        report_version (str): The version of the report.
+
+    Returns:
+        Path: The path to the PDF report.
+    """
+    query = f"""
+    SELECT pr_path
+    FROM pdf_reports
+    WHERE interview_name = '{interview_name}' AND pr_version = '{report_version}';
+    """
+
+    results = db.fetch_record(config_file=config_file, query=query)
+
+    if results is None:
+        return None
+
+    return Path(results)
