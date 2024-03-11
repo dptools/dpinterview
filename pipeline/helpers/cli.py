@@ -61,7 +61,8 @@ def set_environment_variable(variable: str, value: str, overwrite: bool = True) 
     Args:
         variable (str): The name of the environment variable to set.
         value (str): The value to set the environment variable to.
-        overwrite (bool, optional): Whether to overwrite the environment variable if it already exists.
+        overwrite (bool, optional): Whether to overwrite the environment variable
+            if it already exists.
             Defaults to True.
 
     Returns:
@@ -233,7 +234,7 @@ def singularity_run(config_file: Path, command_array: list) -> list:
 
     # Check if singularity_image_path exists
     if not Path(singularity_image_path).is_file():
-        logger.error("Could not read file: " + singularity_image_path)
+        logger.error(f"Could not read file: {singularity_image_path}")
         sys.exit(1)
 
     command_array = [
