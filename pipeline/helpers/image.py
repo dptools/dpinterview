@@ -183,3 +183,40 @@ def blur_image(source_image: Path, dest_image: Path, blur_kernel_size: int = 15)
 
     # Save the blurred image
     cv2.imwrite(dest_image, img)
+
+
+def pad_image(
+    source_image: Path,
+    dest_image: Path,
+    padding: int,
+    padding_color: Tuple[int, int, int] = (0, 0, 0),
+):
+    """
+    Pads an image.
+
+    Args:
+        source_image (Path): The path to the source image.
+        dest_image (Path): The path to save the padded image.
+        padding (int, optional): The padding size. Defaults to 50.
+        padding_color (Tuple[int, int, int], optional): The color to use for padding.
+            Defaults to (0, 0, 0), which is black.
+    """
+    # Read the image
+    img = cv2.imread(str(source_image))
+
+    # Get the image dimensions (OpenCV stores image data as NumPy ndarray)
+    # height, width, _ = img.shape  # height, width, channels
+
+    # Create a new image with the padding
+    new_img = cv2.copyMakeBorder(
+        img,
+        padding,
+        padding,
+        padding,
+        padding,
+        cv2.BORDER_CONSTANT,
+        value=padding_color,
+    )
+
+    # Save the padded image
+    cv2.imwrite(str(dest_image), new_img)
