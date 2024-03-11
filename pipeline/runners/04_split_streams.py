@@ -157,8 +157,8 @@ def split_streams(
         black_bar_height = 0
 
     # out_w:out_h:x:y
-    left_crop_params = f"iw/2:ih-{2*black_bar_height}:0:{black_bar_height}"
-    right_crop_params = f"iw/2:ih-{2*black_bar_height}:iw/2:{black_bar_height}"
+    left_crop_params = f"iw/2:ih-{2 * black_bar_height}:0:{black_bar_height}"
+    right_crop_params = f"iw/2:ih-{2 * black_bar_height}:iw/2:{black_bar_height}"
 
     left_role = InterviewRole.from_str(config_params["left_role"])
     right_role = InterviewRole.from_str(config_params["right_role"])
@@ -211,7 +211,8 @@ def log_streams(config_file: Path, streams: List[VideoStream]) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="decryption", description="Module to decrypt files."
+        prog=MODULE_NAME,
+        description="Module to split video file into individual streams.",
     )
     parser.add_argument(
         "-c", "--config", type=str, help="Path to the config file.", required=False
@@ -239,12 +240,14 @@ if __name__ == "__main__":
     logger.info(f"Using config file: {config_file}")
 
     config_params = utils.config(config_file, section="general")
-    study_id = config_params["study"]
+    studies = orchestrator.get_studies(config_file=config_file)
 
     COUNTER = 0
     STREAMS_COUNTER = 0
 
     logger.info("[bold green]Starting split streams loop...", extra={"markup": True})
+    study_id = studies[0]
+    logger.info(f"Starting with study: {study_id}", extra={"markup": True})
 
     while True:
         # Get file to process
@@ -253,19 +256,28 @@ if __name__ == "__main__":
         )
 
         if file_to_process is None:
-            # Log if any files were processed
-            if COUNTER > 0:
-                data.log(
-                    config_file=config_file,
-                    module_name=MODULE_NAME,
-                    message=f"Split {COUNTER} files into {STREAMS_COUNTER} streams.",
-                )
-                COUNTER = 0
-                STREAMS_COUNTER = 0
+            if study_id == studies[-1]:
+                # Log if any files were processed
+                if COUNTER > 0:
+                    data.log(
+                        config_file=config_file,
+                        module_name=MODULE_NAME,
+                        message=f"Split {COUNTER} files into {STREAMS_COUNTER} streams.",
+                    )
+                    COUNTER = 0
+                    STREAMS_COUNTER = 0
 
-            # Snooze if no files to process
-            orchestrator.snooze(config_file=config_file)
-            continue
+                # Snooze if no files to process
+                orchestrator.snooze(config_file=config_file)
+                study_id = studies[0]
+                logger.info(
+                    f"Restarting with study: {study_id}", extra={"markup": True}
+                )
+                continue
+            else:
+                study_id = studies[studies.index(study_id) + 1]
+                logger.info(f"Switching to study: {study_id}", extra={"markup": True})
+                continue
 
         COUNTER += 1
 

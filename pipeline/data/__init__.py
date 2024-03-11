@@ -6,12 +6,15 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+import logging
 
 import pandas as pd
 
 from pipeline.helpers import db, dpdash, utils
 from pipeline.models.interview_roles import InterviewRole
 from pipeline import constants
+
+logger = logging.getLogger(__name__)
 
 
 def get_consent_date_from_subject_id(
@@ -176,13 +179,12 @@ def get_openface_path(
 subject {subject_id}, study {study_id}"
         )
 
-    match role:
-        case InterviewRole.SUBJECT:
-            openface_path = results.iloc[0]["subject_of_processed_path"]
-        case InterviewRole.INTERVIEWER:
-            openface_path = results.iloc[0]["interviewer_of_processed_path"]
-        case _:
-            raise ValueError(f"Invalid interview role: {role}")
+    if role == InterviewRole.SUBJECT:
+        openface_path = results.iloc[0]["subject_of_processed_path"]
+    elif role == InterviewRole.INTERVIEWER:
+        openface_path = results.iloc[0]["interviewer_of_processed_path"]
+    else:
+        raise ValueError(f"Invalid interview role: {role}")
 
     try:
         of_path = Path(openface_path)
@@ -372,6 +374,32 @@ def get_interview_stream(
     of_path = get_openface_path(
         config_file=config_file, interview_name=interview_name, role=role
     )
+
+    stream_query = f"""
+        SELECT vs_path
+        FROM openface
+        WHERE of_processed_path = '{of_path}'
+    """
+
+    stream_path = db.fetch_record(config_file=config_file, query=stream_query)
+
+    if stream_path is None:
+        return None
+
+    return Path(stream_path)
+
+
+def get_interview_stream_from_openface_path(
+    config_file: Path, of_path: Path
+) -> Optional[Path]:
+    """
+    Get the path to the video stream for the given interview and role.
+    Args:
+        config_file (Path): The path to the configuration file.
+        of_path (Path): The path to the openface directory.
+    Returns:
+        Optional[Path]: The path to the video stream if found, None otherwise.
+    """
 
     stream_query = f"""
         SELECT vs_path

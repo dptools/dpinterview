@@ -3,6 +3,7 @@ Module providing command line interface for the pipeline.
 """
 
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from pipeline.helpers.config import config
+
+logger = logging.getLogger(__name__)
 
 
 def get_repo_root() -> str:
@@ -24,6 +27,49 @@ def get_repo_root() -> str:
     return repo_root
 
 
+def redirect_temp_dir(new_temp_dir: Path) -> None:
+    """
+    Changes the temporary directory to the given directory.
+
+    Required for Singularity to work properly.
+
+    Args:
+        new_temp_dir (Path): The new temporary directory to use.
+
+    Returns:
+        None
+    """
+
+    # Set the temporary directory
+    temp_dir = new_temp_dir
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_dir_str = str(temp_dir)
+
+    # Set the environment variable
+    os.environ["TMPDIR"] = temp_dir_str
+    os.environ["TEMP"] = temp_dir_str
+    os.environ["TMP"] = temp_dir_str
+    os.environ["TMPDIR"] = temp_dir_str
+
+    logger.debug("Temporary directory set to: %s", temp_dir_str)
+
+
+def chown(file_path: Path, user: str, group: str) -> None:
+    """
+    Changes the ownership of a file.
+
+    Args:
+        file_path (Path): The path to the file.
+        user (str): The user to change the ownership to.
+        group (str): The group to change the ownership to.
+
+    Returns:
+        None
+    """
+    command_array = ["chown", "-R", f"{user}:{group}", str(file_path)]
+    execute_commands(command_array, shell=True)
+
+
 def check_if_running(process_name: str) -> bool:
     """
     Check if a process with the same path is running in the background.
@@ -35,7 +81,7 @@ def check_if_running(process_name: str) -> bool:
         bool: True if the process is running, False otherwise.
     """
     command = f"ps -ef | grep -v grep | grep -c {process_name}"
-    result = subprocess.run(command, stdout=subprocess.PIPE, shell=True, check=True)
+    result = subprocess.run(command, stdout=subprocess.PIPE, shell=True, check=False)
     num_processes = int(result.stdout.decode("utf-8"))
     return num_processes > 0
 
@@ -81,7 +127,6 @@ def get_number_of_running_processes(process_name: str) -> int:
 def execute_commands(
     command_array: list,
     shell: bool = False,
-    logger: Optional[logging.Logger] = None,
     on_fail: Callable = lambda: sys.exit(1),
 ) -> subprocess.CompletedProcess:
     """
@@ -99,11 +144,6 @@ def execute_commands(
         subprocess.CompletedProcess: The result of the command execution.
 
     """
-
-    if logger is None:
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-
     logger.debug("Executing command:")
     # cast to str to avoid error when command_array is a list of Path objects
     command_array = [str(x) for x in command_array]
@@ -143,9 +183,7 @@ def execute_commands(
     return result
 
 
-def singularity_run(
-    config_file: Path, command_array: list, logger: Optional[logging.Logger] = None
-) -> list:
+def singularity_run(config_file: Path, command_array: list) -> list:
     """
     Add Singularity-specific arguments to the command.
 
@@ -156,12 +194,9 @@ def singularity_run(
     Returns:
         list: The command to run inside the container, with Singularity-specific arguments added.
     """
-    if logger is None:
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-
     params = config(path=config_file, section="singularity")
     singularity_image_path = params["singularity_image_path"]
+    bind_params = params["bind_params"]
 
     # Check if singularity binary exists
     if shutil.which("singularity") is None:
@@ -182,7 +217,7 @@ def singularity_run(
     command_array = [
         "singularity",
         "exec",
-        "-B /data:/data",
+        f"-B {bind_params}",
         singularity_image_path,
     ] + command_array
 
@@ -195,7 +230,6 @@ def send_email(
     recipients: List[str],
     sender: str,
     attachments: Optional[List[Path]] = None,
-    logger: Optional[logging.Logger] = None,
 ) -> None:
     """
     Send an email with the given subject and message to the given recipients.
@@ -209,17 +243,10 @@ def send_email(
         sender (str): The sender of the email.
         attachments (List[Path], optional): The attachments to add to the email.
             Defaults to None.
-        logger (Optional[logging.Logger], optional): The logger to use for logging.
-            Defaults to None.
 
     Returns:
         None
     """
-
-    if logger is None:
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-
     if shutil.which("mail") is None:
         logger.error("[red][u]mail[/u] binary not found.[/red]", extra={"markup": True})
         logger.warning(
@@ -278,23 +305,16 @@ def remove_directory(path: Path) -> None:
     shutil.rmtree(path)
 
 
-def confirm_action(message: str, logger: Optional[logging.Logger] = None) -> bool:
+def confirm_action(message: str) -> bool:
     """
     Ask the user to confirm an action.
 
     Args:
         message (str): The message to display to the user.
-        logger (Optional[logging.Logger], optional): The logger to use for logging.
-            Defaults to None.
 
     Returns:
         bool: True if the user confirms the action, False otherwise.
     """
-
-    if logger is None:
-        logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)
-
     logger.warning(message)
     user_input = input("Do you want to continue? (yes/no): ")
 

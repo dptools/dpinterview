@@ -211,7 +211,7 @@ def log_video_qqc(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="decryption", description="Module to decrypt files."
+        prog=MODULE_NAME, description="Run Quick QC on video files."
     )
     parser.add_argument(
         "-c", "--config", type=str, help="Path to the config file.", required=False
@@ -239,11 +239,13 @@ if __name__ == "__main__":
     logger.info(f"Using config file: {config_file}")
 
     config_params = utils.config(config_file, section="general")
-    study_id = config_params["study"]
+    studies = orchestrator.get_studies(config_file=config_file)
 
     COUNTER = 0
 
     logger.info("[bold green]Starting video_qqc loop...", extra={"markup": True})
+    study_id = studies[0]
+    logger.info(f"Using study: {study_id}")
 
     while True:
         # Get file to process
@@ -252,18 +254,25 @@ if __name__ == "__main__":
         )
 
         if file_to_process is None:
-            # Log if any files were processed
-            if COUNTER > 0:
-                data.log(
-                    config_file=config_file,
-                    module_name=MODULE_NAME,
-                    message=f"Checked video_qqc for {COUNTER} files.",
-                )
-                COUNTER = 0
+            if study_id == studies[-1]:
+                # Log if any files were processed
+                if COUNTER > 0:
+                    data.log(
+                        config_file=config_file,
+                        module_name=MODULE_NAME,
+                        message=f"Checked video_qqc for {COUNTER} files.",
+                    )
+                    COUNTER = 0
 
-            # Snooze if no files to process
-            orchestrator.snooze(config_file=config_file)
-            continue
+                # Snooze if no files to process
+                orchestrator.snooze(config_file=config_file)
+                study_id = studies[0]
+                logger.info(f"Restarting with study: {study_id}", extra={"markup": True})
+                continue
+            else:
+                study_id = studies[studies.index(study_id) + 1]
+                logger.info(f"Switching to study: {study_id}", extra={"markup": True})
+                continue
 
         COUNTER += 1
         logger.info(

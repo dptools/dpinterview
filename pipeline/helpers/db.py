@@ -6,13 +6,15 @@ from pathlib import Path
 from typing import Optional
 import json
 import logging
+from datetime import datetime
 
 import psycopg2
 import pandas as pd
 import sqlalchemy
 
 from pipeline.helpers.config import config
-from pipeline.helpers import utils
+from pipeline.helpers import cli, utils
+from pipeline import orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +91,7 @@ def execute_queries(
     show_progress=False,
     silent=False,
     db: str = "postgresql",
+    backup: bool = False,
 ) -> list:
     """
     Executes a list of SQL queries on a PostgreSQL database.
@@ -101,6 +104,9 @@ def execute_queries(
             Defaults to True.
         show_progress (bool, optional): Whether to display a progress bar. Defaults to False.
         silent (bool, optional): Whether to suppress output. Defaults to False.
+        db (str, optional): The section of the configuration file to use.
+            Defaults to "postgresql".
+        backup (bool, optional): Whether to sace all executed queries to a file.
 
     Returns:
         list: A list of tuples containing the results of the executed queries.
@@ -108,6 +114,22 @@ def execute_queries(
     conn = None
     command = None
     output = []
+
+    if backup:
+        repo_root = cli.get_repo_root()
+        backup_file = (
+            Path(repo_root)
+            / "data"
+            / "temp"
+            / f"backup_{datetime.now().strftime('%Y%m%d%H%M%S')}.sql"
+        )
+
+        with open(backup_file, "w", encoding="utf-8") as f:
+            for query in queries:
+                f.write(query + ";\n\n")
+
+        orchestrator.fix_permissions(config_file=config_file, file_path=backup_file)
+
     try:
         # read the connection parameters
         params = config(path=config_file, section=db)

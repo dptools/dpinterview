@@ -31,9 +31,10 @@ from rich.logging import RichHandler
 from tqdm import tqdm
 
 from pipeline import data, orchestrator
-from pipeline.helpers import cli, db, dpdash, utils
+from pipeline.helpers import cli, db, dpdash, ffprobe, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.load_openface import LoadOpenface
+from pipeline.models.ffprobe_metadata import FfprobeMetadata
 
 MODULE_NAME = "load_openface"
 
@@ -47,6 +48,26 @@ logargs = {
 logging.basicConfig(**logargs)
 
 console = utils.get_console()
+
+
+def log_metadata(source: Path, metadata: Dict, config_file: Path) -> None:
+    """
+    Logs metadata to the database.
+
+    Args:
+        source (Path): Path to source file
+        metadata (Dict): Metadata to log
+        config_file (Path): Path to config file
+    """
+    ffprobe_metadata = FfprobeMetadata(
+        source_path=source,
+        metadata=metadata,
+    )
+
+    sql_queries = ffprobe_metadata.to_sql()
+
+    logger.info("Logging metadata...", extra={"markup": True})
+    db.execute_queries(config_file=config_file, queries=sql_queries)
 
 
 def get_interview_to_process(config_file: Path, study_id: str):
@@ -124,7 +145,9 @@ def get_openface_runs(config_file: Path, interview_name: str) -> pd.DataFrame:
     return df
 
 
-def construct_load_openface(interview_name: str, of_runs: pd.DataFrame) -> LoadOpenface:
+def construct_load_openface(
+    config_file: Path, interview_name: str, of_runs: pd.DataFrame
+) -> LoadOpenface:
     """
     Constructs a LoadOpenface object.
 
@@ -162,11 +185,37 @@ def construct_load_openface(interview_name: str, of_runs: pd.DataFrame) -> LoadO
         subject_of_path = of_runs[of_runs["ir_role"] == "subject"][
             "of_processed_path"
         ].iloc[0]
+        vs_path = data.get_interview_stream_from_openface_path(
+            config_file=config_file,
+            of_path=subject_of_path,
+        )
+        metadata = ffprobe.get_metadata(
+            file_path_to_process=vs_path, config_file=config_file  # type: ignore
+        )
+
+        log_metadata(
+            source=vs_path,  # type: ignore
+            metadata=metadata,
+            config_file=config_file,
+        )
 
     if "interviewer" in roles_available:
         interviewer_of_path = of_runs[of_runs["ir_role"] == "interviewer"][
             "of_processed_path"
         ].iloc[0]
+        vs_path = data.get_interview_stream_from_openface_path(
+            config_file=config_file,
+            of_path=interviewer_of_path,
+        )
+        metadata = ffprobe.get_metadata(
+            file_path_to_process=vs_path, config_file=config_file  # type: ignore
+        )
+
+        log_metadata(
+            source=vs_path,  # type: ignore
+            metadata=metadata,
+            config_file=config_file,
+        )
 
     lof = LoadOpenface(
         interview_name=interview_name,
@@ -372,13 +421,16 @@ if __name__ == "__main__":
 
     console.rule(f"[bold red]{MODULE_NAME}")
     logger.info(f"Using config file: {config_file}")
+    orchestrator.redirect_temp_dir(config_file=config_file)
 
     config_params = utils.config(config_file, section="general")
-    study_id = config_params["study"]
+    studies = orchestrator.get_studies(config_file=config_file)
 
     COUNTER = 0
 
     logger.info("[bold green]Starting load_openface loop...", extra={"markup": True})
+    study_id = studies[0]
+    logger.info(f"Statring with study: {study_id}")
 
     while True:
         interview_name = get_interview_to_process(
@@ -386,18 +438,24 @@ if __name__ == "__main__":
         )
 
         if interview_name is None:
-            # Log if any files were processed
-            if COUNTER > 0:
-                data.log(
-                    config_file=config_file,
-                    module_name=MODULE_NAME,
-                    message=f"Loaded OpenFace features for {COUNTER} interviews.",
-                )
-                COUNTER = 0
+            if study_id == studies[-1]:
+                # Log if any files were processed
+                if COUNTER > 0:
+                    data.log(
+                        config_file=config_file,
+                        module_name=MODULE_NAME,
+                        message=f"Loaded OpenFace features for {COUNTER} interviews.",
+                    )
+                    COUNTER = 0
 
-            # Snooze if no files to process
-            orchestrator.snooze(config_file=config_file)
-            continue
+                # Snooze if no files to process
+                orchestrator.snooze(config_file=config_file)
+                study_id = studies[0]
+                continue
+            else:
+                study_id = studies[studies.index(study_id) + 1]
+                logger.info(f"Switching to study: {study_id}")
+                continue
 
         COUNTER += 1
 
@@ -410,7 +468,9 @@ if __name__ == "__main__":
             config_file=config_file, interview_name=interview_name
         )
 
-        lof = construct_load_openface(interview_name=interview_name, of_runs=of_runs)
+        lof = construct_load_openface(
+            interview_name=interview_name, of_runs=of_runs, config_file=config_file
+        )
         lof = import_of_openface_db(config_file=config_file, lof=lof)
 
         log_load_openface(config_file=config_file, lof=lof)

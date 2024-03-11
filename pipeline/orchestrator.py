@@ -6,12 +6,138 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import List
 
-from pipeline.helpers import db
+from pipeline.helpers import db, cli
 from pipeline.helpers.config import config
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+def redirect_temp_dir(config_file: Path) -> None:
+    """
+    Changes the temporary directory to the one specified in the configuration file.
+
+    Required for Singularity to work properly.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        None
+    """
+    params = config(config_file, section="general")
+    try:
+        temp_dir = Path(params["temp_dir"])
+    except KeyError:
+        logger.error("Temporary directory not set. Skipping redirection...")
+        return
+
+    cli.redirect_temp_dir(temp_dir)
+
+
+def get_data_root(config_file: Path, enforce_real: bool = False) -> Path:
+    """
+    Gets the data root directory from the configuration file.
+    If fake_root is defined in the configuration file, the fake root directory is returned,
+    unless enforce_real is set to True.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        enforce_real (bool): If True, the real data root directory is returned.
+
+    Returns:
+        Path: The data root directory.
+    """
+    params = config(config_file, section="general")
+
+    if enforce_real:
+        data_root = Path(params["data_root"])
+        return data_root
+
+    try:
+        fake_root = Path(params["fake_root"])
+        data_root = fake_root
+    except KeyError:
+        data_root = Path(params["data_root"])
+
+    return data_root
+
+
+def get_studies(config_file: Path) -> List[str]:
+    """
+    Gets the list of studies from configuration file.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        List[str]: The list of studies.
+    """
+    params = config(path=config_file, section="general")
+    studies = params["study"].split(",")
+
+    # strip leading and trailing whitespaces
+    studies = [study.strip() for study in studies]
+
+    # Check if study metadata exists
+    if not studies:
+        logger.error(f"No studies found in {config_file}.")
+
+    return studies
+
+
+def translate_to_fake_root(
+    config_file: Path,
+    file_path: Path,
+) -> Path:
+    """
+    Translates a file path to a fake root directory.
+
+    Args:
+        config_file (str): The path to the configuration file.
+        file_path (str): The path to the file in data directory.
+
+    Returns:
+        str: The path to the file in the fake root directory.
+    """
+
+    config_params = config(config_file, section="general")
+    data_root = Path(config_params["data_root"])
+    fake_root = Path(config_params["fake_root"])
+
+    fake_file_path = file_path.relative_to(data_root)
+    fake_file_path = fake_root / fake_file_path
+
+    return fake_file_path
+
+
+def fix_permissions(
+    config_file: Path,
+    file_path: Path,
+) -> None:
+    """
+    Fixes the permissions for a file.
+
+    Changes Ownership and Group to the user and group specified in the configuration file.
+
+    Args:
+        config_file (str): The path to the configuration file.
+        file_path (str): The path to the file.
+
+    Returns:
+        None
+    """
+    config_params = config(config_file, section="orchestration")
+    pipeline_user = config_params["pipeline_user"]
+    pipeline_group = config_params["pipeline_group"]
+
+    cli.chown(
+        file_path=file_path,
+        user=pipeline_user,
+        group=pipeline_group,
+    )
 
 
 def get_decryption_count(config_file: Path) -> int:

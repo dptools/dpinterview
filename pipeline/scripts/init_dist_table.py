@@ -45,6 +45,40 @@ logargs = {
 logging.basicConfig(**logargs)
 
 
+def generate_drop_queries() -> List[str]:
+    """
+    Generates the drop queries for the OpenFace features table.
+
+    Returns:
+        List[str]: List of queries.
+    """
+    queries = [
+        """
+        DROP VIEW IF EXISTS openface_features_imported_view;
+        """,
+        """
+        DROP TABLE IF EXISTS openface_features;
+        """,
+        """
+        DROP INDEX IF EXISTS interview_name_index;
+        """,
+        """
+        DROP INDEX IF EXISTS subject_id_index;
+        """,
+        """
+        DROP INDEX IF EXISTS study_id_index;
+        """,
+        """
+        DROP INDEX IF EXISTS ir_role_index;
+        """,
+        """
+        DROP INDEX IF EXISTS off_timestamp_index;
+        """,
+    ]
+
+    return queries
+
+
 def generate_create_query(config_file: Path, csv_file: Path) -> str:
     """
     Generates the create query for the OpenFace features table., by using the
@@ -149,6 +183,9 @@ if __name__ == "__main__":
 
     queries = []
 
+    # Drop queries
+    drop_queries = generate_drop_queries()
+
     # Generate create query
     create_query = generate_create_query(
         config_file=config_file, csv_file=Path(csv_file)
@@ -157,6 +194,7 @@ if __name__ == "__main__":
     # Finalize
     finalize_queries = finalize()
 
+    queries.extend(drop_queries)
     queries.append(create_query)
     queries.extend(finalize_queries)
 

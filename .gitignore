@@ -16,6 +16,9 @@ pipeline/assets/protected
 # scratch
 scratch/
 
+# config
+config.ini
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

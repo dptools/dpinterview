@@ -5,7 +5,7 @@ Attemps to self-heal the pipeline by removing stale data
 import logging
 from pathlib import Path
 
-from pipeline.helpers import db, utils
+from pipeline.helpers import cli, db, utils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -98,3 +98,45 @@ def set_report_generation_not_possible(
         silent=True,
     )
     logger.info(f"Self-healing: Updated report generation status for {interview_name}.")
+
+
+def clean_openface(
+    config_file: Path,
+    openface_dir: Path,
+) -> None:
+    """
+    Cleans the OpenFace directory for the given interview, removing all data,
+    clearing data from DB, if self-healing is enabled.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        openface_dir (Path): The path to the OpenFace directory.
+
+    Returns:
+        None
+    """
+    logger.info(f"Self-healing: OpenFace data on {openface_dir} is inconsistent.")
+
+    if self_heal_is_enabled(config_file=config_file) is False:
+        logger.info("Self-healing is disabled. Ignoring...")
+        return
+
+    query = f"""
+        DELETE FROM
+            openface
+        WHERE
+            of_processed_path = '{openface_dir}';
+    """
+
+    db.execute_queries(config_file=config_file, queries=[query])
+    logger.info(f"Self-healing: Purged records for {openface_dir} from openface.")
+
+    # Remove OpenFace directory
+    if openface_dir.exists():
+        logger.info(f"Self-healing: Removing OpenFace directory for {openface_dir}.")
+        cli.remove_directory(path=openface_dir)
+    else:
+        logger.info(f"Self-healing: OpenFace directory {openface_dir} does not exist.")
+        logger.info("Self-healing: Skipping directory removal.")
+
+    logger.info(f"Self-healing: OpenFace data on {openface_dir} has been cleaned.")
