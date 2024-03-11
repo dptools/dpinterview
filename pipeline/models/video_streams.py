@@ -89,6 +89,42 @@ class VideoStream:
 
         return sql_query
 
+    @staticmethod
+    def drop_row_query_s(stream_path: Path) -> str:
+        """
+        Return the SQL query to delete a row from the 'video_streams' table.
+
+        Args:
+            stream_path (Path): Path to the video stream
+
+        Returns:
+            str: SQL query to delete the row
+        """
+        sql_query = f"""
+        DELETE FROM video_streams
+        WHERE vs_path = '{stream_path}';
+        """
+
+        return sql_query
+    
+    @staticmethod
+    def drop_row_query_v(video_path: Path) -> str:
+        """
+        Return the SQL query to delete a row from the 'video_streams' table.
+
+        Args:
+            video_path (Path): Path to the video
+
+        Returns:
+            str: SQL query to delete the row
+        """
+        sql_query = f"""
+        DELETE FROM video_streams
+        WHERE video_path = '{video_path}';
+        """
+
+        return sql_query
+
     def to_sql(self) -> str:
         """
         Return the SQL query to insert this object into the 'video_streams' table.

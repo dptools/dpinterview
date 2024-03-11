@@ -77,6 +77,25 @@ class DecryptedFile:
 
         return sql_query
 
+    @staticmethod
+    def drop_row_query(destination_path: Path) -> str:
+        """
+        Return the SQL query to delete a row from the 'decrypted_files' table.
+
+        Args:
+            destination_path (Path): Destination path of the decrypted file
+
+        Returns:
+            str: SQL query to delete the row
+        """
+
+        sql_query = f"""
+        DELETE FROM decrypted_files
+        WHERE destination_path = '{destination_path}';
+        """
+
+        return sql_query
+
     def to_sql(self):
         """
         Return the SQL query to insert the DecryptedFile object into the 'decrypted_files' table.

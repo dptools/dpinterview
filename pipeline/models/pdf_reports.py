@@ -95,6 +95,21 @@ class PdfReport:
         """
         return sql_query
 
+    @staticmethod
+    def drop_row_query(interview_name: str, pr_version: str) -> str:
+        """
+        Return the SQL query to delete a row from the 'pdf_reports' table.
+
+        Args:
+            interview_name (str): The name of the interview.
+            pr_version (str): The version of the report.
+        """
+        sql_query = f"""
+        DELETE FROM pdf_reports
+        WHERE interview_name = '{interview_name}' AND pr_version = '{pr_version}';
+        """
+        return sql_query
+
     def to_sql(self) -> str:
         """
         Return the SQL query to insert the object into the 'pdf_reports' table.
