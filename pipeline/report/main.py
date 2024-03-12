@@ -43,6 +43,15 @@ def generate_report(
     fau_h_idx: List[int] = []
     bin_size = int(report_params["bin_size"])
     bins_per_page = int(report_params["bins_per_page"])
+    anonymize_s = report_params["anonymize"].lower()
+
+    # str to bool
+    if anonymize_s == "true":
+        anonymize = True
+    else:
+        anonymize = False
+
+    console.log(f"Anonymize: {anonymize}")
 
     fau_gap_indices = report_params["fau_h_gap_idx"].split(",")
     for idx in fau_gap_indices:
@@ -316,6 +325,7 @@ def generate_report(
                 ticks_config=constants.ticks_config,
                 cluster_bars_config=constants.cluster_bars_config,
                 data_path=constants.DATA_PATH,
+                deidentified=anonymize,
             )
 
             status.update("Writing metadata...")

@@ -92,7 +92,7 @@ if __name__ == "__main__":
     study_id = studyies[0]
     logger.info(f"Staring with study: {study_id}")
 
-    STASH: Optional[Tuple[Path, InterviewRole, Path]] = None
+    STASH: Optional[Tuple[Path, InterviewRole, Path, str]] = None
 
     while True:
         # Get file to process
@@ -119,7 +119,7 @@ if __name__ == "__main__":
                 logger.info(f"[bold green]Switching to study: {study_id}")
                 continue
 
-        video_stream_path, interview_role, video_path = file_to_process
+        video_stream_path, interview_role, video_path, interview_name = file_to_process
 
         if not video_stream_path.exists():
             logger.error(f"Video stream path does not exist: {video_stream_path}")
@@ -131,7 +131,9 @@ if __name__ == "__main__":
         )
         logger.debug(f"Output path: {openface_path}")
         # Check if another process is running with same files
-        if cli.check_if_running(process_name=str(video_stream_path)):
+        if cli.check_if_running(
+            process_name=str(video_stream_path)
+        ) or cli.check_if_running(process_name=str(interview_name)):
             logger.warning(
                 f"Another process is running with the same file: {video_stream_path}"
             )
@@ -159,23 +161,32 @@ if __name__ == "__main__":
             f"Processing {video_stream_path} as {interview_role} from {video_path}"
         )
 
-        # Run OpenFace
-        with Timer() as timer:
-            openface.run_openface(
-                config_file=config_file,
-                file_path_to_process=video_stream_path,
-                output_path=openface_path,
-            )
-        of_duration = timer.duration
+        try:
+            # Run OpenFace
+            with Timer() as timer:
+                openface.run_openface(
+                    config_file=config_file,
+                    file_path_to_process=video_stream_path,
+                    output_path=openface_path,
+                )
+            of_duration = timer.duration
 
-        # Run OpenFace overlay (re-runs OpenFace on face-aligned frames)
-        with Timer() as timer:
-            openface.run_openface_overlay(
-                config_file=config_file,
-                openface_path=openface_path,
-                output_video_path=openface_path / "openface_aligned.mp4",
+            # Run OpenFace overlay (re-runs OpenFace on face-aligned frames)
+            with Timer() as timer:
+                openface.run_openface_overlay(
+                    config_file=config_file,
+                    openface_path=openface_path,
+                    output_video_path=openface_path / "openface_aligned.mp4",
+                    temp_dir_prefix=f"{interview_name}_",
+                )
+            overlay_duration = timer.duration
+        except KeyboardInterrupt:
+            logger.error("KeyboardInterrupt: Exiting...")
+            logger.info("Cleaning up...")
+            cli.remove_directory(
+                path=openface_path,
             )
-        overlay_duration = timer.duration
+            sys.exit(1)
 
         # Log to DB
         openface.log_openface(

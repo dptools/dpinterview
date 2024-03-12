@@ -2,17 +2,17 @@
 Module contain helper functions specific to this data pipeline
 """
 
+import logging
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
-import logging
 
 import pandas as pd
 
+from pipeline import constants
 from pipeline.helpers import db, dpdash, utils
 from pipeline.models.interview_roles import InterviewRole
-from pipeline import constants
 
 logger = logging.getLogger(__name__)
 
@@ -197,56 +197,91 @@ subject {subject_id}, study {study_id}"
     return of_path
 
 
-def construct_frame_paths(
-    frame_numbers: List[Optional[int]],
+def get_openfece_features_overlaid_video_path(
+    config_file: Path,
     interview_name: str,
     role: InterviewRole,
-    config_file: Path,
-) -> List[Optional[Path]]:
+) -> Optional[Path]:
     """
-    Gets the paths to the frames for the given frame numbers.
+    Get the path to the openface directory for the given interview, subject, and role.
 
     Args:
-        frame_numbers (List[Optional[int]]): The frame numbers.
+        config_file (Path): The path to the configuration file.
         interview_name (str): The name of the interview.
         subject_id (str): The ID of the subject.
-        study_id (str): The ID of the study.
-        role (InterviewRole): The role of the user.
-        config_file (Path): The path to the configuration file.
+        study_id (str): The
 
     Returns:
-        List[Optional[Path]]: The paths to the frames.
+        Path: The path to the openface directory.
     """
-    frame_paths: List[Optional[Path]] = []
 
-    openface_path = get_openface_path(
+    of_path = get_openface_path(
         config_file=config_file,
         interview_name=interview_name,
         role=role,
     )
 
-    if openface_path is None:
-        raise FileNotFoundError(
-            f"No openface path found for interview {interview_name}"
-        )
+    if of_path is None:
+        return None
 
-    frames_path = next(openface_path.glob("*aligned"))
+    overlaid_video_path = of_path / "openface_aligned.mp4"
 
-    for frame_number in frame_numbers:
-        if frame_number is None:
-            frame_paths.append(None)
-        else:
-            # Sample name: frame_det_00_000001.bmp
-            frame_file = f"frame_det_00_{frame_number:06d}.bmp"
-            frame_path = frames_path / frame_file
+    if not overlaid_video_path.exists():
+        return None
 
-            # Check if file exists
-            if not frame_path.exists():
-                frame_paths.append(None)
-            else:
-                frame_paths.append(frame_path)
+    return overlaid_video_path
 
-    return frame_paths
+
+# def construct_frame_paths(
+#     frame_numbers: List[Optional[int]],
+#     interview_name: str,
+#     role: InterviewRole,
+#     config_file: Path,
+# ) -> List[Optional[Path]]:
+#     """
+#     Gets the paths to the frames for the given frame numbers.
+
+#     Args:
+#         frame_numbers (List[Optional[int]]): The frame numbers.
+#         interview_name (str): The name of the interview.
+#         subject_id (str): The ID of the subject.
+#         study_id (str): The ID of the study.
+#         role (InterviewRole): The role of the user.
+#         config_file (Path): The path to the configuration file.
+
+#     Returns:
+#         List[Optional[Path]]: The paths to the frames.
+#     """
+#     frame_paths: List[Optional[Path]] = []
+
+#     openface_path = get_openface_path(
+#         config_file=config_file,
+#         interview_name=interview_name,
+#         role=role,
+#     )
+
+#     if openface_path is None:
+#         raise FileNotFoundError(
+#             f"No openface path found for interview {interview_name}"
+#         )
+
+#     frames_path = next(openface_path.glob("*aligned"))
+
+#     for frame_number in frame_numbers:
+#         if frame_number is None:
+#             frame_paths.append(None)
+#         else:
+#             # Sample name: frame_det_00_000001.bmp
+#             frame_file = f"frame_det_00_{frame_number:06d}.bmp"
+#             frame_path = frames_path / frame_file
+
+#             # Check if file exists
+#             if not frame_path.exists():
+#                 frame_paths.append(None)
+#             else:
+#                 frame_paths.append(frame_path)
+
+#     return frame_paths
 
 
 def get_interview_visit_count(config_file: Path, interview_name: str) -> Optional[int]:

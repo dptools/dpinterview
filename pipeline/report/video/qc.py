@@ -75,6 +75,7 @@ def construct_sample_image_by_role(
     interview_name: str,
     role: InterviewRole,
     config_file: Path,
+    deidentify: bool = False,
     start_time: timedelta = timedelta(hours=0, minutes=0, seconds=0),
     end_time: timedelta = timedelta(hours=0, minutes=30, seconds=0),
 ):
@@ -163,16 +164,27 @@ after {max_retires} attempts"
         )
 
         with tempfile.NamedTemporaryFile(suffix=".png") as deidentified_image:
-            image.draw_bars_over_image(
-                source_image=Path(sample_frame.name),
-                dest_image=Path(deidentified_image.name),
-                start_h=0.95,
-                end_h=1,
-                bar_color=(255, 255, 255),
-            )
-            draw_sample_image(
-                canvas=canvas, image_path=Path(deidentified_image.name), role=role
-            )
+            if deidentify:
+                image.filter_by_range(
+                    source_image=Path(sample_frame.name),
+                    dest_image=Path(deidentified_image.name)
+                )
+            else:
+                deidentified_image = sample_frame
+
+            # Draw White bar over last 5% of the image
+            # Used to hide names from Zoom Interface
+            with tempfile.NamedTemporaryFile(suffix=".png") as name_removed_image:
+                image.draw_bars_over_image(
+                    source_image=Path(deidentified_image.name),
+                    dest_image=Path(name_removed_image.name),
+                    start_h=0.95,
+                    end_h=1,
+                    bar_color=(255, 255, 255),
+                )
+                draw_sample_image(
+                    canvas=canvas, image_path=Path(name_removed_image.name), role=role
+                )
 
 
 def construct_openface_metadata_box_by_role(
