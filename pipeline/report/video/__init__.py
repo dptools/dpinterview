@@ -43,6 +43,7 @@ def construct_am_by_role(
     ticks_config: TicksConfig,
     cluster_bars_config: ClusterBarsConfig,
     data_path: Path,
+    deidentified: bool = True,
 ) -> None:
     """
     Construct the Appearance and Movement section for a given role.
@@ -70,6 +71,7 @@ def construct_am_by_role(
         ticks_config (TicksConfig): The ticks configuration.
         cluster_bars_config (ClusterBarsConfig): The cluster bars configuration.
         data_path (Path): The path to the data directory.
+        deidentified (bool): Whether the report is deidentified (no face data).
 
     Returns:
         None
@@ -102,6 +104,7 @@ def construct_am_by_role(
         cluster_bars_config=cluster_bars_config,
         assets_path=assets_path,
         config_file=config_file,
+        deidentify=deidentified,
     )
 
     corr_matrix.contruct_dendrogram_by_role(
@@ -163,6 +166,7 @@ def construct_am_by_role(
         config_file=config_file,
         start_time=start_time,
         end_time=end_time,
+        deidentify=deidentified,
     )
 
 
@@ -191,6 +195,7 @@ def construct_am_report(
     ticks_config: TicksConfig,
     cluster_bars_config: ClusterBarsConfig,
     data_path: Path,
+    deidentified: bool = True,
 ) -> None:
     """
     Construct the Appearance and Movement section for the report.
@@ -220,6 +225,7 @@ def construct_am_report(
         ticks_config (TicksConfig): The ticks configuration.
         cluster_bars_config (ClusterBarsConfig): The cluster bars configuration.
         data_path (Path): The path to the data directory.
+        deidentified (bool): Whether the report is deidentified (no face data).
 
     Returns:
         None
@@ -272,6 +278,7 @@ def construct_am_report(
         ticks_config=ticks_config,
         cluster_bars_config=cluster_bars_config,
         data_path=data_path,
+        deidentified=deidentified,
     )
 
     if interview_metadata.has_interviewer_stream:
@@ -298,6 +305,7 @@ def construct_am_report(
             ticks_config=ticks_config,
             cluster_bars_config=cluster_bars_config,
             data_path=data_path,
+            deidentified=deidentified,
         )
 
     common.draw_heatmap_legend(

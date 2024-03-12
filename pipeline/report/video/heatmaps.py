@@ -673,7 +673,7 @@ def construct_snapshots_bar(
             )
         else:
             if deidentified:
-                strategy = "black_bar"
+                strategy = "filter_face_data"
                 temp_file = tempfile.NamedTemporaryFile(suffix=".bmp")
                 files.append(temp_file)
 
@@ -691,6 +691,14 @@ def construct_snapshots_bar(
                         image.draw_bars_over_image(
                             source_image=frame, dest_image=Path(temp_file.name)
                         )
+                        frame = temp_file.name
+
+                    case "filter_face_data":
+                        image.filter_by_range(
+                            source_image=frame,
+                            dest_image=Path(temp_file.name),
+                        )
+
                         frame = temp_file.name
 
             pdf.draw_image(canvas, Path(frame), x, y, snapshot_width, snapshot_height)
@@ -791,6 +799,7 @@ def construct_heatmap_by_role(
     cluster_bars_config: ClusterBarsConfig,
     assets_path: Path,
     config_file: Path,
+    deidentify: bool = True,
 ) -> None:
     """
     Constructs the heatmap section for the video report. Includes the headers, ticks, labels for
@@ -816,6 +825,9 @@ def construct_heatmap_by_role(
         cluster_bars_config (ClusterBarsConfig): The cluster bars configuration.
         assets_path (Path): The path to the assets directory.
         config_file (Path): The path to the configuration file.
+        deidentify (bool, optional): Whether to deidentify the images.
+            Defaults to False.
+            Deidentification is done by removing all face data from the images.
 
     Raises:
         ValueError: If the role is invalid.
@@ -876,23 +888,36 @@ def construct_heatmap_by_role(
         role=role,
     )
 
-    frame_numbers = FrameRequest.get_frame_numbers(
-        interview_name=interview_name,
-        role=role,
-        start_time=start_time,
-        end_time=end_time,
-        frame_frequency=frame_frequency,
-        config_file=config_file,
-    )
-    frame_paths = core.construct_frame_paths(
-        frame_numbers=frame_numbers,
-        interview_name=interview_name,
-        role=role,
-        config_file=config_file,
-    )
+    with tempfile.TemporaryDirectory() as temp_dir:
+        frame_numbers = FrameRequest.get_frame_numbers(
+            interview_name=interview_name,
+            role=role,
+            start_time=start_time,
+            end_time=end_time,
+            frame_frequency=frame_frequency,
+            config_file=config_file,
+        )
 
-    construct_snapshots_bar(
-        canvas=canvas,
-        frame_paths=frame_paths,
-        role=role,
-    )
+        openface_overlaid_video_path = core.get_openfece_features_overlaid_video_path(
+            config_file=config_file, interview_name=interview_name, role=role
+        )
+
+        if openface_overlaid_video_path is None:
+            console.print(
+                f"OpenFace overlaid video not found for {role.value}",
+                style="error",
+            )
+            frame_paths: List[Path | None] = [None] * len(frame_numbers)
+        else:
+            frame_paths = image.get_frames_by_numbers(
+                video_path=openface_overlaid_video_path,
+                frame_numbers=frame_numbers,
+                out_dir=Path(temp_dir),
+            )
+
+        construct_snapshots_bar(
+            canvas=canvas,
+            frame_paths=frame_paths,
+            role=role,
+            deidentified=deidentify,
+        )

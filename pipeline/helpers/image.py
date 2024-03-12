@@ -2,11 +2,12 @@
 Provides helper functions for image processing.
 """
 
-from pathlib import Path
-from typing import List, Tuple
 import math
+from pathlib import Path
+from typing import List, Tuple, Optional
 
 import cv2
+import numpy as np
 
 
 def check_if_image_has_black_bars(
@@ -131,6 +132,46 @@ def get_frame_by_number(
     cv2.imwrite(str(dest_image), frame)
 
 
+def get_frames_by_numbers(
+    video_path: Path,
+    frame_numbers: List[Optional[int]],
+    out_dir: Path,
+) -> List[Optional[Path]]:
+    """
+    Gets frames from a video by frame numbers.
+
+    Args:
+        video_path (Path): The path to the video.
+        frame_numbers (List[Optional[int]]): The frame numbers to get.
+        out_dir (Path): The directory to save the frames.
+
+    Returns:
+        List[Optional[Path]]: The paths to the saved frames.
+            If a frame number is None, the corresponding path will be None.
+    """
+
+    # Read the video
+    cap = cv2.VideoCapture(str(video_path))
+
+    # Get the total number of frames
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # Save the frames
+    frame_paths = []
+    for frame_number in frame_numbers:
+        if frame_number is None:
+            frame_paths.append(None)
+            continue
+        if frame_number < 1 or frame_number > total_frames:
+            frame_paths.append(None)
+            continue
+        frame_path = out_dir / f"frame_{frame_number}.png"
+        get_frame_by_number(video_path, frame_number, frame_path)
+        frame_paths.append(frame_path)
+
+    return frame_paths
+
+
 def draw_bars_over_image(
     source_image: Path,
     dest_image: Path,
@@ -220,3 +261,42 @@ def pad_image(
 
     # Save the padded image
     cv2.imwrite(str(dest_image), new_img)
+
+
+def filter_by_range(
+    source_image: Path,
+    dest_image: Path,
+    lower_bound: Tuple[int, int, int] = (50, 180, 70),
+    upper_bound: Tuple[int, int, int] = (180, 255, 255),
+    background_color: Tuple[int, int, int] = (255, 255, 255),
+) -> None:
+    """
+    Filter an image by a color range and save the result to a new file.
+
+    Args:
+        source_image (Path): The source image to filter.
+        dest_image (Path): The destination file to save the result.
+        lower_bound (Tuple[int, int, int]): The lower bound of the color range.
+        upper_bound (Tuple[int, int, int]): The upper bound of the color range.
+        background_color (Tuple[int, int, int], optional): The color to use for the background.
+            Defaults to (255, 255, 255).
+
+    Returns:
+        None
+    """
+    img = cv2.imread(str(source_image))
+
+    # Convert the image to HSV
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    # Create a mask for the color
+    mask = cv2.inRange(hsv, lower_bound, upper_bound)
+
+    # Use only the mask to select the color
+    result = cv2.bitwise_and(img, img, mask=mask)
+
+    # Make all other pixels white (instead of black)
+    result[np.where((result == [0, 0, 0]).all(axis=2))] = background_color
+
+    # Save the result
+    cv2.imwrite(str(dest_image), result)
