@@ -13,6 +13,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 from pipeline import constants, core
+from pipeline.core import report
 from pipeline.helpers import dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.helpers.plot import corr_matrix, heatmaps
@@ -43,13 +44,7 @@ def generate_report(
     fau_h_idx: List[int] = []
     bin_size = int(report_params["bin_size"])
     bins_per_page = int(report_params["bins_per_page"])
-    anonymize_s = report_params["anonymize"].lower()
-
-    # str to bool
-    if anonymize_s == "true":
-        anonymize = True
-    else:
-        anonymize = False
+    anonymize = report.is_anonimization_requested(config_file)
 
     console.log(f"Anonymize: {anonymize}")
 
