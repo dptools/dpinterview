@@ -89,9 +89,14 @@ def construct_report_path(config_file: Path, interview_name: str) -> Path:
         interview_name=interview_name, config_file=config_file
     )
 
+    if is_anonimization_requested(config_file=config_file):
+        data_dir = "GENERAL"
+    else:
+        data_dir = "PROTECTED"
+
     reports_dir_path = (
         data_root
-        / "PROTECTED"
+        / data_dir
         / study_id
         / subject_id
         / f"{interview_type}_interview"
