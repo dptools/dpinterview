@@ -167,7 +167,7 @@ after {max_retires} attempts"
             if deidentify:
                 image.filter_by_range(
                     source_image=Path(sample_frame.name),
-                    dest_image=Path(deidentified_image.name)
+                    dest_image=Path(deidentified_image.name),
                 )
             else:
                 deidentified_image = sample_frame
@@ -182,6 +182,15 @@ after {max_retires} attempts"
                     end_h=1,
                     bar_color=(255, 255, 255),
                 )
+
+                if deidentify:
+                    image.draw_bars_over_image(
+                        source_image=Path(name_removed_image.name),
+                        dest_image=Path(name_removed_image.name),
+                        start_h=0.0,
+                        end_h=0.07,
+                        bar_color=(255, 255, 255),
+                    )
                 draw_sample_image(
                     canvas=canvas, image_path=Path(name_removed_image.name), role=role
                 )
