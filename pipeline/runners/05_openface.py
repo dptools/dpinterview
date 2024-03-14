@@ -176,6 +176,7 @@ if __name__ == "__main__":
                 openface.run_openface_overlay(
                     config_file=config_file,
                     openface_path=openface_path,
+                    face_aligned_video_path=openface_path / "face_aligned.mp4",
                     output_video_path=openface_path / "openface_aligned.mp4",
                     temp_dir_prefix=f"{interview_name}_",
                 )

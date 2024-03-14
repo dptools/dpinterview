@@ -273,6 +273,7 @@ def pad_image_process(params: Tuple[Path, Path, int]) -> None:
 def run_openface_overlay(
     config_file: Path,
     openface_path: Path,
+    face_aligned_video_path: Path,
     output_video_path: Path,
     temp_dir_prefix: str = "openface_overlay_",
 ) -> None:
@@ -281,15 +282,16 @@ def run_openface_overlay(
 
     Does:
     - Pads face_aligned frames with 100px on all sides
-    - Compiles frames into video
+    - Compiles frames into video (face_aligned.mp4)
     - Run OpenFace on compiled video
     - Crops out 75px out of each side of the video
-    - Return the OpenFace video
+    - Return the OpenFace video (openface_aligned.mp4)
 
     Args:
         config_file (Path): Path to config file
         openface_path (Path): Path to OpenFace output
-        output_video_path (Path): Path to output video
+        face_aligned_video_path (Path): Path to face_aligned video (no OpenFace features overlayed)
+        output_video_path (Path): Path to output video (with OpenFace features overlayed)
 
     Returns:
         None
@@ -325,7 +327,7 @@ def run_openface_overlay(
                     progress.update(task, advance=1)
 
         logger.info("Compiling frames into video", extra={"markup": True})
-        video_path = temp_dir_path / "video.mp4"
+        video_path = face_aligned_video_path
 
         ffmpeg.images_to_vid(
             image_dir=temp_dir_path,
@@ -333,17 +335,17 @@ def run_openface_overlay(
         )
 
         logger.info("Running OpenFace on compiled video", extra={"markup": True})
-        openface_path = temp_dir_path / "openface"
+        temp_openface_path = temp_dir_path / "openface"
 
         run_openface(
             config_file=config_file,
             file_path_to_process=video_path,
-            output_path=openface_path,
+            output_path=temp_openface_path,
         )
 
-        openface_video = next(openface_path.glob("*.avi"), None)
+        openface_video = next(temp_openface_path.glob("*.avi"), None)
         if openface_video is None:
-            raise ValueError(f"No video found in {openface_path}")
+            raise ValueError(f"No video found in {temp_openface_path}")
 
         logger.info(
             "Cropping out 75px out of each side of the video", extra={"markup": True}
@@ -351,7 +353,7 @@ def run_openface_overlay(
         ffmpeg.crop_video(
             source=openface_video,
             target=output_video_path,
-            crop_params="162:162:75:75",
+            crop_params="162:162:75:75",  # Crop 75px from each side, Raw 112:112
         )
 
     return
