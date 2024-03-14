@@ -174,9 +174,13 @@ def get_openface_path(
     results = db.execute_sql(config_file=config_file, query=query)
 
     if results.empty:
+        logger.error(
+            f"No openface path found for interview {interview_name}, \
+subject {subject_id}, study {study_id}: Probably not loaded into the database yet"
+        )
         raise ValueError(
             f"No openface path found for interview {interview_name}, \
-subject {subject_id}, study {study_id}"
+subject {subject_id}, study {study_id}: Probably not loaded into the database yet"
         )
 
     if role == InterviewRole.SUBJECT:
