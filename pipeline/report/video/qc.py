@@ -69,6 +69,18 @@ def draw_sample_image(
         sample_height * scale_factor,
     )
 
+    pdf.draw_colored_rect(
+        canvas=canvas,
+        x=sample_left + 32,
+        y=y,
+        width=sample_width * scale_factor,
+        height=sample_height * scale_factor,
+        color=(0.7, 0.7, 0.7),  # type: ignore
+        fill=False,
+        stroke=True,
+        line_width=0.1,
+    )
+
 
 def construct_sample_image_by_role(
     canvas: canvas.Canvas,
