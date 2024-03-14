@@ -169,11 +169,12 @@ def snooze(config_file: Path) -> None:
     snooze_time_seconds = int(params["snooze_time_seconds"])
 
     if snooze_time_seconds == 0:
-        logger.info("[bold green]Snooze time is set to 0. Exiting...")
+        logger.info("[bold green]Snooze time is set to 0. Exiting...", extra={"markup": True})
         sys.exit(0)
 
     logger.info(
-        f"[bold green]No file to process. Snoozing for {snooze_time_seconds} seconds..."
+        f"[bold green]No file to process. Snoozing for {snooze_time_seconds} seconds...",
+        extra={"markup": True}
     )
 
     # Sleep for snooze_time_seconds
@@ -181,10 +182,10 @@ def snooze(config_file: Path) -> None:
     try:
         time.sleep(snooze_time_seconds)
     except KeyboardInterrupt:
-        logger.info("[bold red]Snooze interrupted by user.")
-        logger.info("[red]Interrupt again to exit.")
+        logger.info("[bold red]Snooze interrupted by user.", extra={"markup": True})
+        logger.info("[red]Interrupt again to exit.", extra={"markup": True})
         time.sleep(5)
-        logger.info("[bold green]Resuming...")
+        logger.info("[bold green]Resuming...", extra={"markup": True})
 
 
 def db_log(config_file: Path, module_name: str, message: str) -> None:
