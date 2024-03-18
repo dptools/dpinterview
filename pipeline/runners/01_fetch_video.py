@@ -26,12 +26,10 @@ import logging
 from rich.logging import RichHandler
 
 from pipeline import core, orchestrator
-from pipeline.core import decryption
+from pipeline.core import fetch_video
 from pipeline.helpers import cli, utils
-from pipeline.helpers.config import config
-from pipeline.helpers.timer import Timer
 
-MODULE_NAME = "decryption"
+MODULE_NAME = "fetch_video"
 INSTANCE_NAME = MODULE_NAME
 
 logger = logging.getLogger(MODULE_NAME)
@@ -48,16 +46,16 @@ console = utils.get_console()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="decryption", description="Module to decrypt files."
+        prog="fetch_video", description="Fetch video files for decryption."
     )
     parser.add_argument(
         "-c", "--config", type=str, help="Path to the config file.", required=False
     )
     parser.add_argument(
         "-n",
-        "--num_files_to_decrypt",
+        "--num_files_to_request",
         type=int,
-        help="Number of files to decrypt.",
+        help="Number of files to request for decryption.",
         required=False,
     )
 
@@ -82,13 +80,13 @@ if __name__ == "__main__":
     console.rule(f"[bold red]{MODULE_NAME}")
     logger.info(f"Using config file: {config_file}")
 
-    config_params = config(config_file, section="general")
+    config_params = utils.config(config_file, section="general")
     studies = orchestrator.get_studies(config_file=config_file)
     data_root = orchestrator.get_data_root(config_file=config_file)
 
     # Get decryption count from command line if specified
-    if args.num_files_to_decrypt:
-        decrytion_count = args.num_files_to_decrypt
+    if args.num_files_to_request:
+        decrytion_count = args.num_files_to_request
     else:
         decrytion_count = orchestrator.get_decryption_count(config_file=config_file)
 
@@ -103,7 +101,7 @@ if __name__ == "__main__":
             logger.info(f"decrytion_count: {decrytion_count}")
 
             while COUNTER < decrytion_count:
-                file_to_decrypt_t = decryption.get_file_to_decrypt(
+                file_to_decrypt_t = fetch_video.get_file_to_decrypt(
                     config_file=config_file
                 )
 
@@ -122,37 +120,25 @@ if __name__ == "__main__":
                 interview_type = file_to_decrypt_t[1]
                 interview_name = file_to_decrypt_t[2]
 
-                dest_dir = decryption.construct_dest_dir(
+                dest_dir = fetch_video.construct_dest_dir(
                     encrypted_file_path=file_to_decrypt_path,
                     interview_type=interview_type,
                     study_id=study_id,
                     data_root=data_root,
                 )
 
-                dest_file_name = decryption.construct_dest_file_name(
+                dest_file_name = fetch_video.construct_dest_file_name(
                     file_to_decrypt=file_to_decrypt_path,
                     interview_name=interview_name,
                 )
 
                 path_for_decrypted_file = Path(dest_dir, dest_file_name)
 
-                logger.info(f"Decrypting file: {file_to_decrypt_path}")
-                logger.info(f"Saving to: {path_for_decrypted_file}")
-
-                # Decrypt file
-                with Timer() as timer:
-                    path_for_decrypted_file = decryption.decrypt_file(
-                        config_file=config_file,
-                        file_to_decrypt=file_to_decrypt_path,
-                        path_for_decrypted_file=path_for_decrypted_file,
-                    )
-
-                # Log decryption
-                decryption.log_decryption(
+                # Log decryption request
+                fetch_video.log_decryption_request(
                     config_file=config_file,
                     source_path=file_to_decrypt_path,
                     destination_path=path_for_decrypted_file,
-                    process_time=timer.duration,
                 )
 
                 COUNTER += 1
@@ -161,7 +147,7 @@ if __name__ == "__main__":
             core.log(
                 config_file=config_file,
                 module_name=MODULE_NAME,
-                message=f"Decrypted {COUNTER} files.",
+                message=f"Requested decryption of {COUNTER} files.",
             )
 
             # Set key_store to disabled
