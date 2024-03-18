@@ -138,6 +138,11 @@ if __name__ == "__main__":
                 f"Another process is running with the same file: {video_stream_path}"
             )
             SKIP_COUNTER += 1
+
+            # Remove openface_path if it exists
+            if openface_path.exists():
+                cli.remove_directory(path=openface_path)
+
             if SKIP_COUNTER > orchestrator.get_max_instances(
                 config_file=config_file,
                 module_name=MODULE_NAME,
