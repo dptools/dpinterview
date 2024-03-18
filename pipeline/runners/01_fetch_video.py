@@ -134,17 +134,6 @@ if __name__ == "__main__":
 
                 path_for_decrypted_file = Path(dest_dir, dest_file_name)
 
-                # logger.info(f"Decrypting file: {file_to_decrypt_path}")
-                # logger.info(f"Saving to: {path_for_decrypted_file}")
-
-                # # Decrypt file
-                # with Timer() as timer:
-                #     path_for_decrypted_file = decryption.decrypt_file(
-                #         config_file=config_file,
-                #         file_to_decrypt=file_to_decrypt_path,
-                #         path_for_decrypted_file=path_for_decrypted_file,
-                #     )
-
                 # Log decryption request
                 fetch_video.log_decryption_request(
                     config_file=config_file,
