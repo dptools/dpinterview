@@ -41,6 +41,7 @@ from pipeline.helpers.config import config
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
 from pipeline.models.interviews import Interview, InterviewType
+import multiprocessing
 
 MODULE_NAME = "import_interview_files"
 INSTANCE_NAME = MODULE_NAME
@@ -275,6 +276,17 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
     return interviews
 
 
+def hash_file_worker(interview_file: InterviewFile) -> File:
+    """
+    Hashes the file and returns a File object.
+
+    Args:
+        interview_file (InterviewFile): The interview file to hash.
+    """
+    file = File(file_path=interview_file.interview_file)
+    return file
+
+
 def generate_queries(interviews: List[Interview], interview_files: List[InterviewFile]):
     """
     Generates the SQL queries to insert the interview files into the database.
@@ -287,12 +299,15 @@ def generate_queries(interviews: List[Interview], interview_files: List[Intervie
     files: List[File] = []
 
     logger.info("Hashing files...")
-    with utils.get_progress_bar() as progress:
-        task = progress.add_task("Hashing files...", total=len(interview_files))
-        for interview_file in interview_files:
-            progress.update(task, advance=1)
-            file = File(file_path=interview_file.interview_file)
-            files.append(file)
+
+    num_processes = multiprocessing.cpu_count() / 4
+    logger.info(f"Using {num_processes} processes")
+    with multiprocessing.Pool(processes=int(num_processes)) as pool:
+        with utils.get_progress_bar() as progress:
+            task = progress.add_task("Hashing files...", total=len(interview_files))
+            for result in pool.imap_unordered(hash_file_worker, interview_files):
+                files.append(result)
+                progress.update(task, advance=1)
 
     sql_queries = []
     logger.info("Generating SQL queries...")
