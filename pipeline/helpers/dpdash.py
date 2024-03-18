@@ -66,7 +66,7 @@ def get_dpdash_timepoint(consent_date: datetime, event_date: datetime) -> str:
     if consent_date == event_date:
         timepoint = "day0001"
     else:
-        timepoint = f"day{abs((consent_date - event_date).days) + 1:04d}"
+        timepoint = f"day{get_days_between_dates(consent_date, event_date):04d}"
 
     return timepoint
 
