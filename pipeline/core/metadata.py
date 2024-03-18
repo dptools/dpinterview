@@ -32,7 +32,7 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[str]:
             SELECT interview_file
             FROM interview_files JOIN interviews USING (interview_path)
             WHERE study_id = '{study_id}'
-        )
+        ) AND decrypted = TRUE
         ORDER BY RANDOM()
         LIMIT 1;
     """

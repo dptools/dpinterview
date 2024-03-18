@@ -21,10 +21,12 @@ except ValueError:
     pass
 
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
-from pipeline.helpers import utils, db
+import pandas as pd
+
+from pipeline.helpers import db, utils
 
 console = utils.get_console()
 
@@ -36,12 +38,17 @@ class DecryptedFile:
         self,
         source_path: Path,
         destination_path: Path,
+        decrypted: bool = False,
         process_time: Optional[float] = None,
+        requested_at: Optional[datetime] = datetime.now(),
+        decrypted_at: Optional[datetime] = None,
     ):
         self.source_path = source_path
         self.destination_path = destination_path
-        self.process_time: Optional[float] = process_time
-        self.decrypted_at = datetime.now()
+        self.decrypted = decrypted
+        self.process_time = process_time
+        self.requested_at = requested_at
+        self.decrypted_at = decrypted_at
 
     def __repr__(self):
         return f"DecryptedFile({self.source_path}, {self.destination_path})"
@@ -58,8 +65,10 @@ class DecryptedFile:
         CREATE TABLE IF NOT EXISTS decrypted_files (
             source_path TEXT NOT NULL REFERENCES files (file_path),
             destination_path TEXT NOT NULL UNIQUE,
+            decrypted BOOLEAN NOT NULL DEFAULT FALSE,
             process_time REAL,
-            decrypted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            decrypted_at TIMESTAMP DEFAULT NULL,
             PRIMARY KEY (source_path)
         );
         """
@@ -100,17 +109,117 @@ class DecryptedFile:
         """
         Return the SQL query to insert the DecryptedFile object into the 'decrypted_files' table.
         """
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         source_path = db.santize_string(str(self.source_path))
+
+        if self.requested_at is not None:
+            requested_at = self.requested_at.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            requested_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if self.decrypted_at is not None:
+            decrypted_at = self.decrypted_at.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            decrypted_at = "NULL"
+
+        if self.process_time is None:
+            self.process_time = "NULL"
 
         sql_query = f"""
         INSERT INTO decrypted_files (source_path, destination_path, \
-            process_time, decrypted_at)
+            decrypted, process_time, requested_at, decrypted_at)
         VALUES ('{source_path}', '{self.destination_path}', \
-            {self.process_time}, '{timestamp}')
+            {self.decrypted}, {self.process_time}, '{requested_at}', {decrypted_at});
         """
 
+        sql_query = db.handle_null(sql_query)
+
         return sql_query
+
+    @staticmethod
+    def get_files_pending_decrytion(
+        config_file: Path,
+        limit: int = 10,
+    ) -> pd.DataFrame:
+        """
+        Get the files pending decryption.
+
+        Args:
+            config_file (Path): The path to the configuration file.
+            limit (int): The maximum number of rows to return.
+
+        Returns:
+            pd.DataFrame: The files pending decryption.
+        """
+        sql_query = f"""
+        SELECT * FROM decrypted_files
+        WHERE decrypted = FALSE
+        LIMIT {limit};
+        """
+
+        return db.execute_sql(
+            config_file=config_file,
+            query=sql_query,
+        )
+
+    @staticmethod
+    def check_if_decrypted_file_exists(config_file: Path, file_path: Path) -> bool:
+        """
+        Checks if the decrypted file already exists.
+
+        Args:
+            config_file (Path): The path to the configuration file.
+            file_path (Path): The path to the file to check.
+
+        Returns:
+            bool: True if the file exists, False otherwise.
+        """
+        # Check if decrypted file already exists
+        sql_query = f"""
+        SELECT * FROM decrypted_files
+        WHERE source_path = '{file_path}';
+        """
+
+        df = db.execute_sql(
+            config_file=config_file,
+            query=sql_query,
+        )
+
+        return not df.empty
+
+    @staticmethod
+    def update_decrypted_status(
+        config_file: Path,
+        file_path: Path,
+        process_time: Optional[float],
+    ) -> None:
+        """
+        Update the decrypted status of a file.
+
+        Args:
+            config_file (Path): The path to the configuration file.
+            file_path (Path): The path to the file to update.
+            process_time (float): The time it took to decrypt the file.
+
+        Returns:
+            None
+        """
+
+        decrypted_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if process_time is None:
+            process_time_s = "NULL"
+        else:
+            process_time_s = process_time
+
+        sql_query = f"""
+        UPDATE decrypted_files
+        SET decrypted = TRUE, process_time = {process_time_s}, decrypted_at = '{decrypted_at}'
+        WHERE source_path = '{file_path}';
+        """
+
+        sql_query = db.handle_null(sql_query)
+
+        db.execute_queries(config_file=config_file, queries=[sql_query])
 
 
 if __name__ == "__main__":
