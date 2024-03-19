@@ -127,34 +127,38 @@ def split_streams(
     left_role = InterviewRole.from_str(config_params["left_role"])
     right_role = InterviewRole.from_str(config_params["right_role"])
 
-    for role, crop_params in [
-        (left_role, left_crop_params),
-        (right_role, right_crop_params),
-    ]:
-        stream_file_path = construct_stream_path(
-            video_path=video_path, role=role, suffix="mp4"
-        )
-
-        with Timer() as timer:
-            ffmpeg.crop_video(
-                source=video_path,
-                target=stream_file_path,
-                crop_params=crop_params,
-                logger=logger,
+    with utils.get_progress_bar() as progress:
+        task = progress.add_task("Splitting streams", total=2)
+        for role, crop_params in [
+            (left_role, left_crop_params),
+            (right_role, right_crop_params),
+        ]:
+            progress.update(task, description=f"Splitting {role.value} stream")
+            stream_file_path = construct_stream_path(
+                video_path=video_path, role=role, suffix="mp4"
             )
 
-        logger.info(
-            f"Split {role.value} stream: {stream_file_path} ({timer.duration})",
-            extra={"markup": True},
-        )
+            with Timer() as timer:
+                ffmpeg.crop_video(
+                    source=video_path,
+                    target=stream_file_path,
+                    crop_params=crop_params,
+                    progress=progress
+                )
 
-        stream: VideoStream = VideoStream(
-            video_path=video_path,
-            ir_role=role,
-            vs_path=stream_file_path,
-            vs_process_time=timer.duration,
-        )
-        streams.append(stream)
+            logger.info(
+                f"Split {role.value} stream: {stream_file_path} ({timer.duration})",
+                extra={"markup": True},
+            )
+
+            stream: VideoStream = VideoStream(
+                video_path=video_path,
+                ir_role=role,
+                vs_path=stream_file_path,
+                vs_process_time=timer.duration,
+            )
+            streams.append(stream)
+            progress.update(task, advance=1)
 
     return streams
 

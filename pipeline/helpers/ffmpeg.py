@@ -7,7 +7,11 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from rich.progress import Progress
+
 from pipeline.helpers import cli, utils
+
+logger = logging.getLogger(__name__)
 
 
 def extract_screenshots_from_video(
@@ -15,7 +19,6 @@ def extract_screenshots_from_video(
     video_duration: float,
     output_dir: Path,
     num_screenshots: int = 10,
-    logger: Optional[logging.Logger] = None,
 ) -> List[Path]:
     """
     Extracts screenshots from a video file using ffmpeg.
@@ -31,9 +34,6 @@ def extract_screenshots_from_video(
     Returns:
         List[Path]: A list of paths to the extracted screenshots.
     """
-    if logger is None:
-        logger = logging.getLogger(__name__)
-
     # Extract screenshots from video using ffmpeg
     logger.info("[green]Extracting frames from video...", extra={"markup": True})
 
@@ -80,7 +80,7 @@ def crop_video(
     target: Path,
     crop_params: str,
     remove_audio: bool = True,
-    logger: Optional[logging.Logger] = None,
+    progress: Optional[Progress] = None,
 ) -> None:
     """
     Crop a video stream using FFmpeg.
@@ -94,10 +94,6 @@ def crop_video(
     Returns:
         None
     """
-
-    if logger is None:
-        logger = logging.getLogger(__name__)
-
     cli_command_array = [
         "ffmpeg",
         "-y",  # overwrite output file if it exists
@@ -119,12 +115,19 @@ def crop_video(
         logger.error(f"Failed to crop video stream from {source}")
         sys.exit(1)
 
-    with utils.get_progress_bar() as progress:
-        progress.add_task("[green]Cropping video stream...", total=None)
+    if progress is None:
+        progress = utils.get_progress_bar()
+
+    with progress:
+        logger.debug(f"Cropping video stream from {source} to {target}")
+        task = progress.add_task("[green]Cropping video stream...", total=None)
         cli.execute_commands(
             command_array=cli_command_array,
             on_fail=_on_fail,
         )
+
+        # end task
+        progress.remove_task(task)
 
 
 def images_to_vid(
