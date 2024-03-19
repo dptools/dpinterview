@@ -4,7 +4,9 @@ Module providing command line interface for the pipeline.
 
 import logging
 import os
+import random
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -107,6 +109,91 @@ def check_if_running(process_name: str) -> bool:
     result = subprocess.run(command, stdout=subprocess.PIPE, shell=True, check=False)
     num_processes = int(result.stdout.decode("utf-8"))
     return num_processes > 0
+
+
+def get_process_id(process_name: str) -> Optional[List[int]]:
+    """
+    Get the process ID of a process with the given name.
+
+    Args:
+        process_name (str): The name of the process to get the ID of.
+
+    Returns:
+        Optional[int]: The process ID of the process, or None if the process is not running.
+    """
+    command = f"ps -ef | grep -v grep | grep {process_name} | awk '{{print $2}}'"
+    result = subprocess.run(command, stdout=subprocess.PIPE, shell=True, check=False)
+    process_ids = result.stdout.decode("utf-8").split("\n")
+    process_ids = [int(x) for x in process_ids if x]
+    if len(process_ids) > 1:
+        logger.warning(f"Multiple processes with name {process_name} found.")
+    if len(process_ids) > 0:
+        return process_ids
+    else:
+        return None
+
+
+def spawn_dummy_process(process_name: str, timeout: str = "24h") -> str:
+    """
+    Spawns a long running dummy process with the given name as parameter.
+
+    Args:
+        process_name (str): Part of the spawn command.
+        timeout (str, optional): Timeout for the process. Defaults to '24h'.
+
+    Returns:
+        str: The unique process name.
+    """
+
+    random_str_prefix = "".join(
+        random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=5)
+    )
+
+    unique_process_name = f"{random_str_prefix}_{process_name}"
+
+    command = f"timeout {timeout} bash -c \
+'while true; do echo {unique_process_name} > /dev/null; sleep 60; done'"
+    subprocess.Popen(command, shell=True)
+
+    return unique_process_name
+
+
+def kill_pid(pid: int) -> None:
+    """
+    Kills a process with the given process ID.
+
+    Args:
+        pid (int): The process ID of the process to kill.
+
+    Returns:
+        None
+    """
+    try:
+        os.kill(pid, signal.SIGKILL)
+        # os.killpg(process_id, signal.SIGKILL)  # kill process group
+    except ProcessLookupError:
+        logger.warning(f"Process with ID {pid} does not exist.")
+    except PermissionError:
+        logger.warning(f"Permission denied to kill process with ID {pid}.")
+
+
+def kill_processes(process_name: str) -> None:
+    """
+    Kills all processes with the given name.
+
+    Args:
+        process_name (str): The name of the process to kill.
+
+    Returns:
+        None
+    """
+    process_pids = get_process_id(process_name)
+
+    logger.warning(f"Killing all processes with name {process_name} ({process_pids})")
+
+    if process_pids is not None:
+        for process_pid in process_pids:
+            kill_pid(process_pid)
 
 
 def get_number_of_running_processes(process_name: str) -> int:
