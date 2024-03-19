@@ -485,6 +485,31 @@ def get_interview_duration(config_file: Path, interview_name: str) -> int:
     return int(float(results))
 
 
+def get_interview_path(interview_name: str, config_file: Path) -> Optional[Path]:
+    """
+    Get the path to the interview for the given interview name.
+
+    Args:
+        interview_name (str): The name of the interview.
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        Optional[Path]: The path to the interview if found, None otherwise.
+    """
+    query = f"""
+    SELECT interview_path
+    FROM interviews
+    WHERE interview_name = '{interview_name}'
+    """
+
+    result = db.fetch_record(config_file=config_file, query=query)
+
+    if result is not None:
+        interview_path = Path(result)
+
+        return interview_path
+
+
 def list_to_tuple(function: Callable) -> Any:
     """Custom decorator function, to convert list to a tuple."""
 
