@@ -169,12 +169,14 @@ def snooze(config_file: Path) -> None:
     snooze_time_seconds = int(params["snooze_time_seconds"])
 
     if snooze_time_seconds == 0:
-        logger.info("[bold green]Snooze time is set to 0. Exiting...", extra={"markup": True})
+        logger.info(
+            "[bold green]Snooze time is set to 0. Exiting...", extra={"markup": True}
+        )
         sys.exit(0)
 
     logger.info(
         f"[bold green]No file to process. Snoozing for {snooze_time_seconds} seconds...",
-        extra={"markup": True}
+        extra={"markup": True},
     )
 
     # Sleep for snooze_time_seconds
@@ -311,25 +313,28 @@ def check_if_decryption_requested(config_file: Path) -> bool:
 
     if result == "enabled":
         message += "[green]yes"
-        logger.info(message)
+        logger.info(message, extra={"markup": True})
         return True
     elif result == "disabled":
         message += "[red]no"
-        logger.info(message)
+        logger.info(message, extra={"markup": True})
         return False
     else:
         if result is None:
             message += "[yellow]no"
-            logger.info(message)
-            logger.info("[yellow] Initializing key_store table...")
+            logger.info(message, extra={"markup": True})
+            logger.info(
+                "[yellow] Initializing key_store table...", extra={"markup": True}
+            )
             put_key_store(config_file, "decryption", "enabled")
-            logger.info("[green] done")
+            logger.info("[green] done", extra={"markup": True})
             return True
         else:
             message += "[red]no"
-            logger.info(message)
+            logger.info(message, extra={"markup": True})
             logger.info(
-                f"[red] Unexpected value in key_store table: {result}. Exiting..."
+                f"[red] Unexpected value in key_store table: {result}. Exiting...",
+                extra={"markup": True},
             )
             raise ValueError
 
