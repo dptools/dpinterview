@@ -184,9 +184,13 @@ def snooze(config_file: Path) -> None:
     try:
         time.sleep(snooze_time_seconds)
     except KeyboardInterrupt:
-        logger.info("[bold red]Snooze interrupted by user.", extra={"markup": True})
-        logger.info("[red]Interrupt again to exit.", extra={"markup": True})
-        time.sleep(5)
+        try:
+            logger.info("[bold red]Snooze interrupted by user.", extra={"markup": True})
+            logger.info("[red]Interrupt again to exit.", extra={"markup": True})
+            time.sleep(5)
+        except KeyboardInterrupt:
+            logger.info("[bold red]Exiting...", extra={"markup": True})
+            sys.exit(0)
         logger.info("[bold green]Resuming...", extra={"markup": True})
 
 
