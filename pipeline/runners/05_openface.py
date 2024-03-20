@@ -167,6 +167,9 @@ if __name__ == "__main__":
         )
 
         try:
+            process_name = cli.spawn_dummy_process(
+                process_name=str(interview_name)
+            )
             # Run OpenFace
             with Timer() as timer:
                 openface.run_openface(
@@ -186,6 +189,10 @@ if __name__ == "__main__":
                     temp_dir_prefix=f"{interview_name}_",
                 )
             overlay_duration = timer.duration
+
+            cli.kill_processes(
+                process_name=process_name
+            )
         except KeyboardInterrupt:
             logger.error("KeyboardInterrupt: Exiting...")
             logger.info("Cleaning up...")
