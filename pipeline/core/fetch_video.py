@@ -6,13 +6,13 @@ import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from pipeline.helpers import db, dpdash, utils
+from pipeline.helpers import db, dpdash
 from pipeline.models.decrypted_files import DecryptedFile
 
 logger = logging.getLogger(__name__)
 
 
-def get_file_to_decrypt(config_file: Path) -> Optional[Tuple[str, str, str]]:
+def get_file_to_decrypt(config_file: Path, study_id: str) -> Optional[Tuple[str, str, str]]:
     """
     Retrieves a file to decrypt from the database.
 
@@ -23,11 +23,10 @@ def get_file_to_decrypt(config_file: Path) -> Optional[Tuple[str, str, str]]:
         Optional[Tuple[str, str, str]]: A tuple containing the path to the file to decrypt,
             the interview type, and the interview name.
     """
-    config_params = utils.config(config_file, section="general")
-    study_id = config_params["study"]
 
     query = f"""
-        SELECT interview_file, interview_type, interview_name FROM interview_files
+        SELECT interview_file, interview_type, interview_name
+        FROM interview_files
         INNER JOIN interviews ON interview_files.interview_path = interviews.interview_path
         WHERE interviews.study_id = '{study_id}' AND
             interview_files.interview_file_tags LIKE '%%video%%' AND

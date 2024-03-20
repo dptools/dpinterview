@@ -102,7 +102,8 @@ if __name__ == "__main__":
 
             while COUNTER < decrytion_count:
                 file_to_decrypt_t = fetch_video.get_file_to_decrypt(
-                    config_file=config_file
+                    config_file=config_file,
+                    study_id=study_id
                 )
 
                 if not file_to_decrypt_t:
