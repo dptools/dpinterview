@@ -46,7 +46,7 @@ console = utils.get_console()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="decryption", description="Module to decrypt files."
+        prog="openface_qc", description="Performs quality control on OpenFace output."
     )
     parser.add_argument(
         "-c", "--config", type=str, help="Path to the config file.", required=False
