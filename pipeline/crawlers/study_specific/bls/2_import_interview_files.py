@@ -29,6 +29,7 @@ except ValueError:
 
 import argparse
 import logging
+import multiprocessing
 import re
 from datetime import date, datetime, time
 from typing import Dict, List
@@ -41,7 +42,6 @@ from pipeline.helpers.config import config
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
 from pipeline.models.interviews import Interview, InterviewType
-import multiprocessing
 
 MODULE_NAME = "import_interview_files"
 INSTANCE_NAME = MODULE_NAME
