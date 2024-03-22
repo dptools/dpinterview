@@ -361,3 +361,22 @@ def get_max_instances(
     max_instances = int(config_params[f"{module_name}_max_instances"])
 
     return max_instances
+
+
+def is_crawler_hashing_required(config_file: Path) -> bool:
+    """
+    Returns whether hashing is required for the crawler.
+
+    Args:
+        config_file (str): The path to the configuration file.
+
+    Returns:
+        bool: True if hashing is required, False otherwise.
+    """
+    crawler_params = config(config_file, section="crawler")
+    hashing_required = crawler_params["hash_files"]
+
+    if hashing_required == "False" or hashing_required == "false":
+        return False
+    else:
+        return True

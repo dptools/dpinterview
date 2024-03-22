@@ -32,7 +32,7 @@ import logging
 import multiprocessing
 import re
 from datetime import date, datetime, time
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from rich.logging import RichHandler
 from rich.progress import Progress
@@ -160,6 +160,8 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
     for file in files:
         base_name = file.name
         base_name_parts = base_name.split(".")
+        if base_name[0] == ".":
+            continue
         if base_name_parts[-1] == "mp4":
             video_files.append(file)
         elif base_name_parts[-1] == "m4a":
@@ -265,20 +267,25 @@ def fetch_interviews(
     return interviews
 
 
-def hash_file_worker(interview_file: InterviewFile) -> File:
+def hash_file_worker(params: Tuple[InterviewFile, Path]) -> File:
     """
     Hashes the file and returns a File object.
 
     Args:
-        interview_file (InterviewFile): The interview file to hash.
+        params (Tuple[InterviewFile, Path]): A tuple containing the InterviewFile
+            and the path to the config file.
     """
-    file = File(file_path=interview_file.interview_file)
+    interview_file, config_file = params
+    with_hash = orchestrator.is_crawler_hashing_required(config_file=config_file)
+
+    file = File(file_path=interview_file.interview_file, with_hash=with_hash)
     return file
 
 
 def generate_queries(
     interviews: List[Interview],
     interview_files: List[InterviewFile],
+    config_file: Path,
     progress: Progress,
 ) -> List[str]:
     """
@@ -287,17 +294,24 @@ def generate_queries(
     Args:
         interviews (List[Interview]): A list of Interview objects.
         interview_files (List[InterviewFile]): A list of InterviewFile objects.
+        config_file (Path): The path to the configuration file.
+        progress (Progress): The progress bar.
     """
 
     files: List[File] = []
 
-    logger.info("Hashing files...")
+    if orchestrator.is_crawler_hashing_required(config_file=config_file):
+        logger.info("Hashing files...")
+    else:
+        logger.info("Skipping hashing files...")
+
+    params = [(interview_file, config_file) for interview_file in interview_files]
 
     num_processes = multiprocessing.cpu_count() / 2
     logger.info(f"Using {num_processes} processes")
     with multiprocessing.Pool(processes=int(num_processes)) as pool:
         task = progress.add_task("Hashing files...", total=len(interview_files))
-        for result in pool.imap_unordered(hash_file_worker, interview_files):
+        for result in pool.imap_unordered(hash_file_worker, params):
             files.append(result)
             progress.update(task, advance=1)
         progress.remove_task(task)
@@ -349,20 +363,19 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     logger.info("Fetching interview files...")
     interview_files: List[InterviewFile] = []
 
-    # TODO: Remove this
-    num_interviews = 2
     interview_counter = 0
     task = progress.add_task("Fetching interview files...", total=len(interviews))
     for interview in interviews:
-        if interview_counter > num_interviews:
-            break
         interview_counter += 1
         progress.update(task, advance=1)
         interview_files.extend(fetch_interview_files(interview=interview))
 
     # Generate the SQL queries to import the interview files
     sql_queries = generate_queries(
-        interviews=interviews, interview_files=interview_files, progress=progress
+        interviews=interviews,
+        interview_files=interview_files,
+        config_file=config_file,
+        progress=progress,
     )
 
     # Execute the SQL queries

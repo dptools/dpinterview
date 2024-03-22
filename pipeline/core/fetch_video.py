@@ -12,7 +12,9 @@ from pipeline.models.decrypted_files import DecryptedFile
 logger = logging.getLogger(__name__)
 
 
-def get_file_to_decrypt(config_file: Path, study_id: str) -> Optional[Tuple[str, str, str]]:
+def get_file_to_decrypt(
+    config_file: Path, study_id: str
+) -> Optional[Tuple[str, str, str]]:
     """
     Retrieves a file to decrypt from the database.
 
@@ -32,6 +34,11 @@ def get_file_to_decrypt(config_file: Path, study_id: str) -> Optional[Tuple[str,
             interview_files.interview_file_tags LIKE '%%video%%' AND
             interview_files.interview_file NOT IN (
                 SELECT source_path FROM decrypted_files
+            ) AND interview_name NOT IN (  -- Skip interviews with duplicates
+                SELECT interview_name
+                FROM interviews
+                GROUP BY interview_name
+                HAVING COUNT(*) > 1
             )
         ORDER BY RANDOM()
         LIMIT 1
@@ -47,6 +54,36 @@ def get_file_to_decrypt(config_file: Path, study_id: str) -> Optional[Tuple[str,
     interview_name = df["interview_name"].iloc[0]
 
     return file_to_decrypt, interview_type, interview_name
+
+
+def check_if_interview_has_duplicates(interview_name: str, config_file: Path) -> bool:
+    """
+    Checks if multiple interviews with the same name exist in the database.
+
+    Args:
+        interview_name (str): The name of the interview.
+        config_file (Path): The path to the config file.
+
+    Returns:
+        bool: True if the interview has duplicates, False otherwise.
+    """
+    sql_query = f"""
+    SELECT *
+    FROM interviews
+    WHERE interview_name IN (
+        SELECT interview_name
+        FROM interviews
+        GROUP BY interview_name
+        HAVING COUNT(*) > 1
+    ) and interview_name = '{interview_name}';
+    """
+
+    df = db.execute_sql(config_file=config_file, query=sql_query)
+
+    if df.empty:
+        return False
+
+    return True
 
 
 def construct_dest_dir(
@@ -134,7 +171,11 @@ def reconstruct_dest_file_name(dest_file_name: str, suffix: str) -> str:
 
 
 def log_decryption_request(
-    config_file: Path, source_path, destination_path: Path, requested_by: str, on_failure: Callable
+    config_file: Path,
+    source_path,
+    destination_path: Path,
+    requested_by: str,
+    on_failure: Callable,
 ) -> None:
     """
     Logs the request to decrypt a file.

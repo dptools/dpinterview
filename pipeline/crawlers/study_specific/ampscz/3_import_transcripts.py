@@ -27,6 +27,7 @@ from typing import List, Tuple
 from rich.logging import RichHandler
 
 from pipeline import core, orchestrator
+from pipeline.core.fetch_video import check_if_interview_has_duplicates
 from pipeline.helpers import cli, utils, db
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
@@ -61,11 +62,11 @@ def get_interview_name_from_transcript(transcript_filename: str) -> str:
     name_parts = transcript_filename.split("_")
     study_id = name_parts[0]
     subject_id = name_parts[1]
-    data_type = name_parts[2]
+    data_type = name_parts[3]
     day_str = name_parts[4]  # dayXXXX
     day = int(day_str[3:]) + 1
 
-    interview_name = f"{study_id}-{subject_id}-{data_type}-day{day:04d}"
+    interview_name = f"{study_id}-{subject_id}-{data_type}Interview-day{day:04d}"
 
     return interview_name
 
@@ -91,6 +92,15 @@ def transcripts_to_models(
         interview_name = get_interview_name_from_transcript(
             transcript_filename=filename
         )
+
+        if check_if_interview_has_duplicates(
+            interview_name=interview_name, config_file=config_file
+        ):
+            logger.warning(
+                f"Interview {interview_name} has duplicates. Skipping transcript."
+            )
+            continue
+
         interview_path = core.get_interview_path(
             interview_name=interview_name, config_file=config_file
         )
@@ -153,9 +163,7 @@ def import_transcripts(data_root: Path, study: str, config_file: Path) -> None:
     crawler_params = utils.config(path=config_file, section="crawler")
     transcripts_study_pattern = crawler_params["transcripts_study_pattern"]
 
-    transcripts = list(
-        subjects_root.glob(transcripts_study_pattern)
-    )
+    transcripts = list(subjects_root.glob(transcripts_study_pattern))
 
     logger.info(f"Found {len(transcripts)} transcripts.")
 
