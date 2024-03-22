@@ -21,6 +21,7 @@ class File:
     def __init__(
         self,
         file_path: Path,
+        with_hash: bool = True
     ):
         """
         Initialize a File object.
@@ -41,7 +42,10 @@ class File:
 
         self.file_size_mb = file_path.stat().st_size / 1024 / 1024
         self.m_time = datetime.fromtimestamp(file_path.stat().st_mtime)
-        self.md5 = compute_hash(file_path=file_path, hash_type="md5")
+        if with_hash:
+            self.md5 = compute_hash(file_path=file_path, hash_type="md5")
+        else:
+            self.md5 = None
 
     def __str__(self):
         """
@@ -68,7 +72,7 @@ class File:
             file_size_mb FLOAT NOT NULL,
             file_path TEXT PRIMARY KEY,
             m_time TIMESTAMP NOT NULL,
-            md5 TEXT NOT NULL
+            md5 TEXT
         );
         """
 
@@ -92,11 +96,16 @@ class File:
         f_name = db.santize_string(self.file_name)
         f_path = db.santize_string(str(self.file_path))
 
+        if self.md5 is None:
+            hash_val = "NULL"
+        else:
+            hash_val = self.md5
+
         sql_query = f"""
         INSERT INTO files (file_name, file_type, file_size_mb,
             file_path, m_time, md5)
         VALUES ('{f_name}', '{self.file_type}', '{self.file_size_mb}',
-            '{f_path}', '{self.m_time}', '{self.md5}')
+            '{f_path}', '{self.m_time}', '{hash_val}')
         ON CONFLICT (file_path) DO UPDATE SET
             file_name = excluded.file_name,
             file_type = excluded.file_type,
@@ -104,5 +113,7 @@ class File:
             m_time = excluded.m_time,
             md5 = excluded.md5;
         """
+
+        sql_query = db.handle_null(sql_query)
 
         return sql_query
