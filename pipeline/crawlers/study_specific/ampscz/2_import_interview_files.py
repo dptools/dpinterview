@@ -349,6 +349,7 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     logger.info("Fetching interview files...")
     interview_files: List[InterviewFile] = []
 
+    # TODO: Remove this
     num_interviews = 2
     interview_counter = 0
     task = progress.add_task("Fetching interview files...", total=len(interviews))
