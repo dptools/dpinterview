@@ -27,7 +27,8 @@ from rich.logging import RichHandler
 
 from pipeline import core, orchestrator
 from pipeline.core import fetch_video
-from pipeline.helpers import cli, utils
+from pipeline.helpers import cli, utils, db
+from pipeline.models.interview_files import InterviewFile
 
 MODULE_NAME = "fetch_video"
 INSTANCE_NAME = MODULE_NAME
@@ -135,13 +136,24 @@ if __name__ == "__main__":
 
                 path_for_decrypted_file = Path(dest_dir, dest_file_name)
 
+                def on_failure():
+                    """
+                    Skip the file if request fails.
+                    """
+                    global COUNTER  # pylint: disable=global-statement
+                    COUNTER -= 1
+
+                    logger.info("Decryption request failed. Ignoring file.")
+                    sql_query = InterviewFile.ignore_file(file_to_decrypt_path)
+                    db.execute_queries(config_file=config_file, queries=[sql_query])
+
                 # Log decryption request
                 fetch_video.log_decryption_request(
                     config_file=config_file,
                     source_path=file_to_decrypt_path,
                     destination_path=path_for_decrypted_file,
                     requested_by=MODULE_NAME,
-                    on_failure=lambda: logger.warning("Skipped"),
+                    on_failure=on_failure
                 )
 
                 COUNTER += 1

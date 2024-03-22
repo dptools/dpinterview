@@ -49,8 +49,28 @@ class InterviewFile:
             interview_path TEXT NOT NULL REFERENCES interviews (interview_path),
             interview_file TEXT NOT NULL REFERENCES files (file_path),
             interview_file_tags TEXT,
+            ignored BOOLEAN DEFAULT FALSE,
             PRIMARY KEY (interview_path, interview_file)
         );
+        """
+
+        return sql_query
+
+    @staticmethod
+    def ignore_file(interview_file: Path) -> str:
+        """
+        Return the SQL query to ignore the file in the 'interview_files' table.
+
+        Args:
+            interview_file (Path): The path to the file to ignore.
+
+        Returns:
+            str: SQL query to ignore the file
+        """
+        sql_query = f"""
+        UPDATE interview_files
+        SET ignored = TRUE
+        WHERE interview_file = '{interview_file}';
         """
 
         return sql_query
@@ -63,9 +83,12 @@ class InterviewFile:
         i_file = db.santize_string(str(self.interview_file))
 
         sql_query = f"""
-        INSERT INTO interview_files (interview_path, interview_file, interview_file_tags)
-        VALUES ('{i_path}', '{i_file}', '{self.tags}')
-        ON CONFLICT (interview_path, interview_file) DO UPDATE SET interview_file_tags = '{self.tags}';
+        INSERT INTO interview_files (interview_path, interview_file,
+            interview_file_tags)
+        VALUES ('{i_path}', '{i_file}',
+            '{self.tags}')
+        ON CONFLICT (interview_path, interview_file) DO
+            UPDATE SET interview_file_tags = '{self.tags}';
         """
 
         return sql_query
