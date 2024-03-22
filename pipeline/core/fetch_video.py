@@ -130,7 +130,7 @@ def reconstruct_dest_file_name(dest_file_name: str, suffix: str) -> str:
 
 
 def log_decryption_request(
-    config_file: Path, source_path, destination_path: Path
+    config_file: Path, source_path, destination_path: Path, requested_by: str
 ) -> None:
     """
     Logs the request to decrypt a file.
@@ -139,7 +139,7 @@ def log_decryption_request(
         config_file (Path): The path to the configuration file.
         source_path (str): The path to the file before decryption.
         destination_path (str): The path to the file after decryption.
-        process_time (float): The time it took to decrypt the file.
+        requested_by (str): The name of the process requesting the decryption.
 
     Returns:
         None
@@ -161,6 +161,7 @@ def log_decryption_request(
     decrypted_file = DecryptedFile(
         source_path=source_path,
         destination_path=destination_path,
+        requested_by=requested_by,
     )
 
     query = decrypted_file.to_sql()
