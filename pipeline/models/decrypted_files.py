@@ -38,6 +38,7 @@ class DecryptedFile:
         self,
         source_path: Path,
         destination_path: Path,
+        requested_by: str,
         decrypted: bool = False,
         process_time: Optional[float] = None,
         requested_at: Optional[datetime] = datetime.now(),
@@ -45,13 +46,14 @@ class DecryptedFile:
     ):
         self.source_path = source_path
         self.destination_path = destination_path
+        self.requested_by = requested_by
         self.decrypted = decrypted
         self.process_time = process_time
         self.requested_at = requested_at
         self.decrypted_at = decrypted_at
 
     def __repr__(self):
-        return f"DecryptedFile({self.source_path}, {self.destination_path})"
+        return f"DecryptedFile({self.source_path}, {self.destination_path} {self.requested_by})"
 
     def __str__(self):
         return self.__repr__()
@@ -65,6 +67,7 @@ class DecryptedFile:
         CREATE TABLE IF NOT EXISTS decrypted_files (
             source_path TEXT NOT NULL REFERENCES files (file_path),
             destination_path TEXT NOT NULL UNIQUE,
+            requested_by TEXT NOT NULL,
             decrypted BOOLEAN NOT NULL DEFAULT FALSE,
             process_time REAL,
             requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -125,9 +128,9 @@ class DecryptedFile:
             self.process_time = "NULL"
 
         sql_query = f"""
-        INSERT INTO decrypted_files (source_path, destination_path, \
+        INSERT INTO decrypted_files (source_path, destination_path, requested_by,
             decrypted, process_time, requested_at, decrypted_at)
-        VALUES ('{source_path}', '{self.destination_path}', \
+        VALUES ('{source_path}', '{self.destination_path}', '{self.requested_by}',
             {self.decrypted}, {self.process_time}, '{requested_at}', {decrypted_at});
         """
 

@@ -80,7 +80,7 @@ class File:
         Return the SQL query to drop the 'files' table if it exists.
         """
         sql_query = """
-        DROP TABLE IF EXISTS files;
+        DROP TABLE IF EXISTS files CASCADE;
         """
 
         return sql_query

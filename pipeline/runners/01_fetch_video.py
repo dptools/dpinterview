@@ -140,6 +140,7 @@ if __name__ == "__main__":
                     config_file=config_file,
                     source_path=file_to_decrypt_path,
                     destination_path=path_for_decrypted_file,
+                    requested_by=MODULE_NAME,
                     on_failure=lambda: logger.warning("Skipped"),
                 )
 
