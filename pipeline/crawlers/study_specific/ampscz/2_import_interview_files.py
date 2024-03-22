@@ -29,6 +29,7 @@ except ValueError:
 
 import argparse
 import logging
+import multiprocessing
 import re
 from datetime import date, datetime, time
 from typing import Dict, List
@@ -264,6 +265,17 @@ def fetch_interviews(
     return interviews
 
 
+def hash_file_worker(interview_file: InterviewFile) -> File:
+    """
+    Hashes the file and returns a File object.
+
+    Args:
+        interview_file (InterviewFile): The interview file to hash.
+    """
+    file = File(file_path=interview_file.interview_file)
+    return file
+
+
 def generate_queries(
     interviews: List[Interview],
     interview_files: List[InterviewFile],
@@ -280,11 +292,15 @@ def generate_queries(
     files: List[File] = []
 
     logger.info("Hashing files...")
-    task = progress.add_task("Hashing files...", total=len(interview_files))
-    for interview_file in interview_files:
-        progress.update(task, advance=1)
-        file = File(file_path=interview_file.interview_file)
-        files.append(file)
+
+    num_processes = multiprocessing.cpu_count() / 2
+    logger.info(f"Using {num_processes} processes")
+    with multiprocessing.Pool(processes=int(num_processes)) as pool:
+        task = progress.add_task("Hashing files...", total=len(interview_files))
+        for result in pool.imap_unordered(hash_file_worker, interview_files):
+            files.append(result)
+            progress.update(task, advance=1)
+        progress.remove_task(task)
 
     sql_queries = []
     logger.info("Generating SQL queries...")
@@ -349,9 +365,7 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     )
 
     # Execute the SQL queries
-    db.execute_queries(
-        config_file=config_file, queries=sql_queries
-    )
+    db.execute_queries(config_file=config_file, queries=sql_queries)
 
 
 if __name__ == "__main__":
