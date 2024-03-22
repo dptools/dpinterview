@@ -4,7 +4,7 @@ Helper functions for fetching video files to decrypt.
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Callable
 
 from pipeline.helpers import db, dpdash
 from pipeline.models.decrypted_files import DecryptedFile
@@ -91,7 +91,11 @@ def construct_dest_file_name(file_to_decrypt: Path, interview_name: str) -> str:
         file_to_decrypt (str): The path to the file to decrypt.
         interview_name (str): The name of the interview.
     """
-    ext = file_to_decrypt.suffixes[-2]
+    suffixes = file_to_decrypt.suffixes
+    if suffixes[-1] == ".lock":
+        ext = file_to_decrypt.suffixes[-2]
+    else:
+        ext = file_to_decrypt.suffixes[-1]
     dp_dash_dict = dpdash.parse_dpdash_name(interview_name)
     dp_dash_dict["category"] = "audioVideo"
 
@@ -130,7 +134,7 @@ def reconstruct_dest_file_name(dest_file_name: str, suffix: str) -> str:
 
 
 def log_decryption_request(
-    config_file: Path, source_path, destination_path: Path
+    config_file: Path, source_path, destination_path: Path, on_failure: Optional[Callable] = None
 ) -> None:
     """
     Logs the request to decrypt a file.
@@ -165,4 +169,4 @@ def log_decryption_request(
 
     query = decrypted_file.to_sql()
 
-    db.execute_queries(config_file=config_file, queries=[query])
+    db.execute_queries(config_file=config_file, queries=[query], on_failure=on_failure)

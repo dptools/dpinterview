@@ -3,10 +3,11 @@ Helper functions for interacting with a PostgreSQL database.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 import json
 import logging
 from datetime import datetime
+import sys
 
 import psycopg2
 import pandas as pd
@@ -84,6 +85,13 @@ def sanitize_json(json_dict: dict) -> str:
     return json_str
 
 
+def on_failure():
+    """
+    Exits the program with exit code 1.
+    """
+    sys.exit(1)
+
+
 def execute_queries(
     config_file: Path,
     queries: list,
@@ -92,6 +100,7 @@ def execute_queries(
     silent=False,
     db: str = "postgresql",
     backup: bool = False,
+    on_failure: Optional[Callable] = None,
 ) -> list:
     """
     Executes a list of SQL queries on a PostgreSQL database.
@@ -183,7 +192,10 @@ def execute_queries(
         if command is not None:
             logger.error(f"[red]For query: {command}", extra={"markup": True})
         logger.error(e)
-        raise e
+        if on_failure is not None:
+            on_failure()
+        else:
+            raise e
     finally:
         if conn is not None:
             conn.close()

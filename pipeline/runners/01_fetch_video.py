@@ -140,6 +140,7 @@ if __name__ == "__main__":
                     config_file=config_file,
                     source_path=file_to_decrypt_path,
                     destination_path=path_for_decrypted_file,
+                    on_failure=lambda: logger.warning("Skipped"),
                 )
 
                 COUNTER += 1
@@ -152,6 +153,7 @@ if __name__ == "__main__":
             )
 
             # Set key_store to disabled
+            logger.info("Setting key_store to disabled.")
             orchestrator.complete_decryption(config_file=config_file)
 
         else:
