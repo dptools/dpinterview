@@ -214,10 +214,12 @@ class DecryptedFile:
         else:
             process_time_s = process_time
 
+        file_path_sanitized = db.santize_string(str(file_path))
+
         sql_query = f"""
         UPDATE decrypted_files
         SET decrypted = TRUE, process_time = {process_time_s}, decrypted_at = '{decrypted_at}'
-        WHERE source_path = '{file_path}';
+        WHERE source_path = '{file_path_sanitized}';
         """
 
         sql_query = db.handle_null(sql_query)
