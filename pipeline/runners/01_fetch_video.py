@@ -102,6 +102,7 @@ if __name__ == "__main__":
             logger.info(f"decrytion_count: {decrytion_count}")
 
             while COUNTER < decrytion_count:
+                logger.info(f"Fetching file to decrypt. Counter: {COUNTER}")
                 file_to_decrypt_t = fetch_video.get_file_to_decrypt(
                     config_file=config_file,
                     study_id=study_id
@@ -118,6 +119,7 @@ if __name__ == "__main__":
                         )
                         continue
 
+                logger.info(f"File to decrypt: {file_to_decrypt_t}")
                 file_to_decrypt_path = Path(file_to_decrypt_t[0])
                 interview_type = file_to_decrypt_t[1]
                 interview_name = file_to_decrypt_t[2]
