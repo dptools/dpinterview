@@ -144,7 +144,7 @@ def models_to_db(
     for i_file in interview_files:
         sql_queries.append(i_file.to_sql())
 
-    db.execute_queries(queries=sql_queries, config_file=config_file)
+    db.execute_queries(queries=sql_queries, config_file=config_file, show_commands=False)
 
 
 def import_transcripts(data_root: Path, study: str, config_file: Path) -> None:
