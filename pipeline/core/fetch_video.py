@@ -34,7 +34,8 @@ def get_file_to_decrypt(
             interview_files.interview_file_tags LIKE '%%video%%' AND
             interview_files.interview_file NOT IN (
                 SELECT source_path FROM decrypted_files
-            ) AND interview_files.ignored = FALSE
+            ) AND interview_files.ignored = FALSE AND
+            interviews.interview_type = 'open'
         ORDER BY RANDOM()
         LIMIT 1
         """
