@@ -34,12 +34,7 @@ def get_file_to_decrypt(
             interview_files.interview_file_tags LIKE '%%video%%' AND
             interview_files.interview_file NOT IN (
                 SELECT source_path FROM decrypted_files
-            ) AND interview_name NOT IN (  -- Skip interviews with duplicates
-                SELECT interview_name
-                FROM interviews
-                GROUP BY interview_name
-                HAVING COUNT(*) > 1
-            )
+            ) AND interview_files.ignored = FALSE
         ORDER BY RANDOM()
         LIMIT 1
         """
