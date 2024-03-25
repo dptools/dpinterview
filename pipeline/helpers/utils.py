@@ -67,7 +67,18 @@ def configure_logging(config_file: Path, module_name: str, logger: logging.Logge
         None
     """
     log_params = config(config_file, "logging")
-    log_file = log_params[module_name]
+    log_file = Path(log_params[module_name])
+
+    if Path(log_file).stat().st_size > 10000000:  # 10MB
+        archive_file = (
+            log_file.parent
+            / "archive"
+            / f"{log_file.stem}_{datetime.now().strftime('%Y%m%d%H%M%S')}.log"
+        )
+        logger.info(f"Rotating log file to {archive_file}")
+
+        archive_file.parent.mkdir(parents=True, exist_ok=True)
+        Path(log_file).rename(archive_file)
 
     file_handler = logging.FileHandler(log_file, mode="a")
     file_handler.setLevel(logging.DEBUG)
