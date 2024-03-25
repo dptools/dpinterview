@@ -61,7 +61,7 @@ def extract_screenshots_from_video(
         f"fps=1/{interval}",
         "-qscale:v",
         "2",
-        f"{str(output_dir)}/%d.{extension}",
+        f"{str(output_dir)}/%06d.{extension}",
         "-y",  # overwrite existing files
     ]
 
