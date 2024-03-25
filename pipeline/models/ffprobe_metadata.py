@@ -20,14 +20,15 @@ try:
 except ValueError:
     pass
 
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+import logging
 import math
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
+from pipeline.helpers import db, utils
 from pipeline.models.interview_roles import InterviewRole
 
-from pipeline.helpers import utils, db
-
+logger = logging.getLogger(__name__)
 console = utils.get_console()
 
 
@@ -379,7 +380,9 @@ class FfprobeMetadata:
                 ) ON CONFLICT (fma_source_path) DO NOTHING;
             """
         else:
-            raise ValueError(f"Unknown codec_type: {stream['codec_type']}")
+            logger.warning(f"Unknown codec_type: {stream['codec_type']}")
+            logger.info(f"Stream: {stream}")
+            logger.warning("Skipping stream...")
 
         return query
 
