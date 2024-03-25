@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
         COUNTER += 1
         logger.info(
-            f"[cyan] Getting Metadata for{file_to_process}...", extra={"markup": True}
+            f"[cyan]Getting Metadata for{file_to_process}...", extra={"markup": True}
         )
 
         metadata_dict = ffprobe.get_metadata(
