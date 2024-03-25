@@ -118,7 +118,7 @@ def fix_permissions(
     file_path: Path,
 ) -> None:
     """
-    Fixes the permissions for a file.
+    Fixes the permissions for a file or directory.
 
     Changes Ownership and Group to the user and group specified in the configuration file.
 
