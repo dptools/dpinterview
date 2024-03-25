@@ -121,9 +121,18 @@ if __name__ == "__main__":
         video_path = Path(file_to_process[0])
         duration = float(file_to_process[1])
 
+        frames_path = video_path.parent / "frames" / video_path.stem
+        if not frames_path.exists():
+            frames_path.mkdir(parents=True)
+        logger.info(f"Saving frames to: {frames_path}")
+
         with Timer() as timer:
             qc_result: VideoQuickQc = video_qqc.do_video_qqc(
-                video_path=video_path, duration=duration
+                video_path=video_path, duration=duration, frames_path=frames_path
+            )
+            orchestrator.fix_permissions(
+                config_file=config_file,
+                file_path=video_path
             )
 
         # Add process time to qc_result

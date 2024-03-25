@@ -117,7 +117,11 @@ def get_black_bar_height(screenshots: List[Path]) -> int:
         return 0
 
 
-def do_video_qqc(video_path: Path, duration: float) -> VideoQuickQc:
+def do_video_qqc(
+    video_path: Path,
+    duration: float,
+    frames_path: Optional[Path] = None
+) -> VideoQuickQc:
     """
     Performs video quick qc on a video file.
 
@@ -128,18 +132,43 @@ def do_video_qqc(video_path: Path, duration: float) -> VideoQuickQc:
     Args:
         video_path (Path): Path to video file
         duration (float): Video duration
+        frames_path (Optional[Path], optional): Path to store extracted frames. Defaults to None.
     """
     # Get screenshots
     num_screenshots = 10
 
-    with tempfile.TemporaryDirectory(prefix="video-qqc-") as temp_dir:
+    if frames_path is None:
+        with tempfile.TemporaryDirectory(prefix="video-qqc-") as temp_dir:
+            screenshots = ffmpeg.extract_screenshots_from_video(
+                video_file=video_path,
+                video_duration=duration,
+                output_dir=Path(temp_dir),
+                num_screenshots=num_screenshots,
+            )
+            # Check if video has black bars
+            has_black_bars = check_black_bars(screenshots=screenshots)
+            if not has_black_bars:
+                return VideoQuickQc(
+                    video_path=video_path,
+                    has_black_bars=False,
+                    black_bar_height=None,
+                    process_time=None,
+                )
+            else:
+                black_bar_height = get_black_bar_height(screenshots=screenshots)
+                return VideoQuickQc(
+                    video_path=video_path,
+                    has_black_bars=True,
+                    black_bar_height=black_bar_height,
+                    process_time=None,
+                )
+    else:
         screenshots = ffmpeg.extract_screenshots_from_video(
             video_file=video_path,
             video_duration=duration,
-            output_dir=Path(temp_dir),
+            output_dir=frames_path,
             num_screenshots=num_screenshots,
         )
-
         # Check if video has black bars
         has_black_bars = check_black_bars(screenshots=screenshots)
         if not has_black_bars:
