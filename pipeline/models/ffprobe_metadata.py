@@ -390,7 +390,8 @@ class FfprobeMetadata:
     def drop_row_query(source_path: Path) -> List[str]:
         """
         Return the SQL queries to delete a row from the 'ffprobe_metadata' table.
-        Also deletes the video and audio streams from the ffprobe_metadata_video and ffprobe_metadata_audio tables.
+        Also deletes the video and audio streams from the ffprobe_metadata_video and
+        ffprobe_metadata_audio tables.
 
         Args:
             source_path (Path): Source path of the file.
@@ -426,7 +427,20 @@ class FfprobeMetadata:
         Returns:
             List[str]: A list of SQL queries.
         """
-        streams = self.metadata["streams"]
+        try:
+            streams = self.metadata["streams"]
+        except KeyError as e:
+            logger.error(f"Metadata does not have 'streams' key: {e}")
+            logger.debug(f"Metadata: {self.metadata}")
+            return [
+                f"""
+                INSERT INTO ffprobe_metadata (
+                    fm_source_path
+                ) VALUES (
+                    '{self.source_path}'
+                ) ON CONFLICT (fm_source_path) DO NOTHING;
+                """
+            ]
         format_dict: Dict[str, str] = self.metadata["format"]  # type: ignore
 
         sql_queries = []

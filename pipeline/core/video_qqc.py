@@ -41,7 +41,7 @@ def get_file_to_process(
             JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
             JOIN interviews USING (interview_path)
             WHERE interviews.study_id = '{study_id}'
-        )
+        ) AND fm.fm_duration IS NOT NULL
         ORDER BY RANDOM()
         LIMIT 1;
     """
