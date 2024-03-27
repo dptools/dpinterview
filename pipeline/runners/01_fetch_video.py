@@ -25,7 +25,7 @@ import logging
 
 from rich.logging import RichHandler
 
-from pipeline import core, orchestrator
+from pipeline import orchestrator
 from pipeline.core import fetch_video
 from pipeline.helpers import cli, utils, db
 from pipeline.models.interview_files import InterviewFile
@@ -161,7 +161,7 @@ if __name__ == "__main__":
                 COUNTER += 1
 
             # Log to database
-            core.log(
+            orchestrator.log(
                 config_file=config_file,
                 module_name=MODULE_NAME,
                 message=f"Requested decryption of {COUNTER} files.",

@@ -9,7 +9,7 @@ from typing import Optional, Tuple, List
 import multiprocessing
 import tempfile
 
-from pipeline import core, orchestrator
+from pipeline import orchestrator
 from pipeline.helpers import cli, db, dpdash, utils, image, ffmpeg
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.openface import Openface
@@ -432,7 +432,7 @@ def await_decrytion(config_file: Path, module_name: str, counter: int) -> None:
     """
     # Log if any files were processed
     if counter > 0:
-        core.log(
+        orchestrator.log(
             config_file=config_file,
             module_name=module_name,
             message=f"Processed {counter} files.",
