@@ -64,7 +64,7 @@ def get_interview_name_from_transcript(transcript_filename: str) -> str:
     subject_id = name_parts[1]
     data_type = name_parts[3]
     day_str = name_parts[4]  # dayXXXX
-    day = int(day_str[3:]) + 1
+    day = int(day_str[3:])
 
     interview_name = f"{study_id}-{subject_id}-{data_type}Interview-day{day:04d}"
 
