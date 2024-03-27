@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import List
 
-from pipeline.helpers import db, cli
+from pipeline.helpers import db, cli, notifications
 from pipeline.helpers.config import config
 
 logger = logging.getLogger(__name__)
@@ -211,6 +211,30 @@ def db_log(config_file: Path, module_name: str, message: str) -> None:
     ]
 
     db.execute_queries(config_file, commands, show_commands=False, silent=True)
+
+
+def log(module_name: str, message: str, config_file: Path) -> None:
+    """
+    Logs a message to the database and other configured notification services.
+
+    Args:
+        module_name (str): The name of the module.
+        message (str): The message to log.
+        config_file (str): The path to the configuration file.
+
+    Returns:
+        None
+    """
+    logger.info(f"{module_name}: {message}")
+
+    # Log to database
+    db_log(config_file=config_file, module_name=module_name, message=message)
+    notifications.send_notification(
+        title=module_name,
+        body=message,
+        notify_type="info",
+        config_file=config_file,
+    )
 
 
 def request_decrytion(config_file: Path):

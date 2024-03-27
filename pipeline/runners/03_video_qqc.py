@@ -25,7 +25,7 @@ import logging
 
 from rich.logging import RichHandler
 
-from pipeline import core, orchestrator
+from pipeline import orchestrator
 from pipeline.core import video_qqc
 from pipeline.helpers import cli, utils
 from pipeline.helpers.timer import Timer
@@ -93,7 +93,7 @@ if __name__ == "__main__":
             if study_id == studies[-1]:
                 # Log if any files were processed
                 if COUNTER > 0:
-                    core.log(
+                    orchestrator.log(
                         config_file=config_file,
                         module_name=MODULE_NAME,
                         message=f"Checked video_qqc for {COUNTER} files.",
