@@ -118,9 +118,11 @@ if __name__ == "__main__":
             f"[cyan]Getting Metadata for{file_to_process}...", extra={"markup": True}
         )
 
-        metadata_dict = ffprobe.get_metadata(
-            file_path_to_process=Path(file_to_process), config_file=config_file
-        )
+        with utils.get_progress_bar() as progress:
+            task = progress.add_task("Fetching Metadafa using 'ffprobe'", total=None)
+            metadata_dict = ffprobe.get_metadata(
+                file_path_to_process=Path(file_to_process), config_file=config_file
+            )
 
         metadata.log_metadata(
             source=Path(file_to_process),
