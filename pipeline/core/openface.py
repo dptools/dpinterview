@@ -34,6 +34,9 @@ def get_file_to_process(
         Optional[Tuple[Path, InterviewRole, Path, str]]: Tuple of video stream path,
             interview role, video path and interview name
     """
+
+    # If changing the SQL query below, make the same changes to load_openface.py in the
+    # core package
     sql_query = f"""
         SELECT vs.vs_path, vs.ir_role, vs.video_path, if.interview_name
         FROM video_streams AS vs
