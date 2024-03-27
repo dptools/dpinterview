@@ -65,7 +65,7 @@ class DecryptedFile:
         """
         sql_query = """
         CREATE TABLE IF NOT EXISTS decrypted_files (
-            source_path TEXT NOT NULL REFERENCES files (file_path),
+            source_path TEXT NOT NULL REFERENCES interview_files (interview_file),
             destination_path TEXT NOT NULL UNIQUE,
             requested_by TEXT NOT NULL,
             decrypted BOOLEAN NOT NULL DEFAULT FALSE,

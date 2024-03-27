@@ -47,7 +47,7 @@ class InterviewFile:
         sql_query = """
         CREATE TABLE IF NOT EXISTS interview_files (
             interview_path TEXT NOT NULL REFERENCES interviews (interview_path),
-            interview_file TEXT NOT NULL REFERENCES files (file_path),
+            interview_file TEXT UNIQUE NOT NULL REFERENCES files (file_path),
             interview_file_tags TEXT,
             ignored BOOLEAN DEFAULT FALSE,
             PRIMARY KEY (interview_path, interview_file)

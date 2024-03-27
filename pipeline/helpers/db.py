@@ -2,20 +2,19 @@
 Helper functions for interacting with a PostgreSQL database.
 """
 
-from pathlib import Path
-from typing import Optional, Callable
 import json
 import logging
-from datetime import datetime
 import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, Optional
 
-import psycopg2
 import pandas as pd
+import psycopg2
 import sqlalchemy
 
-from pipeline.helpers.config import config
-from pipeline.helpers import cli, utils
 from pipeline import orchestrator
+from pipeline.helpers import cli, utils
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +91,29 @@ def on_failure():
     sys.exit(1)
 
 
+def get_db_credentials(config_file: Path, db: str = "postgresql") -> Dict[str, str]:
+    """
+    Retrieves the database credentials from the configuration file.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        db (str, optional): The section of the configuration file to use.
+            Defaults to "postgresql".
+
+    Returns:
+        Dict[str, str]: A dictionary containing the database credentials.
+    """
+    db_params = utils.config(path=config_file, section=db)
+
+    if "key_file" in db_params:
+        key_file = Path(db_params["key_file"])
+        credentials = utils.config(path=key_file, section=db)
+    else:
+        credentials = db_params
+
+    return credentials
+
+
 def execute_queries(
     config_file: Path,
     queries: list,
@@ -140,19 +162,8 @@ def execute_queries(
         orchestrator.fix_permissions(config_file=config_file, file_path=backup_file)
 
     try:
-        # read the connection parameters
-        params = config(path=config_file, section=db)
-        # connect to the PostgreSQL server
-        if show_commands:
-            logger.debug(
-                "[grey]Connecting to the PostgreSQL database...", extra={"markup": True}
-            )
-            logger.debug(
-                f"[grey]{params['host']}:{params['port']} {params['database']} ({params['user']})",
-                extra={"markup": True},
-            )
-
-        conn = psycopg2.connect(**params)  # type: ignore
+        credentials = get_db_credentials(config_file=config_file, db=db)
+        conn = psycopg2.connect(**credentials)  # type: ignore
         cur = conn.cursor()
 
         def execute_query(query: str):
@@ -177,10 +188,8 @@ def execute_queries(
             for command in queries:
                 execute_query(command)
 
-        # close communication with the PostgreSQL database server
         cur.close()
 
-        # commit the changes
         conn.commit()
 
         if not silent:
@@ -215,18 +224,18 @@ def get_db_connection(
     Returns:
         sqlalchemy.engine.base.Engine: The database connection engine.
     """
-    params = config(path=config_file, section=db)
+    credentials = get_db_credentials(config_file=config_file, db=db)
     engine = sqlalchemy.create_engine(
         "postgresql+psycopg2://"
-        + params["user"]
+        + credentials["user"]
         + ":"
-        + params["password"]
+        + credentials["password"]
         + "@"
-        + params["host"]
+        + credentials["host"]
         + ":"
-        + params["port"]
+        + credentials["port"]
         + "/"
-        + params["database"]
+        + credentials["database"]
     )
 
     return engine

@@ -27,8 +27,7 @@ class InterviewType(Enum):
         """
         create_sql_query = """
         CREATE TABLE IF NOT EXISTS interview_types (
-            id SERIAL PRIMARY KEY,
-            interview_type TEXT NOT NULL UNIQUE
+            interview_type TEXT NOT NULL PRIMARY KEY
         );
         """
 
