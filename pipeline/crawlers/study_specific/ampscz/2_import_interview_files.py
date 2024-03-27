@@ -230,7 +230,8 @@ def fetch_interviews(
             try:
                 date_dt = date.fromisoformat(parts[0])
                 # Time is of the form HH.MM.SS
-                time_dt = time.fromisoformat(parts[1].replace(".", ":"))
+                # Ignore time information, to get accurate day
+                time_dt = time.fromisoformat("00:00:00")
                 interview_datetime = datetime.combine(date_dt, time_dt)
             except ValueError:
                 logger.warning(
