@@ -2,12 +2,25 @@
 Helper functions for sending notifications.
 """
 
-from typing import Literal
+import logging
 from pathlib import Path
+from typing import List, Literal
 
 import apprise
 
 from pipeline.helpers import utils
+
+logger = logging.getLogger(__name__)
+
+# Silence logs from other modules
+noisy_modules: List[str] = [
+    "PIL.PngImagePlugin",
+    "svglib.svglib",
+    "matplotlib.font_manager",
+]
+for module in noisy_modules:
+    logger.debug(f"Setting log level for {module} to INFO")
+    logging.getLogger(module).setLevel(logging.INFO)
 
 
 def notify(

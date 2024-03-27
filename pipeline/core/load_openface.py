@@ -42,8 +42,27 @@ def get_interview_to_process(config_file: Path, study_id: str):
         ON interview_files.interview_path = interviews.interview_path
     ) AS interview_files
     ON video_streams.video_path = interview_files.destination_path
-    WHERE interview_files.interview_name not in (
+    WHERE interview_files.interview_name NOT IN (
         SELECT interview_name FROM load_openface
+    ) AND interview_files.interview_name NOT IN (  -- Exclude interviews that are yet to be processed by OpenFace
+        SELECT if.interview_name
+        FROM video_streams AS vs
+        INNER JOIN (
+            SELECT decrypted_files.destination_path, interview_files.interview_file_tags, interviews.interview_name
+            FROM interview_files
+            JOIN decrypted_files
+                ON interview_files.interview_file = decrypted_files.source_path
+            join interviews using (interview_path)
+        ) AS if
+        ON vs.video_path = if.destination_path
+        WHERE vs.vs_path NOT IN (
+            SELECT vs_path FROM openface
+        ) AND vs.video_path IN (
+            SELECT destination_path FROM decrypted_files
+            JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+            JOIN interviews USING (interview_path)
+            WHERE interviews.study_id = '{study_id}'
+        )
     ) AND video_streams.video_path IN (
         SELECT destination_path FROM decrypted_files
         JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
