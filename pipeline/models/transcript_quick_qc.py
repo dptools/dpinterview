@@ -42,11 +42,13 @@ class TranscriptQuickQc:
         self,
         transcript_path: Path,
         speaker_metrics: Dict[str, Dict[str, Any]],
+        turn_data: Dict[int, Dict[str, str]],
         process_time: Optional[float] = None,
         timestamp: datetime = datetime.now()
     ):
         self.transcript_path = transcript_path
         self.speaker_metrics = speaker_metrics
+        self.turn_data = turn_data
         self.process_time = process_time
         self.timestamp = timestamp
 
@@ -63,8 +65,9 @@ class TranscriptQuickQc:
         """
         sql_query = """
         CREATE TABLE IF NOT EXISTS transcript_quick_qc (
-            transcript_path TEXT NOT NULL REFERENCES files (file_path),
+            transcript_path TEXT NOT NULL REFERENCES interview_files (interview_file),
             speaker_metrics JSONB NOT NULL,
+            turn_data JSONB NOT NULL,
             process_time FLOAT,
             tqc_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (transcript_path)
@@ -89,6 +92,7 @@ class TranscriptQuickQc:
             str: The SQL insert query.
         """
         speaker_metrics = db.sanitize_json(self.speaker_metrics)
+        turn_data = db.sanitize_json(self.turn_data)  # type: ignore
 
         if self.process_time is None:
             process_time = "NULL"
@@ -96,8 +100,13 @@ class TranscriptQuickQc:
             process_time = self.process_time
 
         sql_query = f"""
-        INSERT INTO transcript_quick_qc (transcript_path, speaker_metrics, process_time, tqc_timestamp)
-        VALUES ('{self.transcript_path}', '{speaker_metrics}', {process_time}, '{self.timestamp}')
+        INSERT INTO transcript_quick_qc (
+            transcript_path, speaker_metrics, turn_data,
+            process_time, tqc_timestamp
+        ) VALUES (
+            '{self.transcript_path}', '{speaker_metrics}', '{turn_data}',
+            {process_time}, '{self.timestamp}'
+        )
         """
 
         sql_query = db.handle_null(sql_query)
