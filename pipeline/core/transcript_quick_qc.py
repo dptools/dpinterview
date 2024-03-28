@@ -2,6 +2,7 @@
 Helper functions for performing quick QC on transcripts.
 """
 
+import ast
 import heapq
 import logging
 from datetime import datetime, timedelta
@@ -11,8 +12,8 @@ from typing import Any, Dict, Optional, Union
 import pandas as pd
 
 from pipeline.helpers import db
-from pipeline.models.transcript_quick_qc import TranscriptQuickQc
 from pipeline.models.interview_roles import InterviewRole
+from pipeline.models.transcript_quick_qc import TranscriptQuickQc
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,9 @@ def transcript_to_df(transcript_path: Path) -> pd.DataFrame:
                 continue
 
             speaker, time, text = stripped_line.split(" ", 2)
+
+            if speaker.endswith(":"):
+                speaker = speaker[:-1]
         except ValueError:
             logger.error(f"Failed to parse line: '{stripped_line}'")
             raise
@@ -250,10 +254,126 @@ def add_speaker_roles_to_qqc(
     return qqc
 
 
+def get_turn_data(transcript_df: pd.DataFrame) -> Dict[int, Dict[str, str]]:
+    """
+    Converts the transcript dataframe to a dictionary of turn data.
+
+    Args:
+        transcript_df: pd.DataFrame
+
+    Returns:
+        Dict[int, Dict[str, str]]
+    """
+    transcript_df = transcript_df.drop(columns=["text"])
+    transcript_df = transcript_df[["speaker", "start_time", "end_time"]]
+
+    transcript_df = transcript_df.dropna()
+
+    transcript_dict = transcript_df.to_dict(orient="records")
+    turn_data = {}
+
+    for idx, row in enumerate(transcript_dict):
+        speaker = row["speaker"]
+        start_time = row["start_time"]
+        end_time = row["end_time"]
+
+        turn_data[idx] = {
+            "speaker": speaker,
+            "start_time": start_time,
+            "end_time": end_time,
+        }
+
+    return turn_data
+
+
+def turn_data_to_df(turn_data: Dict[int, Dict[str, str]]) -> pd.DataFrame:
+    """
+    Converts the turn data dictionary to a pandas DataFrame.
+
+    Args:
+        turn_data: Dict[int, Dict[str, str]] - the turn data with turns index as keys
+
+    Returns:
+        pd.DataFrame
+    """
+    turn_df = pd.DataFrame(turn_data).T
+    turn_df = turn_df.reset_index()
+    turn_df = turn_df.drop(columns=["index"])
+
+    return turn_df
+
+
+def fetch_turn_df(interview_name: str, config_file: Path) -> Optional[pd.DataFrame]:
+    """
+    Fetches the turn data for a given interview name.
+
+    Args:
+        interview_name: str - the interview name
+        config_file: Path - the path to the config file
+
+    Returns:
+        Optional[pd.DataFrame] - the turn data as a DataFrame
+    """
+    query = f"""
+        SELECT turn_data
+        FROM transcript_quick_qc
+        INNER JOIN interview_files ON transcript_quick_qc.transcript_path = interview_files.interview_file
+        INNER JOIN interviews ON interview_files.interview_path = interviews.interview_path
+        WHERE
+            interviews.interview_name = '{interview_name}'
+        """
+
+    turn_data = db.fetch_record(config_file=config_file, query=query)
+
+    if turn_data is None:
+        return None
+
+    # str to dict
+    data_dict = ast.literal_eval(turn_data)
+
+    turn_df = turn_data_to_df(data_dict)  # type: ignore
+
+    return turn_df
+
+
+def get_transcript_qqc(
+    interview_name: str, config_file: Path
+) -> Optional[Dict[str, Any]]:
+    """
+    Retrieves the quick quality check results (speaker metrics: num_questions, self-references)
+    for a given interview name.
+
+    Args:
+        interview_name: str - the interview name
+        config_file: Path - the path to the config file
+
+    Returns:
+        Optional[Dict[str, Any]] - the quick quality check results
+    """
+    query = f"""
+        SELECT speaker_metrics
+        FROM transcript_quick_qc
+        INNER JOIN interview_files ON transcript_quick_qc.transcript_path = interview_files.interview_file
+        INNER JOIN interviews ON interview_files.interview_path = interviews.interview_path
+        WHERE
+            interviews.interview_name = '{interview_name}'
+        """
+
+    transcript_qqc = db.fetch_record(config_file=config_file, query=query)
+
+    if transcript_qqc is None:
+        return None
+
+    transcript_qqc = ast.literal_eval(transcript_qqc)
+
+    return transcript_qqc
+
+
 def log_transcript_quick_qc(
     config_file: Path,
     transcript_path: Path,
     qqc: Dict[str, Dict[str, Any]],
+    turn_data: Dict[int, Dict[str, str]],
     process_time: Optional[float] = None,
 ) -> None:
     """
@@ -271,12 +391,15 @@ def log_transcript_quick_qc(
     transcript_qqc = TranscriptQuickQc(
         transcript_path=transcript_path,
         speaker_metrics=qqc,
+        turn_data=turn_data,
         process_time=process_time,
         timestamp=datetime.now(),
     )
 
     sql_query = transcript_qqc.insert_query()
 
-    db.execute_queries(config_file=config_file, queries=[sql_query])
+    db.execute_queries(
+        config_file=config_file, queries=[sql_query], show_commands=False
+    )
 
     return None

@@ -25,7 +25,7 @@ import logging
 
 from rich.logging import RichHandler
 
-from pipeline import core, orchestrator
+from pipeline import orchestrator
 from pipeline.core import transcript_quick_qc
 from pipeline.helpers import cli, utils
 from pipeline.helpers.timer import Timer
@@ -93,7 +93,7 @@ if __name__ == "__main__":
             if study_id == studies[-1]:
                 # Log if any files were processed
                 if COUNTER > 0:
-                    core.log(
+                    orchestrator.log(
                         config_file=config_file,
                         module_name=MODULE_NAME,
                         message=f"Ran transcript_quick_qc on {COUNTER} files.",
@@ -120,6 +120,10 @@ if __name__ == "__main__":
                 transcript_path=file_to_process
             )
 
+            turn_data = transcript_quick_qc.get_turn_data(
+                transcript_df=transcript_df
+            )
+
             transcript_qqc = transcript_quick_qc.get_transcription_quick_qc(
                 transcript_df=transcript_df
             )
@@ -137,5 +141,6 @@ if __name__ == "__main__":
             config_file=config_file,
             transcript_path=file_to_process,
             qqc=transcript_qqc,
+            turn_data=turn_data,
             process_time=process_time,
         )
