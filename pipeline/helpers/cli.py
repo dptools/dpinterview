@@ -29,6 +29,39 @@ def get_repo_root() -> str:
     return repo_root
 
 
+def create_link(source: Path, destination: Path, softlink: bool = True) -> None:
+    """
+    Create a link from the source to the destination.
+
+    Note:
+    - Both source and destination must be on the same filesystem.
+    - The destination must not already exist.
+
+    Args:
+        source (Path): The source of the symbolic link.
+        destination (Path): The destination of the symbolic link.
+        softlink (bool, optional): Whether to create a soft link.
+            Defaults to True. If False, a hard link is created.
+
+    Returns:
+        None
+    """
+    if not source.exists():
+        logger.error(f"Source path does not exist: {source}")
+        raise FileNotFoundError
+
+    if destination.exists():
+        logger.error(f"Destination path already exists: {destination}")
+        raise FileExistsError
+
+    if softlink:
+        logger.debug(f"Creating soft link from {source} to {destination}")
+        source.symlink_to(destination)
+    else:
+        logger.debug(f"Creating hard link from {source} to {destination}")
+        source.hardlink_to(destination)
+
+
 def redirect_temp_dir(new_temp_dir: Path) -> None:
     """
     Changes the temporary directory to the given directory.
