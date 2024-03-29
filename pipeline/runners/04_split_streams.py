@@ -26,6 +26,7 @@ except ValueError:
 
 import argparse
 import logging
+from typing import Optional
 
 from rich.logging import RichHandler
 
@@ -45,6 +46,17 @@ logargs = {
 logging.basicConfig(**logargs)
 
 console = utils.get_console()
+
+
+def get_external_sources(config_file: Path) -> Optional[Path]:
+    """
+    Get external sources from the config file.
+    """
+    config_params = utils.config(config_file, section="external")
+    if "face_processing_pipeline_source" not in config_params:
+        return None
+
+    return Path(config_params["face_processing_pipeline_source"])
 
 
 if __name__ == "__main__":
@@ -82,6 +94,10 @@ if __name__ == "__main__":
 
     COUNTER = 0
     STREAMS_COUNTER = 0
+
+    external_source_root = get_external_sources(config_file=config_file)
+    if external_source_root is not None:
+        logger.info(f"External source root: {external_source_root}")
 
     logger.info("[bold green]Starting split streams loop...", extra={"markup": True})
     study_id = studies[0]
@@ -145,5 +161,21 @@ if __name__ == "__main__":
             config_file=config_file,
         )
         STREAMS_COUNTER += len(streams)
+
+        if external_source_root is not None:
+            for stream_o in streams:
+                stream_path = stream_o.vs_path
+
+                destination_path = external_source_root / stream_path.name
+                cli.create_link(
+                    source=stream_path,
+                    destination=destination_path,
+                    softlink=True,
+                )
+
+                orchestrator.fix_permissions(
+                    config_file=config_file,
+                    file_path=destination_path
+                )
 
         split_streams.log_streams(config_file=config_file, streams=streams)
