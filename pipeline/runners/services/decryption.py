@@ -28,7 +28,7 @@ import logging
 
 from rich.logging import RichHandler
 
-from pipeline import core, orchestrator
+from pipeline import orchestrator
 from pipeline.core import decryption
 from pipeline.helpers import cli, utils
 from pipeline.helpers.timer import Timer
@@ -122,7 +122,7 @@ if __name__ == "__main__":
             COUNTER += 1
 
         if COUNTER >= 10:
-            core.log(
+            orchestrator.log(
                 config_file=config_file,
                 module_name=MODULE_NAME,
                 message=f"Decrypted {COUNTER} files.",
