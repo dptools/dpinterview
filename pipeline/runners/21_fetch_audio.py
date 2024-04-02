@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Decryption Runner
+Decryption Requester for Audio Files
 """
 
 import sys
@@ -26,11 +26,11 @@ import logging
 from rich.logging import RichHandler
 
 from pipeline import orchestrator
-from pipeline.core import fetch_video
+from pipeline.core import fetch_audio
 from pipeline.helpers import cli, utils, db
 from pipeline.models.interview_files import InterviewFile
 
-MODULE_NAME = "fetch_video"
+MODULE_NAME = "fetch_audio"
 INSTANCE_NAME = MODULE_NAME
 
 logger = logging.getLogger(MODULE_NAME)
@@ -47,7 +47,7 @@ console = utils.get_console()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="fetch_video", description="Fetch video files for decryption."
+        prog=MODULE_NAME, description="Fetch audio files for decryption."
     )
     parser.add_argument(
         "-c", "--config", type=str, help="Path to the config file.", required=False
@@ -91,6 +91,7 @@ if __name__ == "__main__":
     else:
         decrytion_count = orchestrator.get_decryption_count(config_file=config_file)
 
+    # Track number of files requested
     COUNTER = 0
 
     study_id = studies[0]
@@ -105,7 +106,7 @@ if __name__ == "__main__":
 
             while COUNTER < decrytion_count:
                 logger.info(f"Fetching file to decrypt. Counter: {COUNTER}")
-                file_to_decrypt_t = fetch_video.get_file_to_decrypt(
+                file_to_decrypt_t = fetch_audio.get_file_to_decrypt(
                     config_file=config_file, study_id=study_id
                 )
 
@@ -120,21 +121,23 @@ if __name__ == "__main__":
                         )
                         continue
 
+                file_to_decrypt, interview_type, interview_name, interview_file_tags = (
+                    file_to_decrypt_t
+                )
+                file_to_decrypt_path = Path(file_to_decrypt)
                 logger.info(f"File to decrypt: {file_to_decrypt_t}")
-                file_to_decrypt_path = Path(file_to_decrypt_t[0])
-                interview_type = file_to_decrypt_t[1]
-                interview_name = file_to_decrypt_t[2]
 
-                dest_dir = fetch_video.construct_dest_dir(
+                dest_dir = fetch_audio.construct_dest_dir(
                     encrypted_file_path=file_to_decrypt_path,
                     interview_type=interview_type,
                     study_id=study_id,
                     data_root=data_root,
                 )
 
-                dest_file_name = fetch_video.construct_dest_file_name(
+                dest_file_name = fetch_audio.construct_dest_file_name(
                     file_to_decrypt=file_to_decrypt_path,
                     interview_name=interview_name,
+                    interview_file_tags=interview_file_tags,
                 )
 
                 path_for_decrypted_file = Path(dest_dir, dest_file_name)
@@ -151,7 +154,7 @@ if __name__ == "__main__":
                     db.execute_queries(config_file=config_file, queries=[sql_query])
 
                 # Log decryption request
-                fetch_video.log_decryption_request(
+                fetch_audio.log_decryption_request(
                     config_file=config_file,
                     source_path=file_to_decrypt_path,
                     destination_path=path_for_decrypted_file,
