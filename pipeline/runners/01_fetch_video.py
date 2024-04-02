@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Decryption Runner
+Decryption Requester for Video Files
 """
 
 import sys
