@@ -66,8 +66,11 @@ def send_notification(
     Returns:
         None
     """
-
-    config = utils.config(path=config_file, section="notifications")
+    try:
+        config = utils.config(path=config_file, section="notifications")
+    except ValueError:
+        logger.debug("No notifications configured. Skipping.")
+        return None
     for url in config.values():
         if url.endswith(".key"):
             with open(url, "r", encoding="utf-8") as f:
