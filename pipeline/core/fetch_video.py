@@ -168,7 +168,7 @@ def reconstruct_dest_file_name(dest_file_name: str, suffix: str) -> str:
 
 def log_decryption_request(
     config_file: Path,
-    source_path,
+    source_path: Path,
     destination_path: Path,
     requested_by: str,
     on_failure: Callable,

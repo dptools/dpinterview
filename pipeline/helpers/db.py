@@ -7,7 +7,7 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Literal, Optional
 
 import pandas as pd
 import psycopg2
@@ -285,3 +285,25 @@ def fetch_record(
     value = df.iloc[0, 0]
 
     return str(value)
+
+
+def df_to_table(
+    config_file: Path,
+    df: pd.DataFrame,
+    table_name: str,
+    if_exists: Literal["fail", "replace", "append"] = "replace",
+) -> None:
+    """
+    Writes a pandas DataFrame to a table in a PostgreSQL database.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        df (pd.DataFrame): The DataFrame to write to the database.
+        table_name (str): The name of the table to write to.
+        if_exists (Literal["fail", "replace", "append"], optional): What to do
+            if the table already exists.
+    """
+
+    engine = get_db_connection(config_file=config_file)
+    df.to_sql(table_name, engine, if_exists=if_exists, index=False)
+    engine.dispose()
