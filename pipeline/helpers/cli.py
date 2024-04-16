@@ -56,10 +56,10 @@ def create_link(source: Path, destination: Path, softlink: bool = True) -> None:
 
     if softlink:
         logger.debug(f"Creating soft link from {source} to {destination}")
-        source.symlink_to(destination)
+        destination.symlink_to(source)
     else:
         logger.debug(f"Creating hard link from {source} to {destination}")
-        source.hardlink_to(destination)
+        destination.hardlink_to(source)
 
 
 def redirect_temp_dir(new_temp_dir: Path) -> None:
