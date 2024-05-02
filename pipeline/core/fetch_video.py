@@ -82,6 +82,7 @@ def check_if_interview_has_duplicates(interview_name: str, config_file: Path) ->
     return True
 
 
+# fetch_audio also points here
 def construct_dest_dir(
     encrypted_file_path: Path, interview_type: str, study_id: str, data_root: Path
 ) -> Path:

@@ -109,10 +109,12 @@ class FfprobeMetadata:
     def __init__(
         self,
         source_path: Path,
+        requested_by: str,
         metadata: Dict[str, Any],
         role: Optional[InterviewRole] = None,
     ):
         self.source_path: Path = source_path
+        self.requested_by: str = requested_by
         self.metadata: Dict[str, Any] = metadata
         self.timestamp: datetime = datetime.now()
         self.role: Optional[InterviewRole] = role
@@ -134,6 +136,7 @@ class FfprobeMetadata:
         metadata_table = """
         CREATE TABLE IF NOT EXISTS ffprobe_metadata (
             fm_source_path TEXT NOT NULL PRIMARY KEY,
+            fm_requested_by TEXT NOT NULL,
             fm_format_name TEXT,
             fm_format_long_name TEXT,
             fm_duration TEXT,
@@ -148,6 +151,7 @@ class FfprobeMetadata:
         metadata_video_table = """
             CREATE TABLE ffprobe_metadata_video (
                 fmv_source_path TEXT NOT NULL PRIMARY KEY REFERENCES ffprobe_metadata (fm_source_path),
+                fmv_requested_by TEXT NOT NULL,
                 ir_role VARCHAR(255),
                 fmv_index INTEGER NOT NULL,
                 fmv_codec_name VARCHAR(255) NOT NULL,
@@ -184,6 +188,7 @@ class FfprobeMetadata:
         metadata_audio_table = """
             CREATE TABLE ffprobe_metadata_audio (
                 fma_source_path TEXT NOT NULL PRIMARY KEY REFERENCES ffprobe_metadata (fm_source_path),
+                fma_requested_by TEXT NOT NULL,
                 fma_index INTEGER NOT NULL,
                 fma_codec_name VARCHAR(255) NOT NULL,
                 fma_codec_long_name VARCHAR(255) NOT NULL,
@@ -236,7 +241,10 @@ class FfprobeMetadata:
 
     @staticmethod
     def stream_to_sql(
-        stream: Dict[str, Any], source_path: Path, role: Optional[InterviewRole] = None
+        stream: Dict[str, Any],
+        source_path: Path,
+        requested_by: str,
+        role: Optional[InterviewRole] = None,
     ) -> str:
         """
         Convert a stream to a SQL query.
@@ -269,6 +277,7 @@ class FfprobeMetadata:
             query = f"""
                 INSERT INTO ffprobe_metadata_video (
                     fmv_source_path,
+                    fmv_requested_by,
                     ir_role,
                     fmv_index,
                     fmv_codec_name,
@@ -301,6 +310,7 @@ class FfprobeMetadata:
                     fmv_extradata_size
                 ) VALUES (
                     '{source_path}',
+                    '{requested_by}',
                     {ir_role},
                     {stream['index']},
                     '{stream['codec_name']}',
@@ -337,6 +347,7 @@ class FfprobeMetadata:
             query = f"""
                 INSERT INTO ffprobe_metadata_audio (
                     fma_source_path,
+                    fma_requested_by,
                     fma_index,
                     fma_codec_name,
                     fma_codec_long_name,
@@ -358,6 +369,7 @@ class FfprobeMetadata:
                     fma_extradata_size
                 ) VALUES (
                     '{source_path}',
+                    '{requested_by}',
                     {stream['index']},
                     '{stream['codec_name']}',
                     '{stream['codec_long_name']}',
@@ -435,9 +447,11 @@ class FfprobeMetadata:
             return [
                 f"""
                 INSERT INTO ffprobe_metadata (
-                    fm_source_path
+                    fm_source_path,
+                    fm_requested_by,
                 ) VALUES (
                     '{self.source_path}'
+                    '{self.requested_by}'
                 ) ON CONFLICT (fm_source_path) DO NOTHING;
                 """
             ]
@@ -448,6 +462,7 @@ class FfprobeMetadata:
         query = f"""
             INSERT INTO ffprobe_metadata (
                 fm_source_path,
+                fm_requested_by,
                 fm_format_name,
                 fm_format_long_name,
                 fm_duration,
@@ -457,6 +472,7 @@ class FfprobeMetadata:
                 fm_tags
             ) VALUES (
                 '{self.source_path}',
+                '{self.requested_by}',
                 '{format_dict['format_name']}',
                 '{format_dict['format_long_name']}',
                 '{format_dict['duration']}',
@@ -470,7 +486,14 @@ class FfprobeMetadata:
         sql_queries.append(query)
 
         for stream in streams:
-            sql_queries.append(self.stream_to_sql(stream, self.source_path, self.role))
+            sql_queries.append(
+                self.stream_to_sql(
+                    stream=stream,
+                    source_path=self.source_path,
+                    role=self.role,
+                    requested_by=self.requested_by,
+                )
+            )
 
         return sql_queries
 
