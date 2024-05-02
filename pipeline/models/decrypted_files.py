@@ -179,7 +179,7 @@ class DecryptedFile:
         # Check if decrypted file already exists
         sql_query = f"""
         SELECT * FROM decrypted_files
-        WHERE source_path = '{file_path}';
+        WHERE destination_path = '{file_path}';
         """
 
         df = db.execute_sql(

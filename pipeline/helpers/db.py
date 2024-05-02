@@ -122,7 +122,7 @@ def execute_queries(
     silent=False,
     db: str = "postgresql",
     backup: bool = False,
-    on_failure: Optional[Callable] = None,
+    on_failure: Optional[Callable] = on_failure,
 ) -> list:
     """
     Executes a list of SQL queries on a PostgreSQL database.

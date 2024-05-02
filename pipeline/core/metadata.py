@@ -62,7 +62,9 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[str]:
     return result
 
 
-def log_metadata(source: Path, metadata: Dict, config_file: Path) -> None:
+def log_metadata(
+    source: Path, metadata: Dict, config_file: Path, requested_by: str
+) -> None:
     """
     Logs metadata to the database.
 
@@ -72,8 +74,7 @@ def log_metadata(source: Path, metadata: Dict, config_file: Path) -> None:
         config_file (Path): Path to config file
     """
     ffprobe_metadata = FfprobeMetadata(
-        source_path=source,
-        metadata=metadata,
+        source_path=source, metadata=metadata, requested_by=requested_by
     )
 
     sql_queries = ffprobe_metadata.to_sql()
