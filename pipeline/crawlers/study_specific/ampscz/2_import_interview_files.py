@@ -154,6 +154,10 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
     interview_path = interview.interview_path
     # list all files in the directory
     files = [f for f in interview_path.iterdir() if f.is_file()]
+    # also add files from 'Audio Record' directory
+    audio_record_dir = interview_path / "Audio Record"
+    if audio_record_dir.exists():
+        files.extend([f for f in audio_record_dir.iterdir() if f.is_file()])
 
     audio_files: List[Path] = []
     video_files: List[Path] = []
