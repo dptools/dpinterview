@@ -56,10 +56,10 @@ def create_link(source: Path, destination: Path, softlink: bool = True) -> None:
 
     if softlink:
         logger.debug(f"Creating soft link from {source} to {destination}")
-        source.symlink_to(destination)
+        destination.symlink_to(source)
     else:
         logger.debug(f"Creating hard link from {source} to {destination}")
-        source.hardlink_to(destination)
+        destination.link_to(source)
 
 
 def redirect_temp_dir(new_temp_dir: Path) -> None:
@@ -125,6 +125,21 @@ def chown(file_path: Path, user: str, group: str) -> None:
         None
     """
     command_array = ["chown", "-R", f"{user}:{group}", str(file_path)]
+    execute_commands(command_array, shell=True)
+
+
+def chmod(file_path: Path, mode: int) -> None:
+    """
+    Changes the permissions of a file.
+
+    Args:
+        file_path (Path): The path to the file.
+        mode (int): the mode to change the permissions to.
+
+    Returns:
+        None
+    """
+    command_array = ["chmod", "-R", mode, str(file_path)]
     execute_commands(command_array, shell=True)
 
 
@@ -290,9 +305,7 @@ def execute_commands(
     logger.debug("Executing command:")
     # cast to str to avoid error when command_array is a list of Path objects
     command_array = [str(x) for x in command_array]
-
-    if logger:
-        logger.debug(" ".join(command_array))
+    logger.debug(" ".join(command_array))
 
     if shell:
         result = subprocess.run(
