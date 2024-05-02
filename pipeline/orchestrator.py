@@ -6,7 +6,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import List
+from typing import List, Literal
 
 from pipeline.helpers import db, cli, notifications
 from pipeline.helpers.config import config
@@ -130,8 +130,12 @@ def fix_permissions(
         None
     """
     config_params = config(config_file, section="orchestration")
-    pipeline_user = config_params["pipeline_user"]
-    pipeline_group = config_params["pipeline_group"]
+    try:
+        pipeline_user = config_params["pipeline_user"]
+        pipeline_group = config_params["pipeline_group"]
+    except KeyError:
+        logger.warning("Pipeline user and group not set. Skipping permission fix...")
+        return
 
     cli.chown(
         file_path=file_path,
@@ -293,7 +297,9 @@ def put_key_store(config_file: Path, key: str, value: str):
     )
 
 
-def complete_decryption(config_file: Path):
+def complete_decryption(
+    config_file: Path, requester: Literal["fetch_audio", "fetch_video"]
+):
     """
     Disables decryption by updating the key_store table in the database.
 
