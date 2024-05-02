@@ -91,6 +91,7 @@ if __name__ == "__main__":
 
     config_params = utils.config(config_file, section="general")
     studies = orchestrator.get_studies(config_file=config_file)
+    data_root = orchestrator.get_data_root(config_file=config_file)
 
     COUNTER = 0
     STREAMS_COUNTER = 0
@@ -175,7 +176,7 @@ if __name__ == "__main__":
 
                 orchestrator.fix_permissions(
                     config_file=config_file,
-                    file_path=destination_path
+                    file_path=data_root
                 )
 
         split_streams.log_streams(config_file=config_file, streams=streams)

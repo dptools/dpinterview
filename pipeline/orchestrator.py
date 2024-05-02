@@ -139,6 +139,11 @@ def fix_permissions(
         group=pipeline_group,
     )
 
+    cli.chmod(
+        file_path=file_path,
+        mode=660
+    )
+
 
 def get_decryption_count(config_file: Path) -> int:
     """
