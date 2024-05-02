@@ -164,6 +164,7 @@ def construct_load_openface(
             source=vs_path,  # type: ignore
             metadata=metadata_dict,
             config_file=config_file,
+            requested_by="load_openface-subject",
         )
 
     if "interviewer" in roles_available:
@@ -182,6 +183,7 @@ def construct_load_openface(
             source=vs_path,  # type: ignore
             metadata=metadata_dict,
             config_file=config_file,
+            requested_by="load_openface-interviewer",
         )
 
     lof = LoadOpenface(

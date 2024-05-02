@@ -128,4 +128,5 @@ if __name__ == "__main__":
             source=Path(file_to_process),
             metadata=metadata_dict,
             config_file=config_file,
+            requested_by=MODULE_NAME
         )
