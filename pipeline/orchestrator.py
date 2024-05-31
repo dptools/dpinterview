@@ -145,7 +145,7 @@ def fix_permissions(
 
     cli.chmod(
         file_path=file_path,
-        mode=660
+        mode=770
     )
 
 
@@ -261,7 +261,7 @@ def request_decrytion(config_file: Path):
     query = """
         UPDATE key_store
         SET value = 'enabled'
-        WHERE name = 'decryption';
+        WHERE name = 'fetch_video';
     """
 
     db.execute_queries(
@@ -269,8 +269,7 @@ def request_decrytion(config_file: Path):
         queries=[
             query,
         ],
-        show_commands=False,
-        silent=True,
+        show_commands=True
     )
 
 
