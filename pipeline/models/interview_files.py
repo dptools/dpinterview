@@ -3,6 +3,7 @@ InterviewFiles model
 """
 
 from pathlib import Path
+from typing import List
 
 from pipeline.helpers import db
 
@@ -92,3 +93,31 @@ class InterviewFile:
         """
 
         return sql_query
+
+    @staticmethod
+    def get_interview_files_with_tag(config_file: Path, interview_name: str, tag: str) -> List[Path]:
+        """
+        Get all audio files for a given interview.
+
+        Args:
+            config_file (Path): The path to the configuration file.
+            interview_name (str): The name of the interview.
+            tag (str): The tag to filter the audio files by.
+
+        Returns:
+            List[Path]: A list of all audio files for the given interview.
+        """
+
+        query = f"""
+            SELECT interview_file FROM interview_files
+            INNER JOIN interviews USING (interview_path)
+            WHERE interview_name = '{interview_name}'
+                AND interview_file_tags LIKE '%%{tag}%%';
+        """
+
+        results_df = db.execute_sql(config_file=config_file, query=query)
+
+        audio_file_paths_s = results_df["interview_file"].tolist()
+        audio_file_paths = [Path(p) for p in audio_file_paths_s]
+
+        return audio_file_paths

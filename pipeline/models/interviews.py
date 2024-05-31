@@ -144,3 +144,27 @@ class Interview:
         """
 
         return sql_query
+
+    @staticmethod
+    def get_interview_name(config_file: Path, interview_file: Path) -> Optional[str]:
+        """
+        Returns the Interview name associated with the file
+
+        Args:
+            config_file (Path): The path to the config file.
+            interview_file (Path): The path to the interview file.
+
+        Returns:
+            Optional[str]: The name of the interview.
+        """
+
+        query = f"""
+        SELECT interview_name
+        FROM interview_files
+        INNER JOIN interviews USING (interview_path)
+        WHERE interview_file = '{interview_file}';
+        """
+
+        result = db.fetch_record(config_file=config_file, query=query)
+
+        return result
