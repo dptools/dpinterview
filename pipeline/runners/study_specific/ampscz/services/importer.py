@@ -32,9 +32,11 @@ import shutil
 from rich.logging import RichHandler
 
 from pipeline import orchestrator
-from pipeline.helpers import cli, utils
+from pipeline.helpers import cli, utils, dpdash
 from pipeline.helpers.timer import Timer
 from pipeline.models.decrypted_files import DecryptedFile
+from pipeline.models.interview_files import InterviewFile
+from pipeline.models.interviews import Interview
 
 MODULE_NAME = "ampscz-importer"
 INSTANCE_NAME = MODULE_NAME
@@ -71,6 +73,67 @@ def import_file(source_path: Path, destination_path: Path) -> None:
         shutil.copy(source_path, destination_path)
 
 
+def get_external_audio_source(config_file: Path) -> Path:
+    """
+    Get external sources from the config file.
+    """
+    config_params = utils.config(config_file, section="external")
+    if "audio_processing_pipeline_source" not in config_params:
+        raise KeyError("audio_processing_pipeline_source not found in config file.")
+
+    return Path(config_params["audio_processing_pipeline_source"])
+
+
+def generate_dest_audio_file_name(
+    interview_name: str,
+    audio_file: Path,
+) -> str:
+    """
+    Generates a destination file name for the audio file.
+
+    Args:
+        interview_name (str): The name of the interview.
+
+    Returns:
+        str: The destination file name.
+    """
+    file_name = audio_file.stem
+
+    dpdash_dict = dpdash.parse_dpdash_name(interview_name)
+    dpdash_dict["category"] = "audio"
+    dpdash_dict["optional_tags"] = [file_name]
+
+    dest_file_name = dpdash.get_dpdash_name_from_dict(dpdash_dict)
+
+    return dest_file_name
+
+
+def import_audio_files(config_file: Path, interview_name: str, dest_root: Path) -> None:
+    """
+    Imports all audio files for the given interview.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+        dest_root (Path): The path to the destination directory.
+    """
+    audio_files = InterviewFile.get_interview_files_with_tag(
+        config_file=config_file, interview_name=interview_name, tag="diarized"
+    )
+
+    dest_dir = dest_root / interview_name
+
+    for audio_file in audio_files:
+        dest_file_name = generate_dest_audio_file_name(
+            interview_name=interview_name, audio_file=audio_file
+        )
+        file_destination = dest_dir / f"{dest_file_name}{audio_file.suffix}"
+
+        import_file(source_path=audio_file, destination_path=file_destination)
+
+        orchestrator.fix_permissions(config_file=config_file, file_path=dest_root)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="decryption", description="Decrypt files requested for decryption."
@@ -104,6 +167,8 @@ if __name__ == "__main__":
     studies = orchestrator.get_studies(config_file=config_file)
     data_root = orchestrator.get_data_root(config_file=config_file)
 
+    external_audio_source = get_external_audio_source(config_file=config_file)
+
     COUNTER = 0
 
     while True:
@@ -129,9 +194,27 @@ if __name__ == "__main__":
                 )
                 destination_path.unlink()
 
+            interview_name = Interview.get_interview_name(
+                config_file=config_file, interview_file=source_path
+            )
+
             with Timer() as timer:
                 import_file(source_path=source_path, destination_path=destination_path)
-                orchestrator.fix_permissions(config_file=config_file, file_path=data_root)
+
+                if interview_name is not None:
+                    import_audio_files(
+                        config_file=config_file,
+                        interview_name=interview_name,
+                        dest_root=external_audio_source,
+                    )
+                else:
+                    logger.warning(
+                        f"No interview found for file: {source_path}. Skipping..."
+                    )
+
+                orchestrator.fix_permissions(
+                    config_file=config_file, file_path=data_root
+                )
 
             DecryptedFile.update_decrypted_status(
                 config_file=config_file,
