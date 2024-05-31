@@ -111,7 +111,6 @@ def catogorize_audio_files(
             files["combined"].append(uncategorized_file)
 
         if len(base_name.split("_")) == 1 and unassigned:
-            unassigned = False
             pattern = r"audio\d+"
 
             if re.match(pattern, base_name):
@@ -178,10 +177,13 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
     # Add the audio files
     for tag, audio_files in categorized_audio_files.items():
         for audio_file in audio_files:
+            tags = f"audio,{tag}"
+            if "Audio Record" in audio_file.parts:
+                tags += ",diarized"
             interview_file = InterviewFile(
                 interview_path=interview_path,
                 interview_file=audio_file,
-                tags=f"audio,{tag}",
+                tags=tags,
             )
             interview_files.append(interview_file)
 
