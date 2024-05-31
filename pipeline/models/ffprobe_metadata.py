@@ -448,9 +448,9 @@ class FfprobeMetadata:
                 f"""
                 INSERT INTO ffprobe_metadata (
                     fm_source_path,
-                    fm_requested_by,
+                    fm_requested_by
                 ) VALUES (
-                    '{self.source_path}'
+                    '{self.source_path}',
                     '{self.requested_by}'
                 ) ON CONFLICT (fm_source_path) DO NOTHING;
                 """

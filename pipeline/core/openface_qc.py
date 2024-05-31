@@ -38,7 +38,7 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[Path]:
             ON interview_files.interview_file = decrypted_files.source_path
         ) AS if
         ON vs.video_path = if.destination_path
-        WHERE of_processed_path not in (
+        WHERE of_processed_path NOT in (
             SELECT of_processed_path FROM openface_qc
         ) AND vs.video_path IN (
             SELECT destination_path FROM decrypted_files
