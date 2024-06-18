@@ -168,11 +168,14 @@ if __name__ == "__main__":
                 stream_path = stream_o.vs_path
 
                 destination_path = external_source_root / stream_path.name
-                cli.create_link(
-                    source=stream_path,
-                    destination=destination_path,
-                    softlink=True,
-                )
+                try:
+                    cli.create_link(
+                        source=stream_path,
+                        destination=destination_path,
+                        softlink=True,
+                    )
+                except FileExistsError:
+                    pass
 
                 orchestrator.fix_permissions(
                     config_file=config_file,
