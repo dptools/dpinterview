@@ -59,7 +59,7 @@ def create_link(source: Path, destination: Path, softlink: bool = True) -> None:
         destination.symlink_to(source)
     else:
         logger.debug(f"Creating hard link from {source} to {destination}")
-        destination.link_to(source)
+        destination.hardlink_to(source)
 
 
 def redirect_temp_dir(new_temp_dir: Path) -> None:
