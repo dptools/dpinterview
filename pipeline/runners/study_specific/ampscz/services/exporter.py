@@ -370,7 +370,7 @@ def get_export_path(
             processed_idx = path_parts.index("processed")
             if "decrypted" in path_parts:
                 processed_idx = path_parts.index("decrypted")
-            relative_path = path_parts[processed_idx + 1 :]
+            relative_path = path_parts[processed_idx + 1:]
             destination_path = export_path / Path(*relative_path)
 
     return destination_path
