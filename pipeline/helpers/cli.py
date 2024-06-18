@@ -151,21 +151,6 @@ def chmod(file_path: Path, mode: int) -> None:
     )
 
 
-def chmod(file_path: Path, mode: int) -> None:
-    """
-    Changes the permissions of a file.
-
-    Args:
-        file_path (Path): The path to the file.
-        mode (int): the mode to change the permissions to.
-
-    Returns:
-        None
-    """
-    command_array = ["chmod", "-R", mode, str(file_path)]
-    execute_commands(command_array, shell=True)
-
-
 def check_if_running(process_name: str) -> bool:
     """
     Check if a process with the same path is running in the background.
