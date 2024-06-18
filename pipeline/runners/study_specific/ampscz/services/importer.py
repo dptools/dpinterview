@@ -136,7 +136,7 @@ def import_audio_files(config_file: Path, interview_name: str, dest_root: Path) 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        prog="decryption", description="Decrypt files requested for decryption."
+        prog="importer", description="Import files from the shared directory."
     )
     parser.add_argument(
         "-c", "--config", type=str, help="Path to the config file.", required=False
