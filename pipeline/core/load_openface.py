@@ -112,6 +112,58 @@ def get_openface_runs(config_file: Path, interview_name: str) -> pd.DataFrame:
     return df
 
 
+def check_if_metadata_exists(
+    config_file: Path,
+    source: Path,
+) -> bool:
+    """
+    Checks if metadata exists for a given source.
+
+    Args:
+        config_file (Path): Path to the config file.
+        source (Path): Path to the source file.
+    """
+    query = f"""
+    SELECT *
+    FROM ffprobe_metadata
+    WHERE fm_source_path = '{source}'
+    """
+
+    df = db.execute_sql(config_file=config_file, query=query)
+
+    return not df.empty
+
+
+def ensure_metadata_exists(
+    config_file: Path,
+    source: Path,
+    role: str,
+) -> None:
+    """
+    Ensures metadata exists for a given source.
+
+    Checks if metadata exists for a given source, if not present,
+    it will be generated and logged to the database.
+
+    Args:
+        config_file (Path): Path to the config file.
+        source (Path): Path to the source file.
+    """
+    if not check_if_metadata_exists(config_file, source):
+        metadata_dict = ffprobe.get_metadata(
+            file_path_to_process=source, config_file=config_file  # type: ignore
+        )
+
+        metadata.log_metadata(
+            source=source,  # type: ignore
+            metadata=metadata_dict,
+            config_file=config_file,
+            requested_by=f"load_openface-{role}",
+        )
+    else:
+        logger.info(f"Metadata exists for {source}")
+
+
 def construct_load_openface(
     config_file: Path, interview_name: str, of_runs: pd.DataFrame
 ) -> LoadOpenface:
@@ -156,16 +208,14 @@ def construct_load_openface(
             config_file=config_file,
             of_path=subject_of_path,
         )
-        metadata_dict = ffprobe.get_metadata(
-            file_path_to_process=vs_path, config_file=config_file  # type: ignore
-        )
-
-        metadata.log_metadata(
-            source=vs_path,  # type: ignore
-            metadata=metadata_dict,
-            config_file=config_file,
-            requested_by="load_openface-subject",
-        )
+        if vs_path is None:
+            logger.error(
+                f"Could not find video stream for {interview_name} subject OpenFace run"
+            )
+            raise ValueError(
+                f"Could not find video stream for {interview_name} subject OpenFace run"
+            )
+        ensure_metadata_exists(config_file=config_file, source=vs_path, role="subject")
 
     if "interviewer" in roles_available:
         interviewer_of_path = of_runs[of_runs["ir_role"] == "interviewer"][
@@ -175,15 +225,15 @@ def construct_load_openface(
             config_file=config_file,
             of_path=interviewer_of_path,
         )
-        metadata_dict = ffprobe.get_metadata(
-            file_path_to_process=vs_path, config_file=config_file  # type: ignore
-        )
-
-        metadata.log_metadata(
-            source=vs_path,  # type: ignore
-            metadata=metadata_dict,
-            config_file=config_file,
-            requested_by="load_openface-interviewer",
+        if vs_path is None:
+            logger.error(
+                f"Could not find video stream for {interview_name} interviewer OpenFace run"
+            )
+            raise ValueError(
+                f"Could not find video stream for {interview_name} interviewer OpenFace run"
+            )
+        ensure_metadata_exists(
+            config_file=config_file, source=vs_path, role="interviewer"
         )
 
     lof = LoadOpenface(

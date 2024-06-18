@@ -125,7 +125,30 @@ def chown(file_path: Path, user: str, group: str) -> None:
         None
     """
     command_array = ["chown", "-R", f"{user}:{group}", str(file_path)]
-    execute_commands(command_array, shell=True)
+    execute_commands(
+        command_array,
+        shell=True,
+        on_fail=lambda: logger.error("Failed to change ownership."),
+    )
+
+
+def chmod(file_path: Path, mode: int) -> None:
+    """
+    Changes the permissions of a file.
+
+    Args:
+        file_path (Path): The path to the file.
+        mode (int): the mode to change the permissions to.
+
+    Returns:
+        None
+    """
+    command_array = ["chmod", "-R", mode, str(file_path)]
+    execute_commands(
+        command_array,
+        shell=True,
+        on_fail=lambda: logger.error("Failed to change permissions."),
+    )
 
 
 def chmod(file_path: Path, mode: int) -> None:
