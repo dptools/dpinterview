@@ -106,7 +106,7 @@ def catogorize_audio_files(
         base_name = base_name.split(".")[0]
         last_part = base_name.split("_")[-1]
 
-        if last_part.isdigit() and unassigned:
+        if last_part.isdigit() and unassigned and "Audio Record" not in str(uncategorized_file):
             unassigned = False
             files["combined"].append(uncategorized_file)
 
@@ -389,6 +389,35 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     db.execute_queries(config_file=config_file, queries=sql_queries)
 
 
+def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
+    """
+    Each interview should have a unique name. If there are unique interviews,
+    mark them as primary. Duplicate interviews will need to be manually
+    resolved.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The study ID.
+
+    Returns:
+        None
+    """
+    query = f"""
+    WITH duplicate_interview_names AS (
+        SELECT interview_name
+        FROM public.interviews
+        GROUP BY interview_name
+        HAVING COUNT(*) = 1
+    )
+    UPDATE public.interviews
+    SET is_primary = TRUE
+    WHERE interview_name IN (SELECT interview_name FROM duplicate_interview_names) AND
+        study_id = '{study_id}';
+    """
+
+    db.execute_queries(config_file=config_file, queries=[query])
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog=MODULE_NAME, description="Gather metadata for files."
@@ -429,5 +458,7 @@ if __name__ == "__main__":
             import_interviews(
                 config_file=config_file, study_id=study_id, progress=progress
             )
+            logger.info(f"Marking unique interviews as primary for {study_id}")
+            mark_unique_interviews_as_primary(config_file=config_file, study_id=study_id)
 
     logger.info("[bold green]Done!", extra={"markup": True})

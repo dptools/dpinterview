@@ -31,6 +31,7 @@ def get_file_to_decrypt(
         FROM interview_files
         INNER JOIN interviews ON interview_files.interview_path = interviews.interview_path
         WHERE interviews.study_id = '{study_id}' AND
+            interviews.is_primary = TRUE AND
             interview_files.interview_file_tags LIKE '%%video%%' AND
             interview_files.interview_file NOT IN (
                 SELECT source_path FROM decrypted_files
