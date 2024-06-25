@@ -28,15 +28,10 @@ import shutil
 from typing import List, Tuple, Literal, Optional
 
 from rich.logging import RichHandler
-import pandas as pd
 
 from pipeline import orchestrator
 from pipeline.helpers import cli, utils, dpdash, db
-from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.exported_assets import ExportedAsset
-from pipeline.models.faceprocessing_pipleine_metrics import (
-    FaceProcessingPipelineMetrics,
-)
 
 MODULE_NAME = "ampscz-exporter"
 
@@ -53,48 +48,34 @@ logging.basicConfig(**logargs)
 console = utils.get_console()
 
 
-def reconstruct_interview_name(face_processing_pipeline_directory_name: str) -> str:
+def get_interview_name_to_process(config_file: Path, study_id: str) -> Optional[str]:
     """
-    Constructs the interview name from the face processing pipeline directory name.
+    Get the interview name to process from the database.
 
     Args:
-        face_processing_pipeline_directory_name (str): The face processing pipeline directory name.
+        config_file (Path): The path to the config file.
+        study_id (str): The study_id.
+
     Returns:
-        str: The interview name.
+        Optional[str]: The interview name to process.
     """
-    parts = face_processing_pipeline_directory_name.split("_")
-    study_id = parts[0]
-    subject_id = parts[1]
-    # category = parts[2]
-    interview_type = parts[3]
-    day = parts[4]
 
-    interview_name = f"{study_id}-{subject_id}-{interview_type}Interview-{day}"
+    query = f"""
+        SELECT interview_name
+        FROM pdf_reports
+        LEFT JOIN load_openface USING (interview_name)
+        WHERE study_id = '{study_id}' AND
+            interview_name NOT IN (
+                SELECT interview_name
+                FROM exported_assets
+            )
+        ORDER BY RANDOM()
+        LIMIT 1;
+    """
+
+    interview_name = db.fetch_record(config_file=config_file, query=query)
+
     return interview_name
-
-
-def get_faceprocessing_pipeline_exports(
-    interview_output_dir: Path,
-) -> List[
-    Tuple[Path, Literal["file", "directory"], Literal["GENERAL", "PROTECTED"], str]
-]:
-    """
-    Returns a list of tuples with the following structure:
-    (Path to the file/directory, file/diretory (type), GENERAL or PROTECTED)
-
-    Parameters
-        - interview_output_dir (Path): Path to the directory containing the face
-            processing pipeline outputs
-    Returns
-        - List of tuples with the structure (Path to the file/directory,
-            file/diretory (type), GENERAL or PROTECTED)
-    """
-    required_exports = list(interview_output_dir.glob("*InterviewVideoFeatures*.csv"))
-
-    exports = []
-    for export in required_exports:
-        exports.append((export, "file", "GENERAL", "face_processing_pipeline"))
-    return exports
 
 
 def duration_to_seconds(duration_str: str) -> int:
@@ -110,57 +91,6 @@ def duration_to_seconds(duration_str: str) -> int:
     h, m, s = map(int, duration_str.split(":"))
     total_seconds = h * 3600 + m * 60 + s
     return total_seconds
-
-
-def get_faceprocessing_pipeline_metrics(
-    interview_name: str, interview_output_dir: Path
-) -> List[FaceProcessingPipelineMetrics]:
-    """
-    Returns a list of FaceProcessingPipelineMetrics objects for the given interview.
-
-    Parameters
-        - interview_output_dir (Path): Path to the directory containing the face
-            processing pipeline outputs
-
-    Returns
-        - List of FaceProcessingPipelineMetrics objects
-    """
-    metrics_path = list(interview_output_dir.glob("*InterviewVideoRunTime*.csv"))
-    if not metrics_path:
-        return []
-
-    metrics_path = metrics_path[0]
-    metrics_df = pd.read_csv(metrics_path)
-
-    metrics: List[FaceProcessingPipelineMetrics] = []
-
-    for _, row in metrics_df.iterrows():
-        ir_role = InterviewRole(row["role"])
-        fpm_landmark_time: str = row["landmark_time"]
-        fpm_fpose_time: str = row["fpose_time"]
-        fpm_au_time: str = row["au_time"]
-        fpm_execution_time: str = row["execution_time"]
-        fpm_record_time: str = row["record_time"]
-
-        # convert from H:M:S to seconds
-        fpm_landmark_time_s = duration_to_seconds(fpm_landmark_time)
-        fpm_fpose_time_s = duration_to_seconds(fpm_fpose_time)
-        fpm_au_time_s = duration_to_seconds(fpm_au_time)
-        fpm_execution_time_s = duration_to_seconds(fpm_execution_time)
-        fpm_record_time_s = duration_to_seconds(fpm_record_time)
-
-        metric = FaceProcessingPipelineMetrics(
-            interview_name=interview_name,
-            ir_role=ir_role,
-            fpm_landmark_time_s=fpm_landmark_time_s,
-            fpm_fpose_time_s=fpm_fpose_time_s,
-            fpm_au_time_s=fpm_au_time_s,
-            fpm_execution_time_s=fpm_execution_time_s,
-            fpm_record_time_s=fpm_record_time_s,
-        )
-        metrics.append(metric)
-
-    return metrics
 
 
 def get_pipeline_streams(interview_name: str, config_file: Path) -> List[Path]:
@@ -376,34 +306,6 @@ def get_export_path(
     return destination_path
 
 
-def is_interview_export_ready(interview_name: str, config_file: Path) -> bool:
-    """
-    Checks if the interview export is ready
-
-    Parameters
-        - interview_name: Name of the interview
-        - config_file: Path to the config file
-
-    Returns
-        - True if the interview export is ready, False otherwise
-    """
-
-    # Reports are the final stage of the av pipeline
-    # check if the report has been generated
-
-    query = f"""
-    SELECT * FROM pdf_reports
-    WHERE interview_name = '{interview_name}'
-    """
-
-    df = db.execute_sql(config_file=config_file, query=query)
-
-    if df.empty:
-        return False
-
-    return True
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="exporter", description="Export pipeline assets to the shared directory."
@@ -447,26 +349,45 @@ if __name__ == "__main__":
     if debug:
         logger.warning("Debug mode enabled. No files will be copied.")
 
-    external_config = utils.config(path=config_file, section="external")
-    face_prcessing_output_dir = external_config["face_processing_pipeline_export"]
-    face_prcessing_output_dir_path = Path(face_prcessing_output_dir)
+    config_params = utils.config(config_file, section="general")
+    studies = orchestrator.get_studies(config_file=config_file)
 
-    # list directories in face_prcessing_output_dir
-    directories_to_export = list(face_prcessing_output_dir_path.glob("*"))
+    COUNTER = 0
 
-    for directory in directories_to_export:
-        directory_name = directory.name
-        interview_name = reconstruct_interview_name(directory_name)
+    study_id = studies[0]
+    logger.info(f"Starting with study: {study_id}")
 
-        IS_EXPORT_READY = is_interview_export_ready(
-            interview_name=interview_name, config_file=config_file
+    while True:
+        interview_name = get_interview_name_to_process(
+            config_file=config_file, study_id=study_id
         )
 
-        if not IS_EXPORT_READY:
-            logger.warning(f"Skipping export for {interview_name}. Export not ready.")
-            continue
+        if interview_name is None:
+            if study_id == studies[-1]:
+                # Log if any reports were generated
+                if COUNTER > 0:
+                    orchestrator.log(
+                        config_file=config_file,
+                        module_name=MODULE_NAME,
+                        message=f"Exported assets for {COUNTER} interviews.",
+                    )
+                    COUNTER = 0
 
-        logger.info(f"Exporting assets for {interview_name}")
+                # Snooze if no interviews to process
+                orchestrator.snooze(config_file=config_file)
+                study_id = studies[0]
+                logger.info(f"Restarting with study: {study_id}")
+                continue
+            else:
+                study_id = studies[studies.index(study_id) + 1]
+                logger.info(f"Switching to study: {study_id}")
+                continue
+
+        COUNTER += 1
+        logger.info(
+            f"[cyan]Exporting Assets for {interview_name}...",
+            extra={"markup": True},
+        )
 
         exports: List[
             Tuple[
@@ -478,9 +399,6 @@ if __name__ == "__main__":
             interview_name=interview_name, config_file=config_file
         )
         exports.extend(pipeline_exports)
-
-        faceprocessing_exports = get_faceprocessing_pipeline_exports(directory)
-        exports.extend(faceprocessing_exports)
 
         queries: List[str] = []
 
@@ -507,9 +425,7 @@ if __name__ == "__main__":
                     source = asset.asset_path
                     destination = asset.asset_destination
                     if not destination.parent.exists():
-                        destination.parent.mkdir(
-                            parents=True, exist_ok=True
-                        )
+                        destination.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source, destination)
             elif asset.asset_type == "directory":
                 logger.debug(f"Copying {asset.asset_path} -> {asset.asset_destination}")
@@ -522,26 +438,11 @@ if __name__ == "__main__":
             query = asset.to_sql()
             queries.append(query)
 
-        metrics = get_faceprocessing_pipeline_metrics(
-            interview_name=interview_name, interview_output_dir=directory
-        )
-        for metric in metrics:
-            if debug:
-                logger.debug(
-                    f"Inserting {metric} into face_processing_pipeline_metrics"
-                )
-            query = metric.to_sql()
-            queries.append(query)
-
         if not debug:
             db.execute_queries(
                 config_file=config_file,
                 queries=queries,
             )
-
-            # Delete the face processing pipeline directory
-            logger.debug(f"Deleting {directory}")
-            shutil.rmtree(directory)
 
             # Clean up assets
             for exportable_asset in exports:
@@ -553,5 +454,3 @@ if __name__ == "__main__":
                     asset_path.unlink()
                 elif asset_path.is_dir():
                     shutil.rmtree(asset_path)
-
-    logger.info("Export complete.")
