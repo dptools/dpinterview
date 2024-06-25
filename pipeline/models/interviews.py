@@ -187,11 +187,13 @@ class Interview:
             Optional[str]: The name of the interview.
         """
 
+        santiized_interview_file = db.santize_string(str(interview_file))
+
         query = f"""
         SELECT interview_name
         FROM interview_files
         INNER JOIN interviews USING (interview_path)
-        WHERE interview_file = '{interview_file}';
+        WHERE interview_file = '{santiized_interview_file}';
         """
 
         result = db.fetch_record(config_file=config_file, query=query)
