@@ -330,19 +330,20 @@ def run_openface_overlay(
                     progress.update(task, advance=1)
 
         logger.info("Compiling frames into video", extra={"markup": True})
-        video_path = face_aligned_video_path
 
         ffmpeg.images_to_vid(
             image_dir=temp_dir_path,
-            output_file=video_path,
+            output_file=face_aligned_video_path,
         )
 
-        logger.info("Running OpenFace on compiled video", extra={"markup": True})
+    logger.info("Running OpenFace on compiled video", extra={"markup": True})
+    with tempfile.TemporaryDirectory(prefix=temp_dir_prefix) as temp_dir:
+        temp_dir_path = Path(temp_dir)
         temp_openface_path = temp_dir_path / "openface"
 
         run_openface(
             config_file=config_file,
-            file_path_to_process=video_path,
+            file_path_to_process=face_aligned_video_path,
             output_path=temp_openface_path,
         )
 
