@@ -16,7 +16,6 @@ from pipeline.models.openface import Openface
 from pipeline.models.video_streams import VideoStream
 from pipeline.models.video_qqc import VideoQuickQc
 from pipeline.models.decrypted_files import DecryptedFile
-from pipeline.models.metrics import Metrics
 from pipeline.models.ffprobe_metadata import FfprobeMetadata
 
 logger = logging.getLogger(__name__)
@@ -214,6 +213,64 @@ def drop_openface_features_query(config_file: Path, interview_name: str) -> None
     )
 
 
+def get_video_streams(config_file: Path, video_path: Path) -> List[Path]:
+    """
+    Get the path to the video stream for the given interview and role.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        interview_name (str): The name of the interview.
+        role (InterviewRole): The role of the user.
+    """
+
+    stream_query = f"""
+        SELECT vs_path
+        FROM video_streams
+        WHERE video_path = '{video_path}'
+    """
+
+    streams_df = db.execute_sql(
+        config_file=config_file,
+        query=stream_query,
+    )
+
+    stream_paths = streams_df["vs_path"].tolist()
+    stream_paths = [Path(stream_path) for stream_path in stream_paths]
+
+    return stream_paths
+
+
+def get_opeface_processed_path(config_file: Path, video_stream: Path) -> Optional[Path]:
+    """
+    Get the path to the openface output for the given video stream.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        video_stream (Path): The path to the video stream.
+
+    Returns:
+        Optional[Path]: The path to the openface output.
+    """
+
+    output_path_query = f"""
+        SELECT of_processed_path
+        FROM openface
+        WHERE vs_path = '{video_stream}'
+    """
+
+    output_path = db.fetch_record(
+        config_file=config_file,
+        query=output_path_query,
+    )
+
+    if output_path is None:
+        return None
+
+    output_path = Path(output_path)
+
+    return output_path
+
+
 def drop_interview_queries(
     config_file: Path,
     interview_name: str,
@@ -231,145 +288,56 @@ def drop_interview_queries(
         List[str]: List of SQL queries.
     """
 
-    roles = [InterviewRole.INTERVIEWER, InterviewRole.SUBJECT]
+    drop_queries: List[str] = []
 
     decrypted_files = get_decrypted_files(
         config_file=config_file, interview_name=interview_name
     )
 
-    streams: List[Path] = []
-    of_paths: List[Path] = []
-    for role in roles:
-        try:
-            stream = core.get_interview_stream(
-                config_file=config_file,
-                interview_name=interview_name,
-                role=role,
-            )
-        except FileNotFoundError:
-            stream = None
-        except ValueError:
-            stream = None
-
-        if stream is not None:
-            streams.append(stream)
-
-        try:
-            of_path = core.get_openface_path(
-                config_file=config_file,
-                interview_name=interview_name,
-                role=role,
-            )
-        except FileNotFoundError:
-            of_path = None
-        except ValueError:
-            of_path = None
-
-        if of_path is not None:
-            of_paths.append(of_path)
-
-    sql_queries = []
-    drop_report_query = PdfReport.drop_row_query(
+    drop_pdf_reports_query = PdfReport.drop_row_query(
         interview_name=interview_name, pr_version=version
     )
+    drop_queries.append(drop_pdf_reports_query)
 
     drop_load_openface_query = LoadOpenface.drop_row_query(
         interview_name=interview_name
     )
+    drop_queries.append(drop_load_openface_query)
 
-    drop_openface_qc_query: List[str] = []
-    drop_openface_query: List[str] = []
-    for of_path in of_paths:
-        drop_openface_qc_query.append(
-            OpenfaceQC.drop_row_query(
-                of_processed_path=of_path,
-            )
-        )
+    for file in decrypted_files:
+        video_streams = get_video_streams(config_file=config_file, video_path=file)
 
-        drop_openface_query.append(
-            Openface.drop_row_query(
-                of_processed_path=of_path,
+        for stream in video_streams:
+            openface_output = get_opeface_processed_path(
+                config_file=config_file, video_stream=stream
             )
-        )
 
-    drop_streams_query: List[str] = []
-    drop_ffprobe_query: List[str] = []
-    for stream in streams:
-        drop_openface_query.append(
-            Openface.drop_row_query_v(
-                video_path=stream,
-            )
-        )
-        drop_openface_query.append(
-            Openface.drop_row_query_vs(
-                vs_path=stream,
-            )
-        )
-        drop_streams_query.append(
-            VideoStream.drop_row_query_s(
-                stream_path=stream,
-            )
-        )
-        drop_ffprobe_query.extend(
-            FfprobeMetadata.drop_row_query(
-                source_path=stream,
-            )
-        )
+            if openface_output is not None:
+                drop_openface_qc_query = OpenfaceQC.drop_row_query(
+                    of_processed_path=openface_output
+                )
+                drop_queries.append(drop_openface_qc_query)
 
-    drop_video_qqc_query: List[str] = []
-    drop_decrypted_query: List[str] = []
-    for decrypted_file in decrypted_files:
-        drop_streams_query.append(
-            VideoStream.drop_row_query_v(
-                video_path=decrypted_file,
-            )
-        )
-        drop_video_qqc_query.append(
-            VideoQuickQc.drop_row_query(
-                video_path=decrypted_file,
-            )
-        )
-        drop_ffprobe_query.extend(
-            FfprobeMetadata.drop_row_query(
-                source_path=decrypted_file,
-            )
-        )
-        drop_decrypted_query.append(
-            DecryptedFile.drop_row_query(
-                destination_path=decrypted_file,
-            )
-        )
+                drop_openface_query = Openface.drop_row_query(
+                    of_processed_path=openface_output
+                )
+                drop_queries.append(drop_openface_query)
 
-    drop_metrics_query = Metrics.drop_row_query(
-        interview_name=interview_name,
-    )
+            drop_stream_query = VideoStream.drop_row_query_s(stream_path=stream)
+            drop_queries.append(drop_stream_query)
 
-    sql_queries.extend(
-        [
-            drop_report_query,
-            drop_load_openface_query,
-        ],
-    )
-    sql_queries.extend(
-        drop_openface_qc_query,
-    )
-    sql_queries.extend(
-        drop_openface_query,
-    )
-    sql_queries.extend(
-        drop_streams_query,
-    )
-    sql_queries.extend(
-        drop_video_qqc_query,
-    )
-    sql_queries.extend(
-        drop_decrypted_query,
-    )
-    sql_queries.extend(
-        drop_ffprobe_query,
-    )
-    sql_queries.append(
-        drop_metrics_query,
-    )
+            drop_stream_ffprobe_query = FfprobeMetadata.drop_row_query(
+                source_path=stream
+            )
+            drop_queries.extend(drop_stream_ffprobe_query)
 
-    return sql_queries
+        drop_video_qqc_query = VideoQuickQc.drop_row_query(video_path=file)
+        drop_queries.append(drop_video_qqc_query)
+
+        drop_decrypted_file_query = DecryptedFile.drop_row_query(destination_path=file)
+        drop_queries.append(drop_decrypted_file_query)
+
+        drop_ffprobe_queries = FfprobeMetadata.drop_row_query(source_path=file)
+        drop_queries.extend(drop_ffprobe_queries)
+
+    return drop_queries
