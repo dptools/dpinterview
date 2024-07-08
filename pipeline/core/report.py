@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+import matplotlib.pyplot as plt
+
 from pipeline import core, orchestrator
 from pipeline.helpers import db, dpdash, utils
 from pipeline.models.pdf_reports import PdfReport
@@ -129,13 +131,13 @@ def generate_report(
     Returns:
         Optional[str]: The error message, if any.
     """
-    logger.info(f"Generating report for {interview_name}...")
 
     error_message = report.generate_report(
         config_file=config_file,
         interview_name=interview_name,
         dest_file_name=report_path,
     )
+    plt.close()
 
     return error_message
 
