@@ -189,7 +189,7 @@ def get_process_id(process_name: str) -> Optional[List[int]]:
         return None
 
 
-def spawn_dummy_process(process_name: str, timeout: str = "24h") -> str:
+def spawn_dummy_process(process_name: str, timeout: str = "6h") -> str:
     """
     Spawns a long running dummy process with the given name as parameter.
 
@@ -467,6 +467,45 @@ def remove_directory(path: Path) -> None:
         return
 
     shutil.rmtree(path)
+
+
+def remove(path: Path) -> None:
+    """
+    Remove a file or directory. Aso removes parent directories if they are empty.
+
+    Args:
+        path (Path): The path to the file or directory to remove.
+
+    Returns:
+        None
+    """
+    if path.is_dir():
+        remove_directory(path)
+    else:
+        path.unlink()
+
+    # Remove parent directories if they are empty
+    parent = path.parent
+    while parent != Path("/") and not any(parent.iterdir()):
+        remove_directory(parent)
+        parent = parent.parent
+
+
+def copy(source: Path, destination: Path) -> None:
+    """
+    Copy a file or directory to a new location.
+
+    Args:
+        source (Path): The source file or directory to copy.
+        destination (Path): The destination file or directory to copy to.
+
+    Returns:
+        None
+    """
+    if source.is_dir():
+        shutil.copytree(source, destination)
+    else:
+        shutil.copy2(source, destination)
 
 
 def confirm_action(message: str) -> bool:

@@ -27,10 +27,9 @@ from typing import List, Tuple
 from rich.logging import RichHandler
 
 from pipeline import core, orchestrator
-from pipeline.core.fetch_video import check_if_interview_has_duplicates
 from pipeline.helpers import cli, utils, db
 from pipeline.models.files import File
-from pipeline.models.interview_files import InterviewFile
+from pipeline.models.transcript_files import TranscriptFile
 
 MODULE_NAME = "import_transcript_files"
 INSTANCE_NAME = MODULE_NAME
@@ -65,6 +64,9 @@ def get_interview_name_from_transcript(transcript_filename: str) -> str:
     data_type = name_parts[3]
     day_str = name_parts[4]  # dayXXXX
     day = int(day_str[3:])
+    # make all day as positive
+    if day < 0:
+        day = -day
 
     interview_name = f"{study_id}-{subject_id}-{data_type}Interview-day{day:04d}"
 
@@ -73,7 +75,7 @@ def get_interview_name_from_transcript(transcript_filename: str) -> str:
 
 def transcripts_to_models(
     transcripts: List[Path], config_file: Path
-) -> Tuple[List[File], List[InterviewFile]]:
+) -> Tuple[List[File], List[TranscriptFile]]:
     """
     Converts the transcripts into File and InterviewFile models.
 
@@ -81,10 +83,10 @@ def transcripts_to_models(
         transcripts (List[Path]): The list of transcripts.
 
     Returns:
-        Tuple[List[File], List[InterviewFile]]: The list of File and InterviewFile models.
+        Tuple[List[File], List[TranscriptFile]]: The list of File and InterviewFile models.
     """
-    files = []
-    interview_files = []
+    files: List[File] = []
+    transcript_files: List[TranscriptFile] = []
 
     for transcript in transcripts:
         filename = transcript.name
@@ -92,14 +94,6 @@ def transcripts_to_models(
         interview_name = get_interview_name_from_transcript(
             transcript_filename=filename
         )
-
-        if check_if_interview_has_duplicates(
-            interview_name=interview_name, config_file=config_file
-        ):
-            logger.warning(
-                f"Interview {interview_name} has duplicates. Skipping transcript."
-            )
-            continue
 
         interview_path = core.get_interview_path(
             interview_name=interview_name, config_file=config_file
@@ -110,27 +104,27 @@ def transcripts_to_models(
             continue
 
         file = File(file_path=transcript)
-        i_file = InterviewFile(
-            interview_path=interview_path,
-            interview_file=transcript,
-            tags="transcript,transcribeme",
+        t_file = TranscriptFile(
+            transcript_file=transcript,
+            interview_name=interview_name,
+            tags="transcribeme",
         )
 
         files.append(file)
-        interview_files.append(i_file)
+        transcript_files.append(t_file)
 
-    return files, interview_files
+    return files, transcript_files
 
 
 def models_to_db(
-    files: List[File], interview_files: List[InterviewFile], config_file: Path
+    files: List[File], transcript_files: List[TranscriptFile], config_file: Path
 ) -> None:
     """
     Imports the File and InterviewFile models into the database.
 
     Args:
         files (List[File]): The list of File models.
-        interview_files (List[InterviewFile]): The list of InterviewFile models.
+        transcript_files (List[InterviewFile]): The list of InterviewFile models.
 
     Returns:
         None
@@ -141,8 +135,8 @@ def models_to_db(
     for file in files:
         sql_queries.append(file.to_sql())
 
-    for i_file in interview_files:
-        sql_queries.append(i_file.to_sql())
+    for t_file in transcript_files:
+        sql_queries.append(t_file.to_sql())
 
     db.execute_queries(queries=sql_queries, config_file=config_file, show_commands=False)
 
@@ -167,14 +161,14 @@ def import_transcripts(data_root: Path, study: str, config_file: Path) -> None:
 
     logger.info(f"Found {len(transcripts)} transcripts.")
 
-    files, interview_files = transcripts_to_models(
+    files, transcript_files = transcripts_to_models(
         transcripts=transcripts, config_file=config_file
     )
 
     logger.info(
-        f"Importing {len(files)} files and {len(interview_files)} interview files."
+        f"Importing {len(files)} files and {len(transcript_files)} transcript files."
     )
-    models_to_db(files=files, interview_files=interview_files, config_file=config_file)
+    models_to_db(files=files, transcript_files=transcript_files, config_file=config_file)
 
 
 if __name__ == "__main__":

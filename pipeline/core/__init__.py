@@ -552,7 +552,7 @@ def fetch_openface_features(
         """
 
     session_of_features = db.execute_sql(
-        config_file=config_file, query=sql_query, db="openface_db"
+        config_file=config_file, query=sql_query, db="openface_db", debug=True
     )
 
     return session_of_features

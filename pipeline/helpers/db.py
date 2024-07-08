@@ -142,7 +142,6 @@ def execute_queries(
     Returns:
         list: A list of tuples containing the results of the executed queries.
     """
-    conn = None
     command = None
     output = []
 
@@ -163,7 +162,7 @@ def execute_queries(
 
     try:
         credentials = get_db_credentials(config_file=config_file, db=db)
-        conn = psycopg2.connect(**credentials)  # type: ignore
+        conn: psycopg2.extensions.connection = psycopg2.connect(**credentials)  # type: ignore
         cur = conn.cursor()
 
         def execute_query(query: str):
@@ -241,7 +240,9 @@ def get_db_connection(
     return engine
 
 
-def execute_sql(config_file: Path, query: str, db: str = "postgresql") -> pd.DataFrame:
+def execute_sql(
+    config_file: Path, query: str, db: str = "postgresql", debug: bool = False
+) -> pd.DataFrame:
     """
     Executes a SQL query on a PostgreSQL database and returns the result as a pandas DataFrame.
 
@@ -254,6 +255,9 @@ def execute_sql(config_file: Path, query: str, db: str = "postgresql") -> pd.Dat
         pd.DataFrame: A pandas DataFrame containing the result of the SQL query.
     """
     engine = get_db_connection(config_file=config_file, db=db)
+
+    if debug:
+        logger.debug(f"Executing query: {query}")
 
     df = pd.read_sql(query, engine)
 

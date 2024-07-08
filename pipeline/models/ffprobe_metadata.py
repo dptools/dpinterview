@@ -395,6 +395,7 @@ class FfprobeMetadata:
             logger.warning(f"Unknown codec_type: {stream['codec_type']}")
             logger.info(f"Stream: {stream}")
             logger.warning("Skipping stream...")
+            query = "SELECT 1;"  # No-op
 
         return query
 

@@ -106,7 +106,11 @@ def catogorize_audio_files(
         base_name = base_name.split(".")[0]
         last_part = base_name.split("_")[-1]
 
-        if last_part.isdigit() and unassigned and "Audio Record" not in str(uncategorized_file):
+        if (
+            last_part.isdigit()
+            and unassigned
+            and "Audio Record" not in str(uncategorized_file)
+        ):
             unassigned = False
             files["combined"].append(uncategorized_file)
 
@@ -151,6 +155,17 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
     subject_id = interview.subject_id
 
     interview_path = interview.interview_path
+
+    if interview_path.is_file():
+        interview_files.append(
+            InterviewFile(
+                interview_path=interview_path,
+                interview_file=interview_path,
+                tags="audio,combined",
+            )
+        )
+        return interview_files
+
     # list all files in the directory
     files = [f for f in interview_path.iterdir() if f.is_file()]
     # also add files from 'Audio Record' directory
@@ -263,6 +278,52 @@ def fetch_interviews(
             interview = Interview(
                 interview_name=interview_name,
                 interview_path=interview_dir,
+                interview_datetime=interview_datetime,
+                interview_type=interview_type,
+                subject_id=subject_id,
+                study_id=study_id,
+            )
+
+            interviews.append(interview)
+
+        wav_files = list(interview_type_path.glob("*.WAV"))
+
+        for wav_file in wav_files:
+            interview_datetime_str = wav_file.stem  # YYYYMMDDHHMMSS
+            try:
+                interview_datetime = datetime.strptime(
+                    interview_datetime_str, "%Y%m%d%H%M%S"
+                )
+                # truncate time
+                interview_datetime = interview_datetime.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+            except ValueError:
+                logger.warning(
+                    f"Could not parse date and time from {interview_datetime_str}. Skipping..."
+                )
+                continue
+
+            consent_date_s = core.get_consent_date_from_subject_id(
+                config_file=config_file, subject_id=subject_id, study_id=study_id
+            )
+
+            if consent_date_s is None:
+                logger.warning(f"Could not find consent date for {subject_id}")
+                continue
+            consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
+
+            interview_name = dpdash.get_dpdash_name(
+                study=study_id,
+                subject=subject_id,
+                data_type=f"{interview_type.value}Interview",
+                consent_date=consent_date,
+                event_date=interview_datetime,
+            )
+
+            interview = Interview(
+                interview_name=interview_name,
+                interview_path=wav_file,
                 interview_datetime=interview_datetime,
                 interview_type=interview_type,
                 subject_id=subject_id,
@@ -388,7 +449,6 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     # Execute the SQL queries
     db.execute_queries(config_file=config_file, queries=sql_queries)
 
-
 def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
     """
     Each interview should have a unique name. If there are unique interviews,
@@ -416,7 +476,6 @@ def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
     """
 
     db.execute_queries(config_file=config_file, queries=[query])
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -459,6 +518,8 @@ if __name__ == "__main__":
                 config_file=config_file, study_id=study_id, progress=progress
             )
             logger.info(f"Marking unique interviews as primary for {study_id}")
-            mark_unique_interviews_as_primary(config_file=config_file, study_id=study_id)
+            mark_unique_interviews_as_primary(
+                config_file=config_file, study_id=study_id
+            )
 
     logger.info("[bold green]Done!", extra={"markup": True})

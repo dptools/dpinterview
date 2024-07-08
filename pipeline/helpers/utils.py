@@ -3,11 +3,13 @@ Helper functions for the pipeline
 """
 
 import logging
+import multiprocessing
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import List
-from datetime import datetime
 
+import pandas as pd
 from rich.console import Console
 from rich.progress import (
     BarColumn,
@@ -18,12 +20,13 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
-import pandas as pd
 
 from pipeline.helpers import cli
 from pipeline.helpers.config import config
 
 _console = Console(color_system="standard")
+
+logger = logging.getLogger(__name__)
 
 
 def get_progress_bar(transient: bool = False) -> Progress:
@@ -216,3 +219,62 @@ def create_labels(start_time: float, end_time: float, num_of_labels: int):
         labels.append(label)
 
     return labels
+
+
+class FunctionTimeout(Exception):
+    """
+    Exception raised when a function times out.
+    """
+
+
+def timeout_max(seconds: int):
+    """
+    A decorator to set a timeout for a function.
+
+    If the function takes longer than the specified time in seconds,
+    the function will raise a FunctionTimeout exception, and terminate the running function.
+
+    Args:
+        seconds (int): The maximum time in seconds the function is allowed to run.
+
+    Returns:
+        function: The decorated function.
+    """
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            result_queue = multiprocessing.Queue()
+
+            def target():
+                try:
+                    result_queue.put(func(*args, **kwargs))
+                except Exception as e:
+                    result_queue.put(e)
+
+            process = multiprocessing.Process(target=target)
+            process.start()
+            process.join(seconds)
+
+            if process.is_alive():
+                if seconds == 0:
+                    # skip the timeout
+                    pass
+                else:
+                    process.terminate()
+                process.join()
+                logger.error(
+                    f"Function {func.__name__} timed out after {seconds} seconds."
+                )
+                raise FunctionTimeout(
+                    f"Function {func.__name__} timed out after {seconds} seconds."
+                )
+
+            result = result_queue.get()
+            if isinstance(result, Exception):
+                raise result
+
+            return result
+
+        return wrapper
+
+    return decorator
