@@ -121,6 +121,8 @@ if __name__ == "__main__":
 
         video_stream_path, interview_role, video_path, interview_name = file_to_process
 
+        logger.debug(f"Processing interview: {interview_name}")
+
         if not video_stream_path.exists():
             logger.error(f"Video stream path does not exist: {video_stream_path}")
             logger.error(f"video_path: {video_path}")
@@ -135,7 +137,7 @@ if __name__ == "__main__":
             process_name=str(video_stream_path)
         ) or cli.check_if_running(process_name=str(interview_name)):
             logger.warning(
-                f"Another process is running with the same file: {video_stream_path}"
+                f"Another process is running with the same file: {video_stream_path}. Skipping..."
             )
             SKIP_COUNTER += 1
 

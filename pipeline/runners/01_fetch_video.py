@@ -111,8 +111,13 @@ if __name__ == "__main__":
 
                 if not file_to_decrypt_t:
                     if study_id == studies[-1]:
-                        console.print("No file to decrypt. Exiting...")
-                        sys.exit(0)
+                        # Snooze if no files to process
+                        orchestrator.snooze(config_file=config_file)
+                        study_id = studies[0]
+                        logger.info(
+                            f"Restarting with study: {study_id}", extra={"markup": True}
+                        )
+                        continue
                     else:
                         study_id = studies[studies.index(study_id) + 1]
                         logger.info(
@@ -175,6 +180,8 @@ if __name__ == "__main__":
             )
 
         else:
+            logger.info("Decryption not requested. Snoozing.")
+
             # Snooze if decryption is not requested
             orchestrator.snooze(config_file=config_file)
 
