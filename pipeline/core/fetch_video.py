@@ -27,17 +27,33 @@ def get_file_to_decrypt(
     """
 
     query = f"""
-        SELECT interview_file, interview_type, interview_name
-        FROM interview_files
-        INNER JOIN interviews ON interview_files.interview_path = interviews.interview_path
-        WHERE interviews.study_id = '{study_id}' AND
-            interview_files.interview_file_tags LIKE '%%video%%' AND
-            interview_files.interview_file NOT IN (
-                SELECT source_path FROM decrypted_files
-            ) AND interview_files.ignored = FALSE
-        ORDER BY RANDOM()
-        LIMIT 1
-        """
+    WITH DuplicatesCTE AS (
+    SELECT
+        interview_path
+    FROM
+        public.interview_files
+    WHERE
+        interview_file_tags = 'video'
+    GROUP BY
+        interview_path
+    HAVING
+        COUNT(interview_file) > 1
+    ) SELECT interview_file, interview_type, interview_name
+    FROM interview_files
+    INNER JOIN interviews ON interview_files.interview_path = interviews.interview_path
+    WHERE interviews.study_id = '{study_id}' AND
+        interviews.is_primary = TRUE AND
+        interview_files.interview_file_tags LIKE '%%video%%' AND
+        interview_files.interview_file NOT IN (
+            SELECT source_path FROM decrypted_files
+        ) AND interview_files.ignored = FALSE AND
+        interviews.interview_type = 'open' AND
+        interview_files.interview_path NOT IN (
+            SELECT interview_path FROM DuplicatesCTE
+        )
+    ORDER BY RANDOM()
+    LIMIT 1
+    """
 
     df = db.execute_sql(config_file=config_file, query=query)
 
