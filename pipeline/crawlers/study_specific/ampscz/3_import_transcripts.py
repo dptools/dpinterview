@@ -91,9 +91,14 @@ def transcripts_to_models(
     for transcript in transcripts:
         filename = transcript.name
 
-        interview_name = get_interview_name_from_transcript(
-            transcript_filename=filename
-        )
+        try:
+            interview_name = get_interview_name_from_transcript(
+                transcript_filename=filename
+            )
+        except IndexError as e:
+            logger.error(f"Error processing transcript {filename}: {e}")
+            logger.error("Skipping.")
+            continue
 
         interview_path = core.get_interview_path(
             interview_name=interview_name, config_file=config_file
@@ -109,6 +114,9 @@ def transcripts_to_models(
             interview_name=interview_name,
             tags="transcribeme",
         )
+
+        if "prescreening" in str(transcript):
+            t_file.tags += ",prescreening"
 
         files.append(file)
         transcript_files.append(t_file)
@@ -155,9 +163,15 @@ def import_transcripts(data_root: Path, study: str, config_file: Path) -> None:
     subjects_root = data_root / "PROTECTED" / study
 
     crawler_params = utils.config(path=config_file, section="crawler")
-    transcripts_study_pattern = crawler_params["transcripts_study_pattern"]
+    transcripts_study_patterns = crawler_params["transcripts_study_pattern"]
+    transcripts_study_patterns = transcripts_study_patterns.split(",")
+    transcripts_study_patterns = [x.strip() for x in transcripts_study_patterns]
 
-    transcripts = list(subjects_root.glob(transcripts_study_pattern))
+    transcripts: List[Path] = []
+
+    for transcripts_study_pattern in transcripts_study_patterns:
+        transcripts_list = list(subjects_root.glob(transcripts_study_pattern))
+        transcripts.extend(transcripts_list)
 
     logger.info(f"Found {len(transcripts)} transcripts.")
 
