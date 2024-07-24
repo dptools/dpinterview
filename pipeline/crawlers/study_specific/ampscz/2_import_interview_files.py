@@ -426,6 +426,7 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
                 config_file=config_file, subject_id=subject_id, study_id=study_id
             )
         )
+    progress.remove_task(task)
 
     # Get the interview files
     logger.info("Fetching interview files...")
@@ -437,6 +438,7 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
         interview_counter += 1
         progress.update(task, advance=1)
         interview_files.extend(fetch_interview_files(interview=interview))
+    progress.remove_task(task)
 
     # Generate the SQL queries to import the interview files
     sql_queries = generate_queries(
@@ -448,6 +450,7 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
 
     # Execute the SQL queries
     db.execute_queries(config_file=config_file, queries=sql_queries)
+
 
 def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
     """
@@ -476,6 +479,7 @@ def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
     """
 
     db.execute_queries(config_file=config_file, queries=[query])
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
