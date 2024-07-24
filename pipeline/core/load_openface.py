@@ -347,7 +347,14 @@ def import_of_openface_db(config_file: Path, lof: LoadOpenface) -> LoadOpenface:
                     logger.error(message)
                     raise ValueError(message)
 
-                csv_file = csv_files[0]
+                try:
+                    csv_file = csv_files[0]
+                except IndexError as e:
+                    logger.error(
+                        f"No OpenFace CSV file found for {lof.interview_name} interviewer"
+                    )
+                    raise e
+
                 queries.extend(
                     construct_insert_queries(
                         config_file=config_file,

@@ -349,18 +349,24 @@ def draw_qc_metrics_by_role(
     orange_color = (1, 0.5, 0)
     red_color = (1, 0, 0)
 
-    if qc_metrics.successful_frames_percentage > 85:
-        frames_color = green_color
-    elif qc_metrics.successful_frames_percentage > 50:
-        frames_color = orange_color
-    else:
+    try:
+        if qc_metrics.successful_frames_percentage > 85:
+            frames_color = green_color
+        elif qc_metrics.successful_frames_percentage > 50:
+            frames_color = orange_color
+        else:
+            frames_color = red_color
+    except TypeError:
         frames_color = red_color
 
-    if qc_metrics.successful_frames_confidence_mean > 0.95:
-        confidence_color = green_color
-    elif qc_metrics.successful_frames_confidence_mean > 0.8:
-        confidence_color = orange_color
-    else:
+    try:
+        if qc_metrics.successful_frames_confidence_mean > 0.95:
+            confidence_color = green_color
+        elif qc_metrics.successful_frames_confidence_mean > 0.8:
+            confidence_color = orange_color
+        else:
+            confidence_color = red_color
+    except TypeError:
         confidence_color = red_color
 
     match role:
@@ -374,9 +380,15 @@ def draw_qc_metrics_by_role(
     frames_qc_text = (
         f"Faces detected in {qc_metrics.successful_frames_percentage:.2f}% of frames"
     )
-    confidence_qc_text = (
-        f"{qc_metrics.successful_frames_confidence_mean * 100:.2f}% OF confidence mean"
-    )
+
+    try:
+        confidence_qc_text = (
+            f"{qc_metrics.successful_frames_confidence_mean * 100:.2f}% OF confidence mean"
+        )
+    except TypeError:
+        confidence_qc_text = (
+            "0% OF confidence mean"
+        )
 
     pdf.draw_text(
         canvas=canvas,

@@ -65,6 +65,25 @@ def get_data_root(config_file: Path, enforce_real: bool = False) -> Path:
     return data_root
 
 
+def get_templates_root(config_file: Path) -> Path:
+    """
+    Gets the templates root directory from the configuration file.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        Path: The templates root directory.
+    """
+
+    params = config(config_file, section="general")
+    repo_root = Path(params["repo_root"])
+
+    templates_root = repo_root / "pipeline" / "assets" / "templates"
+
+    return templates_root
+
+
 def get_studies(config_file: Path) -> List[str]:
     """
     Gets the list of studies from configuration file.
@@ -269,7 +288,7 @@ def request_decrytion(config_file: Path):
         queries=[
             query,
         ],
-        show_commands=True
+        show_commands=True,
     )
 
 

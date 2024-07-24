@@ -70,7 +70,15 @@ def configure_logging(config_file: Path, module_name: str, logger: logging.Logge
         None
     """
     log_params = config(config_file, "logging")
-    log_file = Path(log_params[module_name])
+    log_file_r = log_params[module_name]
+
+    if log_file_r.startswith("/"):
+        log_file = Path(log_file_r)
+    else:
+        general_params = config(config_file, "general")
+        repo_root = Path(general_params["repo_root"])
+
+        log_file = repo_root / log_file_r
 
     if log_file.exists() and log_file.stat().st_size > 10000000:  # 10MB
         archive_file = (
@@ -278,3 +286,21 @@ def timeout_max(seconds: int):
         return wrapper
 
     return decorator
+
+
+def silence_logs(
+    noisy_modules: List[str], target_level: int = logging.INFO
+) -> None:
+    """
+    Silences logs from specified modules.
+
+    Args:
+        noisy_modules (List[str]): A list of modules to silence.
+        target_level (int): The target log level to set the modules to.
+
+    Returns:
+        None
+    """
+    for module in noisy_modules:
+        logger.debug(f"Setting log level for {module} to {target_level}")
+        logging.getLogger(module).setLevel(target_level)
