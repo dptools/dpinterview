@@ -29,7 +29,7 @@ from rich.logging import RichHandler
 
 from pipeline import orchestrator
 from pipeline.core import load_openface
-from pipeline.helpers import cli, utils
+from pipeline.helpers import cli, utils, notifications
 
 MODULE_NAME = "load_openface"
 
@@ -83,45 +83,55 @@ if __name__ == "__main__":
     study_id = studies[0]
     logger.info(f"Statring with study: {study_id}")
 
-    while True:
-        interview_name = load_openface.get_interview_to_process(
-            config_file=config_file, study_id=study_id
+    try:
+        while True:
+            interview_name = load_openface.get_interview_to_process(
+                config_file=config_file, study_id=study_id
+            )
+
+            if interview_name is None:
+                if study_id == studies[-1]:
+                    # Log if any files were processed
+                    if COUNTER > 0:
+                        orchestrator.log(
+                            config_file=config_file,
+                            module_name=MODULE_NAME,
+                            message=f"Loaded OpenFace features for {COUNTER} interviews.",
+                        )
+                        COUNTER = 0
+
+                    # Snooze if no files to process
+                    orchestrator.snooze(config_file=config_file)
+                    study_id = studies[0]
+                    continue
+                else:
+                    study_id = studies[studies.index(study_id) + 1]
+                    logger.info(f"Switching to study: {study_id}")
+                    continue
+
+            COUNTER += 1
+
+            logger.info(
+                f"[cyan]Loading OpenFace features for {interview_name}...",
+                extra={"markup": True},
+            )
+
+            of_runs = load_openface.get_openface_runs(
+                config_file=config_file, interview_name=interview_name
+            )
+
+            lof = load_openface.construct_load_openface(
+                interview_name=interview_name, of_runs=of_runs, config_file=config_file
+            )
+            lof = load_openface.import_of_openface_db(config_file=config_file, lof=lof)
+
+            load_openface.log_load_openface(config_file=config_file, lof=lof)
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        notifications.send_notification(
+            notify_type="failure",
+            title=f"{MODULE_NAME} failed",
+            body=f"Error: {e}",
+            config_file=config_file,
         )
-
-        if interview_name is None:
-            if study_id == studies[-1]:
-                # Log if any files were processed
-                if COUNTER > 0:
-                    orchestrator.log(
-                        config_file=config_file,
-                        module_name=MODULE_NAME,
-                        message=f"Loaded OpenFace features for {COUNTER} interviews.",
-                    )
-                    COUNTER = 0
-
-                # Snooze if no files to process
-                orchestrator.snooze(config_file=config_file)
-                study_id = studies[0]
-                continue
-            else:
-                study_id = studies[studies.index(study_id) + 1]
-                logger.info(f"Switching to study: {study_id}")
-                continue
-
-        COUNTER += 1
-
-        logger.info(
-            f"[cyan]Loading OpenFace features for {interview_name}...",
-            extra={"markup": True},
-        )
-
-        of_runs = load_openface.get_openface_runs(
-            config_file=config_file, interview_name=interview_name
-        )
-
-        lof = load_openface.construct_load_openface(
-            interview_name=interview_name, of_runs=of_runs, config_file=config_file
-        )
-        lof = load_openface.import_of_openface_db(config_file=config_file, lof=lof)
-
-        load_openface.log_load_openface(config_file=config_file, lof=lof)
+        raise e
