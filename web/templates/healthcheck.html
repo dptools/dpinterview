@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<p><b>Healthcheck</b></p>
+<ul class="list-group">
+    <li class="list-group-item">Application is running on {{ host_name }}</li>
+    <li class="list-group-item">Server time is {{ server_time }}</li>
+</ul>
+
+<div class="mt-3">
+    <button type="button" class="btn btn-outline-secondary"
+        onclick="window.location.href='/interviews/view/random'">Random Frames</button>
+    <button type="button" class="btn btn-outline-secondary"
+        onclick="window.location.href='/transcripts/view/random'">Random Transcript</button>
+    <button type="button" class="btn btn-outline-secondary"
+        onclick="window.location.href='/interviews/openface/view/random'">Random OpenFace</button>
+</div>
+
+<div class="alert alert-info mt-3" role="alert">
+    <h5 class="alert-heading">This site is not to be used directly!</h4>
+    <p>
+        This site acts as a QC Portal together with the Superset Dashboard.
+        All access should be through the Dashboard.
+    </p>
+    <hr>
+    <p class="mb-0">The Superset Dashboard is available at <a href="http://localhost:8088/">Local Link</a></p>
+</div>
+{% endblock %}

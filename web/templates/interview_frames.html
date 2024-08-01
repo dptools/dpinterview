@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<form>
+    <div class="mb-3">
+        <label for="interviewName" class="form-label">Interview Name</label>
+        <input type="text" class="form-control" id="interviewName" disabled value="{{ interview_name }}">
+    </div>
+    <button type="button" class="btn btn-secondary mb-3"
+    onclick="window.location.href='/transcripts/view/{{ interview_name }}'">Show Transcript</button>
+</form>
+
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+    <strong>Note:</strong> The pipeline expects the videos to be in Zoom's Gallery mode and the <em>left</em> stream to be the <em>Subject</em> stream andthe <em>right</em> stream to be the <em>Interviewer</em> stream.
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+
+{% if not frames %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <strong>Note:</strong> This interview does not apperar to have been processed yet. Please check back later.
+</div>
+{% endif %}
+
+{% if multiple_videos %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <strong>Note:</strong> This interview appears to contain multiple videos. The frames displayed below are from the all the videos.
+</div>
+{% endif %}
+
+<div id="InterviewFramesAutoplay" class="carousel slide" data-bs-ride="carousel">
+    <div class="carousel-inner">
+        {% for image in frames %}
+        <div class="carousel-item {% if loop.first %} active {% endif %}">
+            <img src="/payload=[{{ image }}]" class="d-block w-100" alt="...">
+        </div>
+        {% endfor %}
+    </div>
+    <button class="carousel-control-prev" type="button" data-bs-target="#InterviewFramesAutoplay" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+    </button>
+    <button class="carousel-control-next" type="button" data-bs-target="#InterviewFramesAutoplay" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+    </button>
+</div>
+
+<hr>
+
+<div class="container">
+    <div class="row">
+        {% for image in frames %}
+        <div class="col-12 col-md-6 col-lg-4 col-xl-3 mb-4">
+            <img src="/payload=[{{ image }}]" style="max-width: 100%; height: auto;"
+                onclick="switchToImage({{ loop.index0 }})">
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    var myCarousel = document.querySelector('#InterviewFramesAutoplay')
+    var carousel = new bootstrap.Carousel(myCarousel, {
+        interval: 10000,
+        wrap: true
+    })
+
+    function switchToImage(frameCount) {
+        var carousel = document.querySelector('#InterviewFramesAutoplay')
+        var carouselInstance = bootstrap.Carousel.getInstance(carousel)
+        carouselInstance.to(frameCount)
+    }
+</script>
+{% endblock %}
