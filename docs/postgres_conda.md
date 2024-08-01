@@ -43,6 +43,19 @@ pg_ctl -D mylocal_db -l logfile start
 # server started
 ```
 
+### If you want to use a different port edit the following line in `mylocal_db/postgresql.conf`
+
+```bash
+# port = 5432
+```
+
+to
+
+```bash
+port = 58999
+```
+
+
 Now the server is up.
 
 ## Create a non-superuser (more safety!)
@@ -52,10 +65,20 @@ createuser --encrypted --pwprompt mynonsuperuser
 # asks for name and password
 ```
 
+If you used a different port
+```bash
+createuser --encrypted --pwprompt -h localhost -p 58999 mynonsuperuser
+```
+
 ## Using this super user, create inner database inside the base database
 
 ```bash
 createdb --owner=mynonsuperuser myinner_db
+```
+
+If you used a different port
+```bash
+createdb -h localhost -p 58999 --owner=mynonsuperuser myinner_db 
 ```
 
 At this point, if you run some program,
@@ -66,6 +89,27 @@ e.g. Django.
 
 ```bash
 psql -d myinner_db -U mynonsuperuser
+```
+
+To use more relaxed listen address
+
+1) Edit the following line in `postgresql.conf`
+
+```bash
+#listen_addresses = 'localhost'
+```
+
+to
+
+```bash
+listen_addresses = '*'
+```
+
+2) Add the following line in `pg_hba.conf` under `# IPv4 local connections:`
+
+```bash
+# IPv4 local connections: 
+host    all             all             0.0.0.0/0               trust
 ```
 
 ## In this point, if you run some program, you connect your program with this inner database e.g. Django
