@@ -23,7 +23,8 @@ except ValueError:
 import argparse
 import logging
 import random
-from typing import Any, Dict, Optional, cast, List
+from datetime import datetime
+from typing import Any, Dict, List, Optional, cast
 
 import jinja2
 import ollama
@@ -122,9 +123,7 @@ def parse_transcript_to_df(transcript: Path) -> pd.DataFrame:
         try:
             speaker, time, text = line.split(" ", 2)
             try:
-                pd.to_datetime(
-                    time, format="%H:%M:%S.%f"
-                )
+                pd.to_datetime(time, format="%H:%M:%S.%f")
             except ValueError:
                 # add text to the previous line
                 print(line)
@@ -144,6 +143,9 @@ def parse_transcript_to_df(transcript: Path) -> pd.DataFrame:
         turn_idx += 1
 
     df = pd.DataFrame(data)
+
+    if len(df) == 0:
+        raise ValueError("No valid data found in the transcript file.")
 
     # Add a end_time column, by shifting the time column by one
     df["end_time"] = df["time"].shift(-1)
@@ -186,9 +188,12 @@ def construct_prompt(
 
     TURNS_COUNT: int = 10
 
-    # select TURNS_COUNT contiguous turns, starting from a random turn
-    random_turn = random.randint(0, len(transcript_df) - TURNS_COUNT)
-    temp_df = transcript_df.iloc[random_turn: random_turn + 10]
+    if len(transcript_df) < TURNS_COUNT:
+        temp_df = transcript_df
+    else:
+        # select TURNS_COUNT contiguous turns, starting from a random turn
+        random_turn = random.randint(0, len(transcript_df) - TURNS_COUNT)
+        temp_df = transcript_df.iloc[random_turn: random_turn + 10]
 
     transcript_text = ""
     for _, row in temp_df.iterrows():
@@ -261,10 +266,21 @@ def process_transcript(
 
     template = environment.get_template(prompt_template)
 
-    prompt = construct_prompt(
-        transcript_path=transcript_path,
-        template=template,
-    )
+    try:
+        prompt = construct_prompt(
+            transcript_path=transcript_path,
+            template=template,
+        )
+    except ValueError as e:
+        logger.error(f"Error: {e}")
+        return LlmSpeakerIdentification(
+            llm_source_transcript=transcript_path,
+            ollama_model_identifier="default",
+            llm_interviewer_label="undefined",
+            llm_metrics={},
+            llm_task_duration_s=0,
+            llm_timestamp=datetime.now(),
+        )
 
     with utils.get_progress_bar() as progress:
         _ = progress.add_task("Prompting LLM model...", total=None)
@@ -287,6 +303,7 @@ def process_transcript(
         llm_interviewer_label=identified_speaker,
         llm_metrics=prompt_response,
         llm_task_duration_s=0,
+        llm_timestamp=datetime.now(),
     )
 
     return speaker_identification
@@ -348,6 +365,11 @@ if __name__ == "__main__":
     logger.info(
         "[bold green]Starting speaker identification loop...", extra={"markup": True}
     )
+
+    llm_config = utils.config(path=config_file, section="llm_speaker_identification")
+    model = llm_config["ollama_model"]
+    logger.info(f"Using model: {model}", extra={"markup": True})
+
     study_id = studies[0]
     logger.info(f"Starting with study: {study_id}", extra={"markup": True})
 
