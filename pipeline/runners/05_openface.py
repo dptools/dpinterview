@@ -149,17 +149,29 @@ if __name__ == "__main__":
                 config_file=config_file,
                 module_name=MODULE_NAME,
             ):
-                console.log("[bold red]Max number of instances reached. Snoozing...")
-                openface.await_decrytion(
-                    config_file=config_file, counter=COUNTER, module_name=MODULE_NAME
-                )
+                # console.log("[bold red]Max number of instances reached. Snoozing...")
+                # openface.await_decrytion(
+                #     config_file=config_file, counter=COUNTER, module_name=MODULE_NAME
+                # )
                 SKIP_COUNTER = 0
                 COUNTER = 0
-                continue
+                if study_id == studyies[-1]:
+                    logger.info("[bold green] No file to process.")
+                    openface.await_decrytion(
+                        config_file=config_file, counter=COUNTER, module_name=MODULE_NAME
+                    )
+                    COUNTER = 0
+                    study_id = studyies[0]
+                    logger.info(f"Restarting with study: {study_id}")
+                    continue
+                else:
+                    study_id = studyies[studyies.index(study_id) + 1]
+                    logger.info(f"[bold green]Switching to study: {study_id}")
+                    continue
+                # continue
             file_to_process = openface.get_file_to_process(
                 config_file=config_file, study_id=study_id
             )
-            continue
         else:
             SKIP_COUNTER = 0
             COUNTER += 1
