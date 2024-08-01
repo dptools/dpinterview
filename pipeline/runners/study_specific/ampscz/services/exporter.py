@@ -336,6 +336,30 @@ def get_interview_files_to_clean(interview_name: str, config_file: Path) -> List
     return files_path
 
 
+def export_external_outputs(config_file: Path) -> None:
+    """
+    Exports files created by external pipelines to the shared data_root.
+
+    Parameters
+        - config_file: Path to the config file
+
+    Returns
+        - None
+    """
+    external_params = utils.config(config_file, section="external")
+
+    # acoustic pipeline
+    audio_processing_pipeline_outputs = external_params.get(
+        "audio_processing_pipeline_export"
+    )
+    audio_processing_pipeline_outputs = Path(audio_processing_pipeline_outputs)  # type: ignore
+
+    assets_to_export = list(audio_processing_pipeline_outputs.glob("*"))
+
+    logger.info("Exporting assets from acoustic pipeline")
+    logger.info(f"Found {len(assets_to_export)} assets to export")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="exporter", description="Export pipeline assets to the shared directory."
@@ -384,10 +408,16 @@ if __name__ == "__main__":
 
     COUNTER = 0
 
+    studies = ["external"] + studies
+
     study_id = studies[0]
     logger.info(f"Starting with study: {study_id}")
 
     while True:
+        if study_id == "external":
+            export_external_outputs(config_file=config_file)
+            study_id = studies[studies.index(study_id) + 1]
+
         interview_name = get_interview_name_to_process(
             config_file=config_file, study_id=study_id
         )
