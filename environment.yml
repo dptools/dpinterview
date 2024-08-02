@@ -82,9 +82,12 @@ dependencies:
   - graphite2=1.3.13
   - gst-plugins-base=1.22.6
   - gstreamer=1.22.6
+  - h2=4.1.0
   - harfbuzz=8.2.1
   - hdf5=1.14.2
+  - hpack=4.0.0
   - huggingface_hub=0.23.4
+  - hyperframe=6.0.1
   - icu=73.2
   - importlib-metadata=6.8.0
   - importlib_metadata=6.8.0
@@ -214,7 +217,7 @@ dependencies:
   - munkres=1.1.4
   - mysql-common=8.0.33
   - mysql-libs=8.0.33
-  - ncurses=6.4
+  - ncurses=6.4.20240210
   - nest-asyncio=1.5.6
   - nettle=3.8.1
   - networkx=3.1
@@ -286,17 +289,18 @@ dependencies:
   - stone=3.3.1
   - svglib=1.5.1
   - svt-av1=1.7.0
-  - sympy=1.12
+  - sympy=1.12.1
   - tbb=2021.10.0
   - tinycss2=1.2.1
   - tk=8.6.13
   - tmux=3.3a
-  - tokenizers=0.19.1
   - toml=0.10.2
   - tomli=2.0.1
   - tornado=6.3.3
   - traitlets=5.9.0
   - tree=2.1.1
+  - typing-extensions=4.12.2
+  - typing_extensions=4.12.2
   - tzcode=2023c
   - tzdata=2023c
   - ucx=1.15.0
@@ -335,6 +339,7 @@ dependencies:
   - zipp=3.16.2
   - zlib=1.2.13
   - zoxide=0.9.4
+  - zstandard=0.22.0
   - zstd=1.5.5
   - pip:
       - about-time==4.2.1
@@ -420,7 +425,7 @@ dependencies:
       - pathspec==0.11.2
       - prometheus-client==0.20.0
       - protobuf==4.24.3
-      - psycopg2==2.9.7
+      - psycopg2-binary==2.9.9
       - pyasn1==0.5.0
       - pyasn1-modules==0.3.0
       - pycodestyle==2.11.0
@@ -446,18 +451,13 @@ dependencies:
       - sniffio==1.3.1
       - soupsieve==2.5
       - sqlalchemy==2.0.21
-      - tensorboard==2.13.0
-      - tensorboard-data-server==0.7.1
-      - tensorflow==2.13.0
-      - tensorflow-estimator==2.13.0
-      - tensorflow-io-gcs-filesystem==0.34.0
       - termcolor==2.3.0
       - terminado==0.18.1
       - threadpoolctl==3.2.0
+      - tokenizers==0.13.3
       - tqdm==4.66.1
       - transformers==4.33.1
       - types-python-dateutil==2.9.0.20240316
-      - typing-extensions==4.12.2
       - uri-template==1.3.0
       - urllib3==1.26.16
       - webcolors==1.13
