@@ -25,6 +25,7 @@ except ValueError:
 import argparse
 import logging
 from typing import List, Tuple, Literal, Optional
+from datetime import datetime
 
 from rich.logging import RichHandler
 
@@ -299,7 +300,7 @@ def get_export_path(
             processed_idx = path_parts.index("processed")
             if "decrypted" in path_parts:
                 processed_idx = path_parts.index("decrypted")
-            relative_path = path_parts[processed_idx + 1:]
+            relative_path = path_parts[processed_idx + 1 :]
             destination_path = export_path / Path(*relative_path)
 
     return destination_path
@@ -477,6 +478,7 @@ if __name__ == "__main__":
                 asset_export_type=asset_export_type,
                 asset_tag=asset_tag,
                 asset_destination=destination_path,
+                aset_exported_timestamp=datetime.now(),
             )
 
             if asset.asset_type == "file":

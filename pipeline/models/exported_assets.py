@@ -39,7 +39,7 @@ class ExportedAsset:
         asset_export_type: Literal["GENERAL", "PROTECTED"],
         asset_tag: str,
         asset_destination: Path,
-        aset_exported_timestamp: datetime = datetime.now(),
+        aset_exported_timestamp: datetime
     ):
         self.interview_name = interview_name
         self.asset_path = asset_path
