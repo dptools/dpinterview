@@ -61,7 +61,7 @@ def get_cache_cols(test: bool = False) -> List[str]:
     Returns the columns to cache.
 
     Returns:
-    - List[str]: the columns to cache
+        List[str]: the columns to cache
     """
 
     if test:
@@ -103,10 +103,10 @@ def construct_query(cols: List[str], role: str) -> Tuple[str, List[str]]:
     from openface_features table.
 
     Args:
-    - cols (List[str]): the FAU metrics to get the average and standard deviation of
+        cols (List[str]): the FAU metrics to get the average and standard deviation of
 
     Returns:
-    - Tuple[str, List[str]]: a tuple containing the query and the columns to get
+        Tuple[str, List[str]]: a tuple containing the query and the columns to get
     """
 
     query = """
@@ -131,15 +131,20 @@ def construct_query(cols: List[str], role: str) -> Tuple[str, List[str]]:
     return query, cols_in_query
 
 
-def construct_cache_file_path(role: str) -> Path:
+def construct_cache_file_path(role: str, config_file: Path) -> Path:
     """
     Constructs the path to the cache file.
 
+    Args:
+        role (str): the role to cache the metrics for
+        config_file (Path): path to the configuration file
+
     Returns:
-    - str: the path to the cache file
+        str: the path to the cache file
     """
+    repo_root = cli.get_repo_root_from_config(config_file=config_file)
     cache_file = (
-        Path(cli.get_repo_root())
+        Path(repo_root)
         / "data"
         / f"metrics_cache_{role}_{datetime.now().strftime('%Y-%m-%d')}.csv"
     )
@@ -177,7 +182,11 @@ def cache_metrics(config_file: Path, role: str) -> None:
     Caches the average and standard deviation of each FAU metric in a CSV file.
 
     Args:
-    - config_file (str): path to the configuration file
+        config_file (str): path to the configuration file
+        role (str): the role to cache the metrics for
+
+    Returns:
+        None
     """
     cols = get_cache_cols()
     query, cols_in_query = construct_query(cols=cols, role=role)
@@ -204,7 +213,7 @@ def cache_metrics(config_file: Path, role: str) -> None:
             df.at[1, cache_col] = val
 
     # Get the path to the cache file
-    cache_file = construct_cache_file_path(role=role)
+    cache_file = construct_cache_file_path(role=role, config_file=config_file)
 
     # Check if the directory exists
     if not cache_file.parent.exists():
