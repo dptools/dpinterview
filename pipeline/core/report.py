@@ -16,13 +16,16 @@ from pipeline.report import main as report
 logger = logging.getLogger(__name__)
 
 
-def get_interview_name_to_process(config_file: Path, study_id: str) -> Optional[str]:
+def get_interview_name_to_process(
+    config_file: Path, study_id: str, report_version: str
+) -> Optional[str]:
     """
     Get the interview name to process from the database.
 
     Args:
         config_file (Path): The path to the config file.
         study_id (str): The study_id.
+        report_version (str): The report version.
 
     Returns:
         Optional[str]: The interview name to process.
@@ -36,6 +39,7 @@ def get_interview_name_to_process(config_file: Path, study_id: str) -> Optional[
             interview_name NOT IN (
                 SELECT interview_name
                 FROM pdf_reports
+                WHERE pr_version = '{report_version}'
             )
         ORDER BY RANDOM()
         LIMIT 1;
