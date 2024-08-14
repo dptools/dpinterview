@@ -146,7 +146,7 @@ def execute_queries(
     output = []
 
     if backup:
-        repo_root = cli.get_repo_root()
+        repo_root = cli.get_repo_root_from_config(config_file=config_file)
         backup_file = (
             Path(repo_root)
             / "data"

@@ -29,6 +29,23 @@ def get_repo_root() -> str:
     return repo_root
 
 
+def get_repo_root_from_config(config_file: Path) -> str:
+    """
+    Returns the root directory of the pipeline's repository.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        str: The root directory of the pipeline's repository.
+    """
+
+    config_params = config(path=config_file, section="general")
+    repo_root = config_params["repo_root"]
+
+    return repo_root
+
+
 def create_link(source: Path, destination: Path, softlink: bool = True) -> None:
     """
     Create a link from the source to the destination.

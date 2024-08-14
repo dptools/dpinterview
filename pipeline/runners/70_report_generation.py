@@ -96,10 +96,13 @@ if __name__ == "__main__":
     study_id = studies[0]
     logger.info(f"Statring with study: {study_id}")
 
+    report_params = utils.config(config_file, section="report_generation")
+    report_version = report_params["report_version"]
+
     while True:
         # Get interview name to process
         interview_name = report.get_interview_name_to_process(
-            config_file=config_file, study_id=study_id
+            config_file=config_file, study_id=study_id, report_version=report_version
         )
 
         if interview_name is None:
@@ -156,7 +159,7 @@ if __name__ == "__main__":
 
         pdf_report = PdfReport(
             interview_name=interview_name,
-            pr_version="v1.0.0",
+            pr_version=report_version,
             pr_path=str(report_path),
             pr_generation_time=pr_generation_time,
             pr_timestamp=datetime.now(),

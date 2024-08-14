@@ -4,13 +4,12 @@ Has all the constants used in the pipeline.
 
 from pathlib import Path
 
-from pipeline.helpers import cli
 from pipeline.models.lite.heatmap_config import HeatmapConfig
 from pipeline.models.lite.ticks_config import TicksConfig
 from pipeline.models.lite.cluster_bar_config import ClusterBarsConfig
 
 # Paths
-REPO_ROOT = Path(cli.get_repo_root())
+REPO_ROOT = Path(__file__).parent.parent
 ASSETS_PATH = REPO_ROOT / "pipeline" / "assets"
 DATA_PATH = REPO_ROOT / "data"
 FAU_METRICS_PT_CACHE = DATA_PATH / "metrics_cache_subject.csv"
