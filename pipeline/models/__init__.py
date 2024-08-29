@@ -82,6 +82,7 @@ def init_db(config_file: Path):
         Subject.init_table_query(),
         InterviewType.init_table_query(),
         Interview.init_table_query(),
+        Interview.post_init_queries(),
         File.init_table_query(),
         InterviewFile.init_table_query(),
         DecryptedFile.init_table_query(),
