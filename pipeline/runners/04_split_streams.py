@@ -79,6 +79,8 @@ if __name__ == "__main__":
 
     config_params = utils.config(config_file, section="general")
     studies = orchestrator.get_studies(config_file=config_file)
+    zoom_meeting = config_params.get("zoom", "True")
+    zoom_meeting = zoom_meeting.lower() == "true"
 
     COUNTER = 0
     STREAMS_COUNTER = 0
@@ -142,6 +144,7 @@ if __name__ == "__main__":
             video_path=video_path,
             has_black_bars=has_black_bars,
             black_bar_height=black_bar_height,
+            zoom_meeting=zoom_meeting,
             config_file=config_file,
         )
         STREAMS_COUNTER += len(streams)

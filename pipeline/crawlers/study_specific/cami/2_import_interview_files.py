@@ -57,6 +57,35 @@ logging.basicConfig(**logargs)
 console = utils.get_console()
 
 
+def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
+    """
+    Each interview should have a unique name. If there are unique interviews,
+    mark them as primary. Duplicate interviews will need to be manually
+    resolved.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The study ID.
+
+    Returns:
+        None
+    """
+    query = f"""
+    WITH duplicate_interview_names AS (
+        SELECT interview_name
+        FROM public.interviews
+        GROUP BY interview_name
+        HAVING COUNT(*) = 1
+    )
+    UPDATE public.interviews
+    SET is_primary = TRUE
+    WHERE interview_name IN (SELECT interview_name FROM duplicate_interview_names) AND
+        study_id = '{study_id}';
+    """
+
+    db.execute_queries(config_file=config_file, queries=[query])
+
+
 def fetch_interview_files(
     config_file: Path, interview: Interview
 ) -> List[InterviewFile]:
@@ -131,7 +160,9 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
                 raise
 
         try:
-            time_dt = datetime.strptime(f"{parts[2]}:{parts[3]}:{parts[4]}", "%H:%M:%S").time()
+            time_dt = datetime.strptime(
+                f"{parts[2]}:{parts[3]}:{parts[4]}", "%H:%M:%S"
+            ).time()
         except ValueError:
             logger.error(f"Could not parse time for {base_name}")
             raise
@@ -164,6 +195,34 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
         )
 
         interviews.append(interview)
+
+    # sort the interviews by datetime
+    interviews.sort(key=lambda x: x.interview_datetime)
+
+    for idx, interview in enumerate(interviews):
+        if idx == 0:
+            prev_interview = None
+            interview_name_w_session = f"{interview.interview_name}-session01"
+            interview.interview_name = interview_name_w_session
+
+        else:
+            prev_interview = interviews[idx - 1]
+
+            current_interview_date = interview.interview_datetime.date()
+            prev_interview_date = prev_interview.interview_datetime.date()
+
+            if prev_interview_date == current_interview_date:
+                prev_interview_name = prev_interview.interview_name
+                prev_interview_session_number = prev_interview_name.split("-")[-1]
+                prev_interview_session_number = int(
+                    prev_interview_session_number.replace("session", "")
+                )
+                interview_name_w_session = f"{interview.interview_name}-session{prev_interview_session_number + 1:02d}"
+                interview.interview_name = interview_name_w_session
+            else:
+                prev_interview = None
+                interview_name_w_session = f"{interview.interview_name}-session01"
+                interview.interview_name = interview_name_w_session
 
     return interviews
 
@@ -297,6 +356,11 @@ if __name__ == "__main__":
     console.rule(f"[bold red]{MODULE_NAME}")
     logger.info(f"Using config file: {config_file}")
 
+    config_params = config(path=config_file, section="general")
+    study_id = config_params["study"]
+
     import_interviews(config_file=config_file)
+    logger.info(f"Marking unique interviews as primary for {study_id}")
+    mark_unique_interviews_as_primary(config_file=config_file, study_id=study_id)
 
     logger.info("[bold green]Done!", extra={"markup": True})

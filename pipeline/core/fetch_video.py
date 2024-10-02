@@ -33,7 +33,7 @@ def get_file_to_decrypt(
     FROM
         public.interview_files
     WHERE
-        interview_file_tags = 'video'
+        interview_file_tags LIKE '%%video%%'
     GROUP BY
         interview_path
     HAVING
@@ -47,7 +47,6 @@ def get_file_to_decrypt(
         interview_files.interview_file NOT IN (
             SELECT source_path FROM decrypted_files
         ) AND interview_files.ignored = FALSE AND
-        interviews.interview_type = 'open' AND
         interview_files.interview_path NOT IN (
             SELECT interview_path FROM DuplicatesCTE
         )

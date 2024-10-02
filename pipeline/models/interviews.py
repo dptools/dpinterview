@@ -145,15 +145,21 @@ class Interview:
         return queries
 
     @staticmethod
-    def drop_table_query() -> str:
+    def drop_table_query() -> List[str]:
         """
         Return the SQL query to drop the 'interviews' table.
         """
-        sql_query = """
+        view_sql_query = """
+        DROP VIEW IF EXISTS primary_interviews;
+        """
+
+        table_sql_query = """
         DROP TABLE IF EXISTS interviews;
         """
 
-        return sql_query
+        sql_queries: List[str] = [view_sql_query, table_sql_query]
+
+        return sql_queries
 
     def to_sql(self):
         """
@@ -166,10 +172,16 @@ class Interview:
         s_id = db.santize_string(self.subject_id)
         st_id = db.santize_string(self.study_id)
 
+        # Update on conflict
         sql_query = f"""
         INSERT INTO interviews (interview_name, interview_path, interview_type, interview_date, subject_id, study_id)
         VALUES ('{i_name}', '{i_path}', '{i_type}', '{i_date}', '{s_id}', '{st_id}')
-        ON CONFLICT (interview_path) DO NOTHING;
+        ON CONFLICT (interview_path) DO UPDATE
+        SET interview_name = '{i_name}',
+            interview_type = '{i_type}',
+            interview_date = '{i_date}',
+            subject_id = '{s_id}',
+            study_id = '{st_id}'
         """
 
         return sql_query

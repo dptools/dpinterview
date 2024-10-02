@@ -80,7 +80,12 @@ def construct_stream_path(video_path: Path, role: InterviewRole, suffix: str) ->
     dpdash_dict["category"] = "video"
 
     dp_dash_name = dpdash.get_dpdash_name_from_dict(dpdash_dict)
-    stream_path = video_path.parent / "streams" / f"{dp_dash_name}.{suffix}"
+    stream_path = (
+        video_path.parent
+        / "streams"
+        / video_path.name.split(".")[0]
+        / f"{dp_dash_name}.{suffix}"
+    )
 
     # Create streams directory if it doesn't exist
     stream_path.parent.mkdir(parents=True, exist_ok=True)
@@ -92,15 +97,17 @@ def split_streams(
     video_path: Path,
     has_black_bars: bool,
     black_bar_height: Optional[int],
+    zoom_meeting: bool,
     config_file: Path,
 ) -> List[VideoStream]:
     """
-    Split video into streams
+    Split video into streams, if black bars are detected (Zoom).
 
     Args:
         video_path (Path): Path to video
         has_black_bars (bool): Whether video has black bars
         black_bar_height (Optional[int]): Height of black bars
+        zoom_meeting (bool): Whether video is a Zoom meeting recording
         config_file (Path): Path to config file
     """
     config_params = utils.config(path=config_file, section="split-streams")
@@ -109,7 +116,7 @@ def split_streams(
     streams = []
     logger.info(f"Splitting streams for {video_path}...", extra={"markup": True})
 
-    if not has_black_bars:
+    if not has_black_bars and zoom_meeting:
         logger.info("No black bars detected. Skipping splitting streams.")
         stream: VideoStream = VideoStream(
             video_path=video_path, ir_role=default_role, vs_path=video_path
@@ -143,7 +150,7 @@ def split_streams(
                     source=video_path,
                     target=stream_file_path,
                     crop_params=crop_params,
-                    progress=progress
+                    progress=progress,
                 )
 
             logger.info(

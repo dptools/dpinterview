@@ -164,3 +164,42 @@ def images_to_vid(
     with utils.get_progress_bar() as progress:
         progress.add_task("[green]Converting images to video...", total=None)
         cli.execute_commands(command_array=cli_command_array)
+
+
+def extract_audio_stream(
+    source_file: Path,
+    stream_index: int,
+    output_file: Path,
+    progress: Optional[Progress] = None,
+) -> None:
+    """
+    Extract an audio stream from a video file using FFmpeg.
+
+    Args:
+        source_file (Path): The path to the input video file.
+        stream_index (int): The index of the audio stream to extract.
+        output_file (Path): The path to the output audio file.
+
+    Returns:
+        None
+    """
+    cli_command_array = [
+        "ffmpeg",
+        "-y",  # overwrite output file if it exists
+        "-i",
+        source_file,
+        "-map",
+        f"0:a:{stream_index}",
+        "-vn",  # disable video
+        output_file,
+    ]
+
+    if progress is None:
+        progress = utils.get_progress_bar()
+
+    with progress:
+        task = progress.add_task(
+            f"[green]Extracting audio stream #{stream_index}", total=None
+        )
+        cli.execute_commands(command_array=cli_command_array)
+        progress.remove_task(task)

@@ -378,19 +378,22 @@ def singularity_run(config_file: Path, command_array: list) -> list:
         list: The command to run inside the container, with Singularity-specific arguments added.
     """
     params = config(path=config_file, section="singularity")
+    singularity_binary_path = params.get("singularity_binary_path", None)
     singularity_image_path = params["singularity_image_path"]
     bind_params = params["bind_params"]
 
     # Check if singularity binary exists
-    if shutil.which("singularity") is None:
-        logger.error(
-            "[red][u]singularity[/u] binary not found.[/red]", extra={"markup": True}
-        )
-        logger.error(
-            "[yellow]Did you run '[i]module load singularity'[/i]?",
-            extra={"markup": True},
-        )
-        sys.exit(1)
+    if singularity_binary_path is None:
+        singularity_binary_path = shutil.which("singularity")
+        if singularity_binary_path is None:
+            logger.error(
+                "[red][u]singularity[/u] binary not found.[/red]", extra={"markup": True}
+            )
+            logger.error(
+                "[yellow]Did you run '[i]module load singularity'[/i]?",
+                extra={"markup": True},
+            )
+            sys.exit(1)
 
     # Check if singularity_image_path exists
     if not Path(singularity_image_path).is_file():
@@ -398,7 +401,7 @@ def singularity_run(config_file: Path, command_array: list) -> list:
         sys.exit(1)
 
     command_array = [
-        "singularity",
+        singularity_binary_path,
         "exec",
         f"-B {bind_params}",
         singularity_image_path,

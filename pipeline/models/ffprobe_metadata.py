@@ -150,7 +150,7 @@ class FfprobeMetadata:
 
         metadata_video_table = """
             CREATE TABLE ffprobe_metadata_video (
-                fmv_source_path TEXT NOT NULL PRIMARY KEY REFERENCES ffprobe_metadata (fm_source_path),
+                fmv_source_path TEXT NOT NULL REFERENCES ffprobe_metadata (fm_source_path),
                 fmv_requested_by TEXT NOT NULL,
                 ir_role VARCHAR(255),
                 fmv_index INTEGER NOT NULL,
@@ -181,13 +181,14 @@ class FfprobeMetadata:
                 fmv_start_pts INTEGER NOT NULL,
                 fmv_start_time VARCHAR(255) NOT NULL,
                 fmv_duration VARCHAR(255) NOT NULL,
-                fmv_extradata_size INTEGER NOT NULL
+                fmv_extradata_size INTEGER NOT NULL,
+                PRIMARY KEY (fmv_source_path, fmv_index)
         );
         """
 
         metadata_audio_table = """
             CREATE TABLE ffprobe_metadata_audio (
-                fma_source_path TEXT NOT NULL PRIMARY KEY REFERENCES ffprobe_metadata (fm_source_path),
+                fma_source_path TEXT NOT NULL REFERENCES ffprobe_metadata (fm_source_path),
                 fma_requested_by TEXT NOT NULL,
                 fma_index INTEGER NOT NULL,
                 fma_codec_name VARCHAR(255) NOT NULL,
@@ -207,7 +208,8 @@ class FfprobeMetadata:
                 fma_start_pts INTEGER NOT NULL,
                 fma_start_time VARCHAR(255) NOT NULL,
                 fma_duration VARCHAR(255) NOT NULL,
-                fma_extradata_size INTEGER NOT NULL
+                fma_extradata_size INTEGER NOT NULL,
+                PRIMARY KEY (fma_source_path, fma_index)
             );
         """
 
@@ -341,7 +343,7 @@ class FfprobeMetadata:
                     '{stream['start_time']}',
                     '{duration}',
                     {stream['extradata_size']}
-                ) ON CONFLICT (fmv_source_path) DO NOTHING;
+                ) ON CONFLICT (fmv_source_path, fmv_index) DO NOTHING;
             """
         elif stream["codec_type"] == "audio":
             query = f"""
@@ -389,7 +391,7 @@ class FfprobeMetadata:
                     '{stream['start_time']}',
                     '{duration}',
                     {stream['extradata_size']}
-                ) ON CONFLICT (fma_source_path) DO NOTHING;
+                ) ON CONFLICT (fma_source_path, fma_index) DO NOTHING;
             """
         else:
             logger.warning(f"Unknown codec_type: {stream['codec_type']}")
