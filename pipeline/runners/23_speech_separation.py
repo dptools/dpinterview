@@ -31,7 +31,6 @@ from typing import List, Optional, Tuple
 
 import pyannote.core
 import scipy.io.wavfile
-import torchaudio
 from pyannote.audio import Pipeline
 from pyannote.audio.pipelines.utils.hook import ProgressHook
 from rich.logging import RichHandler
