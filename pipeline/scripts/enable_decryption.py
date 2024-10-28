@@ -29,6 +29,6 @@ if __name__ == "__main__":
     config_file = utils.get_config_file_path()
 
     console.rule("[green]Enabling Decryption")
-    orchestrator.request_decrytion(config_file=config_file)
+    orchestrator.request_decrytion(config_file=config_file, requester="fetch_video")
 
     console.log("[green]Done!")

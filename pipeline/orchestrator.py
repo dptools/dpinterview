@@ -262,7 +262,7 @@ def log(module_name: str, message: str, config_file: Path) -> None:
     )
 
 
-def request_decrytion(config_file: Path):
+def request_decrytion(config_file: Path, requester: Literal["fetch_audio", "fetch_video"]):
     """
     Requests decryption by updating the key_store table in the database.
 
@@ -274,10 +274,10 @@ def request_decrytion(config_file: Path):
     """
     logger.info("Requesting decryption...")
 
-    query = """
+    query = f"""
         UPDATE key_store
         SET value = 'enabled'
-        WHERE name = 'decryption';
+        WHERE name = '{requester}';
     """
 
     db.execute_queries(
