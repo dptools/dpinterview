@@ -52,7 +52,7 @@ logging.basicConfig(**logargs)
 console = utils.get_console()
 
 
-def import_file(source_path: Path, destination_path: Path) -> None:
+def import_file(source_path: Path, destination_path: Path, symlink: bool) -> None:
     """
     Imports the file to the destination directory.
 
@@ -60,14 +60,17 @@ def import_file(source_path: Path, destination_path: Path) -> None:
         source_path (Path): The path to the file to import.
         destination_path (Path): The path to the destination directory.
     """
-    logger.info(f"Importing file: {source_path} -> {destination_path}")
+    logger.info(f"Importing file: '{source_path}' -> '{destination_path}'")
+
+    if not destination_path.parent.exists():
+        destination_path.parent.mkdir(parents=True)
+
+    if symlink:
+        destination_path.symlink_to(source_path)
+        return
 
     with utils.get_progress_bar() as progress:
         progress.add_task("Copying file...", total=None)
-
-        if not destination_path.parent.exists():
-            destination_path.parent.mkdir(parents=True)
-
         shutil.copy(source_path, destination_path)
 
 
@@ -100,7 +103,10 @@ if __name__ == "__main__":
     console.rule(f"[bold red]{MODULE_NAME}")
     logger.info(f"Using config file: {config_file}")
 
-    config_params = utils.config(config_file, section="general")
+    config_params = utils.config(config_file, section="importer")
+    symlink = bool(config_params.get("symlink", False))
+    logger.info(f"Symlink: {symlink}")
+
     studies = orchestrator.get_studies(config_file=config_file)
     data_root = orchestrator.get_data_root(config_file=config_file)
 
@@ -130,8 +136,14 @@ if __name__ == "__main__":
                 destination_path.unlink()
 
             with Timer() as timer:
-                import_file(source_path=source_path, destination_path=destination_path)
-                orchestrator.fix_permissions(config_file=config_file, file_path=data_root)
+                import_file(
+                    source_path=source_path,
+                    destination_path=destination_path,
+                    symlink=symlink,
+                )
+                # orchestrator.fix_permissions(
+                #     config_file=config_file, file_path=data_root
+                # )
 
             DecryptedFile.update_decrypted_status(
                 config_file=config_file,
