@@ -22,11 +22,11 @@ except ValueError:
 
 import logging
 import argparse
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from rich.logging import RichHandler
 
-from pipeline import core, orchestrator
+from pipeline import orchestrator
 from pipeline.helpers import cli, utils, db
 from pipeline.models.files import File
 from pipeline.models.transcript_files import TranscriptFile
@@ -73,6 +73,54 @@ def get_interview_name_from_transcript(transcript_filename: str) -> str:
     return interview_name
 
 
+def get_interview_path(interview_name: str, config_file: Path) -> Optional[Path]:
+    """
+    Get the path to the interview for the given interview name.
+
+    Args:
+        interview_name (str): The name of the interview.
+        config_file (Path): The path to the configuration file.
+
+    Returns:
+        Optional[Path]: The path to the interview if found, None otherwise.
+    """
+    query = f"""
+    SELECT interview_path
+    FROM interviews
+    WHERE interview_name LIKE '{interview_name}%%'
+    """
+
+    result_df = db.execute_sql(config_file=config_file, query=query)
+
+    if result_df.empty:
+        return None
+
+    if len(result_df) > 1:
+        raise ValueError(f"Multiple interviews found for {interview_name}")
+
+    interview_path = Path(result_df["interview_path"].iloc[0])
+    return interview_path
+
+
+def get_interview_name_from_path(
+    interview_path: Path,
+    config_file: Path,
+) -> Optional[str]:
+
+    query = f"""
+    SELECT interview_name
+    FROM interviews
+    WHERE interview_path = '{db.santize_string(str(interview_path))}'
+    """
+
+    result = db.fetch_record(
+        config_file=config_file,
+        query=query,
+    )
+
+    return result
+
+
 def transcripts_to_models(
     transcripts: List[Path], config_file: Path
 ) -> Tuple[List[File], List[TranscriptFile]]:
@@ -100,19 +148,48 @@ def transcripts_to_models(
             logger.error("Skipping.")
             continue
 
-        interview_path = core.get_interview_path(
-            interview_name=interview_name, config_file=config_file
-        )
+        try:
+            interview_path = get_interview_path(
+                interview_name=interview_name, config_file=config_file
+            )
+        except ValueError as e:
+            logger.error(f"{filename}: {e};")
+            interview_path = None
 
         if interview_path is None:
-            logger.warning(f"Interview path not found for {interview_name}. Skipping.")
-            continue
+            interview_matched: bool = False
+            logger.warning(
+                f"Interview path not found for {interview_name} ({transcript})."
+            )
+            # Use name from filename
+            # Sample: PrescientBM_BM84422_interviewAudioTranscript_psychs_day0001_session001.txt
+
+            parts = filename.split("_")
+            study_id = parts[0]
+            subject_id = parts[1]
+            interview_type = parts[-3]
+            day_str = parts[-2]
+
+            interview_name = (
+                f"{study_id}-{subject_id}-{interview_type}Interview-{day_str}-session001"
+            )
+        else:
+            interview_matched: bool = True
+            interview_name = get_interview_name_from_path(
+                interview_path=interview_path,
+                config_file=config_file,
+            )
 
         file = File(file_path=transcript)
+        tags = "transcribeme"
+
+        if interview_matched:
+            tags += ",unmatched"
+
         t_file = TranscriptFile(
             transcript_file=transcript,
             interview_name=interview_name,
-            tags="transcribeme",
+            tags=tags,
         )
 
         if "prescreening" in str(transcript):
@@ -146,7 +223,9 @@ def models_to_db(
     for t_file in transcript_files:
         sql_queries.append(t_file.to_sql())
 
-    db.execute_queries(queries=sql_queries, config_file=config_file, show_commands=False)
+    db.execute_queries(
+        queries=sql_queries, config_file=config_file, show_commands=False
+    )
 
 
 def import_transcripts(data_root: Path, study: str, config_file: Path) -> None:
@@ -182,7 +261,12 @@ def import_transcripts(data_root: Path, study: str, config_file: Path) -> None:
     logger.info(
         f"Importing {len(files)} files and {len(transcript_files)} transcript files."
     )
-    models_to_db(files=files, transcript_files=transcript_files, config_file=config_file)
+    models_to_db(
+        files=files, transcript_files=transcript_files, config_file=config_file
+    )
+
+    skipped_files_count = len(transcripts) - len(files)
+    logger.info(f"Skipped {skipped_files_count} files.")
 
 
 if __name__ == "__main__":

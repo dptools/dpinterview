@@ -91,7 +91,7 @@ def get_study_metadata(config_file: Path, study_id: str) -> pd.DataFrame:
 
     metadata_filename = f"{study_id}_metadata.csv"
 
-    study_metadata = Path(data_root, "GENERAL", study_id, metadata_filename)
+    study_metadata = Path(data_root, "PROTECTED", study_id, metadata_filename)
 
     # Check if study_metadata exists
     if not study_metadata.exists():

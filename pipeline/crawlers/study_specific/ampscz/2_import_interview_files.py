@@ -236,6 +236,15 @@ def fetch_interviews(
             study_path / "raw" / subject_id / "interviews" / interview_type.value
         )
 
+        try:
+            interview_type_path.exists()
+        except PermissionError:
+            logger.warning(
+                f"{subject_id}: Could not access {interview_type.value} interviews: \
+{interview_type_path}. Skipping..."
+            )
+            continue
+
         if not interview_type_path.exists():
             logger.warning(
                 f"{subject_id}: Could not find {interview_type.value} interviews: \
@@ -253,6 +262,12 @@ def fetch_interviews(
                 # Time is of the form HH.MM.SS
                 # Ignore time information, to get accurate day
                 time_dt = time.fromisoformat("00:00:00")
+                interview_stripped_datetime = datetime.combine(date_dt, time_dt)
+
+                time_part = parts[1]  # 13.21.42
+                time_part = time_part.replace(".", ":")
+                time_dt = time.fromisoformat(time_part)
+
                 interview_datetime = datetime.combine(date_dt, time_dt)
             except ValueError:
                 logger.warning(
@@ -272,7 +287,7 @@ def fetch_interviews(
                 subject=subject_id,
                 data_type=f"{interview_type.value}Interview",
                 consent_date=consent_date,
-                event_date=interview_datetime,
+                event_date=interview_stripped_datetime,
             )
 
             interview = Interview(
@@ -331,6 +346,34 @@ def fetch_interviews(
             )
 
             interviews.append(interview)
+
+    # sort the interviews by datetime
+    interviews.sort(key=lambda x: x.interview_datetime)
+
+    for idx, interview in enumerate(interviews):
+        if idx == 0:
+            prev_interview = None
+            interview_name_w_session = f"{interview.interview_name}-session{1:03d}"
+            interview.interview_name = interview_name_w_session
+
+        else:
+            prev_interview = interviews[idx - 1]
+
+            current_interview_date = interview.interview_datetime.date()
+            prev_interview_date = prev_interview.interview_datetime.date()
+
+            if prev_interview_date == current_interview_date:
+                prev_interview_name = prev_interview.interview_name
+                prev_interview_session_number = prev_interview_name.split("-")[-1]
+                prev_interview_session_number = int(
+                    prev_interview_session_number.replace("session", "")
+                )
+                interview_name_w_session = f"{interview.interview_name}-session{prev_interview_session_number + 1:03d}"
+                interview.interview_name = interview_name_w_session
+            else:
+                prev_interview = None
+                interview_name_w_session = f"{interview.interview_name}-session{1:03d}"
+                interview.interview_name = interview_name_w_session
 
     return interviews
 
@@ -449,7 +492,7 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     )
 
     # Execute the SQL queries
-    db.execute_queries(config_file=config_file, queries=sql_queries)
+    db.execute_queries(config_file=config_file, queries=sql_queries, silent=True)
 
 
 def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
@@ -466,16 +509,25 @@ def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
         None
     """
     query = f"""
-    WITH duplicate_interview_names AS (
-        SELECT interview_name
-        FROM public.interviews
-        GROUP BY interview_name
-        HAVING COUNT(*) = 1
-    )
-    UPDATE public.interviews
+    WITH unique_interviews AS (
+        SELECT
+            subject_id,
+            interview_date,
+            MAX(interview_name) AS interview_name
+        FROM
+            public.interviews
+        WHERE
+            study_id = '{study_id}'
+        GROUP BY
+            subject_id,
+            interview_date
+        HAVING
+            COUNT(*) = 1
+        )
+    UPDATE interviews
     SET is_primary = TRUE
-    WHERE interview_name IN (SELECT interview_name FROM duplicate_interview_names) AND
-        study_id = '{study_id}';
+    WHERE study_id = '{study_id}' AND
+        interview_name IN (SELECT interview_name FROM unique_interviews);
     """
 
     db.execute_queries(config_file=config_file, queries=[query])
