@@ -75,15 +75,15 @@ def import_file(source_path: Path, destination_path: Path, symlink: bool) -> Non
         shutil.copy(source_path, destination_path)
 
 
-def get_external_audio_source(config_file: Path) -> Path:
-    """
-    Get external sources from the config file.
-    """
-    config_params = utils.config(config_file, section="external")
-    if "audio_processing_pipeline_source" not in config_params:
-        raise KeyError("audio_processing_pipeline_source not found in config file.")
+# def get_external_audio_source(config_file: Path) -> Path:
+#     """
+#     Get external sources from the config file.
+#     """
+#     config_params = utils.config(config_file, section="external")
+#     if "audio_processing_pipeline_source" not in config_params:
+#         raise KeyError("audio_processing_pipeline_source not found in config file.")
 
-    return Path(config_params["audio_processing_pipeline_source"])
+#     return Path(config_params["audio_processing_pipeline_source"])
 
 
 def generate_dest_audio_file_name(
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     studies = orchestrator.get_studies(config_file=config_file)
     data_root = orchestrator.get_data_root(config_file=config_file)
 
-    external_audio_source = get_external_audio_source(config_file=config_file)
+    # external_audio_source = get_external_audio_source(config_file=config_file)
 
     COUNTER = 0
 
