@@ -44,6 +44,7 @@ def construct_am_by_role(
     cluster_bars_config: ClusterBarsConfig,
     data_path: Path,
     deidentified: bool = True,
+    allow_external: bool = False,
 ) -> None:
     """
     Construct the Appearance and Movement section for a given role.
@@ -72,6 +73,7 @@ def construct_am_by_role(
         cluster_bars_config (ClusterBarsConfig): The cluster bars configuration.
         data_path (Path): The path to the data directory.
         deidentified (bool): Whether the report is deidentified (no face data).
+        allow_external (bool): Whether to allow external images.
 
     Returns:
         None
@@ -105,6 +107,7 @@ def construct_am_by_role(
         assets_path=assets_path,
         config_file=config_file,
         deidentify=deidentified,
+        allow_external=allow_external,
     )
 
     corr_matrix.contruct_dendrogram_by_role(
@@ -167,6 +170,7 @@ def construct_am_by_role(
         start_time=start_time,
         end_time=end_time,
         deidentify=deidentified,
+        allow_external=allow_external,
     )
 
 
@@ -196,6 +200,7 @@ def construct_am_report(
     cluster_bars_config: ClusterBarsConfig,
     data_path: Path,
     deidentified: bool = True,
+    allow_external: bool = False,
 ) -> None:
     """
     Construct the Appearance and Movement section for the report.
@@ -226,6 +231,7 @@ def construct_am_report(
         cluster_bars_config (ClusterBarsConfig): The cluster bars configuration.
         data_path (Path): The path to the data directory.
         deidentified (bool): Whether the report is deidentified (no face data).
+        allow_external (bool): Whether to allow external images.
 
     Returns:
         None
@@ -279,6 +285,7 @@ def construct_am_report(
         cluster_bars_config=cluster_bars_config,
         data_path=data_path,
         deidentified=deidentified,
+        allow_external=allow_external,
     )
 
     if interview_metadata.has_interviewer_stream:
@@ -306,6 +313,7 @@ def construct_am_report(
             cluster_bars_config=cluster_bars_config,
             data_path=data_path,
             deidentified=deidentified,
+            allow_external=allow_external,
         )
 
     common.draw_heatmap_legend(

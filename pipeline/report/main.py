@@ -41,12 +41,18 @@ def generate_report(
     console = utils.get_console()
 
     report_params = config(config_file, section="report_generation")
+    allow_external = report_params.get("allow_external", "False")
+    if allow_external == "True" or allow_external == "true":
+        allow_external = True
+    else:
+        allow_external = False
     fau_h_idx: List[int] = []
     bin_size = int(report_params["bin_size"])
     bins_per_page = int(report_params["bins_per_page"])
     anonymize = report.is_anonimization_requested(config_file)
 
     console.log(f"Anonymize: {anonymize}")
+    console.log(f"Allow external: {allow_external}")
 
     fau_gap_indices = report_params["fau_h_gap_idx"].split(",")
     for idx in fau_gap_indices:
@@ -321,6 +327,7 @@ def generate_report(
                 cluster_bars_config=constants.cluster_bars_config,
                 data_path=constants.DATA_PATH,
                 deidentified=anonymize,
+                allow_external=allow_external,
             )
 
             status.update("Writing metadata...")

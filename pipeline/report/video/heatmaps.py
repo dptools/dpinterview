@@ -3,6 +3,7 @@ Contains functions to construct heatmaps for Appearance and Movement
 section of the report.
 """
 
+import logging
 import tempfile
 from datetime import timedelta
 from pathlib import Path
@@ -11,14 +12,14 @@ from typing import List, Optional
 from reportlab.pdfgen import canvas
 
 from pipeline import constants, core
-from pipeline.helpers import image, pdf, utils
+from pipeline.helpers import image, pdf
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.lite.cluster_bar_config import ClusterBarsConfig
 from pipeline.models.lite.frame_request import FrameRequest
 from pipeline.models.lite.ticks_config import TicksConfig
 from pipeline.report import common
 
-console = utils.get_console()
+logger = logging.getLogger(__name__)
 
 
 def draw_pose_svgs_by_role(
@@ -800,6 +801,7 @@ def construct_heatmap_by_role(
     assets_path: Path,
     config_file: Path,
     deidentify: bool = True,
+    allow_external: bool = False,
 ) -> None:
     """
     Constructs the heatmap section for the video report. Includes the headers, ticks, labels for
@@ -828,6 +830,7 @@ def construct_heatmap_by_role(
         deidentify (bool, optional): Whether to deidentify the images.
             Defaults to False.
             Deidentification is done by removing all face data from the images.
+        allow_external (bool, optional): Whether to allow redirecting to external assets.
 
     Raises:
         ValueError: If the role is invalid.
@@ -899,15 +902,16 @@ def construct_heatmap_by_role(
         )
 
         openface_overlaid_video_path = core.get_openfece_features_overlaid_video_path(
-            config_file=config_file, interview_name=interview_name, role=role
+            config_file=config_file,
+            interview_name=interview_name,
+            role=role,
+            redirect_to_exported_assets=allow_external,
         )
 
         if openface_overlaid_video_path is None:
-            console.print(
-                f"OpenFace overlaid video not found for {role.value}",
-                style="error",
-            )
+            logger.error(f"OpenFace overlaid video not found for {role.value}")
             frame_paths: List[Path | None] = [None] * len(frame_numbers)
+            raise ValueError(f"OpenFace overlaid video not found for {role.value}")
         else:
             frame_paths = image.get_frames_by_numbers(
                 video_path=openface_overlaid_video_path,
