@@ -145,6 +145,35 @@ class Interview:
         return queries
 
     @staticmethod
+    def post_init_queries() -> List[str]:
+        """
+        Return the SQL queries to add the 'is_primary ' column and
+        unique constraint to the 'interviews' table.
+        """
+        queries: List[str] = []
+
+        primary_column = (
+            "ALTER TABLE interviews ADD COLUMN is_primary boolean DEFAULT false;"
+        )
+        unique_column = """
+        CREATE UNIQUE INDEX idx_unique_primary_interview
+        ON interviews(interview_name)
+        WHERE is_primary = true;
+        """
+        create_view = """
+        CREATE VIEW primary_interviews AS
+        SELECT interview_name
+        FROM interviews
+        WHERE is_primary = true;
+        """
+
+        queries.append(primary_column)
+        queries.append(unique_column)
+        queries.append(create_view)
+
+        return queries
+
+    @staticmethod
     def drop_table_query() -> List[str]:
         """
         Return the SQL query to drop the 'interviews' table.

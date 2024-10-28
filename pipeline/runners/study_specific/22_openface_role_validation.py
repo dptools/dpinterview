@@ -286,7 +286,10 @@ def check_match(transcript_qqc: Dict[str, Any], fau_data: Dict[str, Any]) -> boo
     for speaker, stats in fau_data.items():
         if "role" not in stats and "role" not in transcript_qqc[speaker]:
             continue
-        if transcript_qqc[speaker]["role"] != stats["role"]:
+        try:
+            if transcript_qqc[speaker]["role"] != stats["role"]:
+                return False
+        except KeyError:
             return False
 
     return True

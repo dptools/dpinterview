@@ -22,6 +22,8 @@ from pipeline.models.openface_qc import OpenfaceQC
 from pipeline.models.load_openface import LoadOpenface
 from pipeline.models.pdf_reports import PdfReport
 from pipeline.models.ffprobe_metadata import FfprobeMetadata
+from pipeline.models.fau_role_validation import FauRoleValidation
+from pipeline.models.transcript_quick_qc import TranscriptQuickQc
 
 from pipeline.helpers import db
 
@@ -57,6 +59,7 @@ def init_db(config_file: Path):
     """
     drop_queries_l: List[Union[str, List[str]]] = [
         PdfReport.drop_table_query(),
+        FauRoleValidation.drop_table_query(),
         LoadOpenface.drop_table_query(),
         OpenfaceQC.drop_table_query(),
         Openface.drop_table_query(),
@@ -64,6 +67,7 @@ def init_db(config_file: Path):
         InterviewRole.drop_table_query(),
         VideoQuickQc.drop_table_query(),
         DecryptedFile.drop_table_query(),
+        TranscriptQuickQc.drop_table_query(),
         InterviewFile.drop_table_query(),
         Interview.drop_table_query(),
         InterviewType.drop_table_query(),
@@ -85,6 +89,7 @@ def init_db(config_file: Path):
         Interview.post_init_queries(),
         File.init_table_query(),
         InterviewFile.init_table_query(),
+        TranscriptQuickQc.init_table_query(),
         DecryptedFile.init_table_query(),
         VideoQuickQc.init_table_query(),
         InterviewRole.init_table_query(),
@@ -92,6 +97,7 @@ def init_db(config_file: Path):
         Openface.init_table_query(),
         OpenfaceQC.init_table_query(),
         LoadOpenface.init_table_query(),
+        FauRoleValidation.init_table_query(),
         PdfReport.init_table_query(),
         FfprobeMetadata.init_table_query(),
     ]

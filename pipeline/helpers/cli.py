@@ -330,9 +330,7 @@ def execute_commands(
     logger.debug("Executing command:")
     # cast to str to avoid error when command_array is a list of Path objects
     command_array = [str(x) for x in command_array]
-
-    if logger:
-        logger.debug(" ".join(command_array))
+    logger.debug(" ".join(command_array))
 
     if shell:
         result = subprocess.run(
