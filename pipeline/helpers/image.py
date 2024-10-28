@@ -300,3 +300,32 @@ def filter_by_range(
 
     # Save the result
     cv2.imwrite(str(dest_image), result)
+
+
+def crop_image(
+    source_image: Path,
+    dest_image: Path,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+) -> None:
+    """
+    Crops an image.
+
+    Args:
+        source_image (Path): The path to the source image.
+        dest_image (Path): The path to save the cropped image.
+        x (int): The x-coordinate of the top-left corner of the crop rectangle.
+        y (int): The y-coordinate of the top-left corner of the crop rectangle.
+        width (int): The width of the crop rectangle.
+        height (int): The height of the crop rectangle.
+    """
+    # Read the image
+    img = cv2.imread(str(source_image))
+
+    # Crop the image
+    cropped_img = img[y: y + height, x: x + width]
+
+    # Save the cropped image
+    cv2.imwrite(str(dest_image), cropped_img)

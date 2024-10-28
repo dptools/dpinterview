@@ -90,6 +90,7 @@ def construct_sample_image_by_role(
     deidentify: bool = False,
     start_time: timedelta = timedelta(hours=0, minutes=0, seconds=0),
     end_time: timedelta = timedelta(hours=0, minutes=30, seconds=0),
+    allow_external: bool = False,
 ):
     """
     Fetches the sample image for the video section and draws it on the canvas. Selects
@@ -111,7 +112,10 @@ def construct_sample_image_by_role(
         None
     """
     of_path = core.get_openface_path(
-        interview_name=interview_name, role=role, config_file=config_file
+        interview_name=interview_name,
+        role=role,
+        config_file=config_file,
+        redirect_to_exported_assets=allow_external,
     )
 
     if of_path is None:
@@ -121,7 +125,8 @@ def construct_sample_image_by_role(
     of_video = next(of_video_path, None)
 
     if of_video is None:
-        raise FileNotFoundError(f"OpenFace video not found for {interview_name} {role}")
+        message = f"OpenFace video not found for {interview_name} {role} at {of_path}"
+        raise FileNotFoundError(message)
 
     # Get a frame at the middle of the video
     # Get frame number from openface_features table
@@ -382,13 +387,9 @@ def draw_qc_metrics_by_role(
     )
 
     try:
-        confidence_qc_text = (
-            f"{qc_metrics.successful_frames_confidence_mean * 100:.2f}% OF confidence mean"
-        )
+        confidence_qc_text = f"{qc_metrics.successful_frames_confidence_mean * 100:.2f}% OF confidence mean"
     except TypeError:
-        confidence_qc_text = (
-            "0% OF confidence mean"
-        )
+        confidence_qc_text = "0% OF confidence mean"
 
     pdf.draw_text(
         canvas=canvas,
