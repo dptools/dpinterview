@@ -39,6 +39,7 @@ class LlmSpeakerIdentification(BaseModel):
         llm_source_transcript (Path): The source transcript
         ollama_model_identifier (str): The Ollama model identifier
         llm_interviewer_label (str): The interviewer label
+        llm_confidence (float): The confidence score
         llm_metrics (Dict[str, Any]): The metrics
         llm_timestmap (datetime): The timestamp of when the response
             was generated.
@@ -47,6 +48,7 @@ class LlmSpeakerIdentification(BaseModel):
     llm_source_transcript: Path
     ollama_model_identifier: str
     llm_interviewer_label: str
+    llm_confidence: float
     llm_metrics: Dict[str, Any]
     llm_task_duration_s: Optional[float] = None
     llm_timestamp: datetime = datetime.now()
@@ -56,6 +58,7 @@ class LlmSpeakerIdentification(BaseModel):
     llm_source_transcript={self.llm_source_transcript},
     ollama_model_identifier={self.ollama_model_identifier},
     llm_interviewer_label={self.llm_interviewer_label},
+    llm_confidence={self.llm_confidence},
     llm_metrics={self.llm_metrics},
     llm_timestamp={self.llm_timestamp}
     llm_task_duration_s={self.llm_task_duration_s}
@@ -75,6 +78,7 @@ class LlmSpeakerIdentification(BaseModel):
             llm_source_transcript TEXT NOT NULL,
             ollama_model_identifier TEXT NOT NULL,
             llm_interviewer_label TEXT,
+            llm_confidence FLOAT,
             llm_metrics JSONB NOT NULL,
             llm_timestamp TIMESTAMP NOT NULL,
             llm_task_duration_s FLOAT NOT NULL,
@@ -126,6 +130,7 @@ class LlmSpeakerIdentification(BaseModel):
             llm_source_transcript,
             ollama_model_identifier,
             llm_interviewer_label,
+            llm_confidence,
             llm_metrics,
             llm_timestamp,
             llm_task_duration_s
@@ -133,12 +138,14 @@ class LlmSpeakerIdentification(BaseModel):
             '{str(self.llm_source_transcript)}',
             '{self.ollama_model_identifier}',
             '{self.llm_interviewer_label}',
+            {self.llm_confidence},
             '{json_str}',
             '{self.llm_timestamp}',
             '{llm_task_duration}'
         ) ON CONFLICT (llm_source_transcript, ollama_model_identifier) DO UPDATE
         SET
             llm_interviewer_label = '{self.llm_interviewer_label}',
+            llm_confidence = {self.llm_confidence},
             llm_metrics = '{json_str}',
             llm_timestamp = '{self.llm_timestamp}',
             llm_task_duration_s = '{llm_task_duration}';

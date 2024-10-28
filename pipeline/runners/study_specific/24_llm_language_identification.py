@@ -158,7 +158,7 @@ def parse_transcript_to_df(transcript: Path) -> pd.DataFrame:
     df["duration_ms"] = df["duration_ms"].dt.total_seconds() * 1000
 
     # Replace nan values with 0 on 'duration' column
-    df["duration_ms"].fillna(0, inplace=True)
+    df["duration_ms"] = df["duration_ms"].fillna(0)
 
     # cast the turn, duration columns to int
     df["turn"] = df["turn"].astype(int)
@@ -193,7 +193,7 @@ def construct_prompt(
     else:
         # select TURNS_COUNT contiguous turns, starting from a random turn
         random_turn = random.randint(0, len(transcript_df) - TURNS_COUNT)
-        temp_df = transcript_df.iloc[random_turn : random_turn + 10]
+        temp_df = transcript_df.iloc[random_turn: random_turn + 10]
 
     transcript_text = ""
     for _, row in temp_df.iterrows():
@@ -260,7 +260,7 @@ def process_transcript(
             )
             progress.remove_task(prompt_task)
 
-            identified_language: str = prompt_response["message"]["content"]
+            identified_language: str = prompt_response["message"]["content"]  # type: ignore
             identified_language = identified_language.strip()
 
             if len(identified_language.split()) > 2:

@@ -24,14 +24,14 @@ import argparse
 import logging
 import random
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 import jinja2
 import pandas as pd
 from rich.logging import RichHandler
 
 from pipeline import orchestrator
-from pipeline.helpers import cli, db, utils, llm
+from pipeline.helpers import cli, db, llm, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.llm_speaker_identification import LlmSpeakerIdentification
 
@@ -157,7 +157,7 @@ def parse_transcript_to_df(transcript: Path) -> pd.DataFrame:
     df["duration_ms"] = df["duration_ms"].dt.total_seconds() * 1000
 
     # Replace nan values with 0 on 'duration' column
-    df["duration_ms"].fillna(0, inplace=True)
+    df["duration_ms"] = df["duration_ms"].fillna(0)
 
     # cast the turn, duration columns to int
     df["turn"] = df["turn"].astype(int)
@@ -206,7 +206,7 @@ def construct_prompt(
 
 
 def process_transcript(
-    transcript_path: Path, config_file: Path
+    transcript_path: Path, config_file: Path, n_tries: int = 3
 ) -> LlmSpeakerIdentification:
     """
     Process the transcript and identify the speaker label.
@@ -214,6 +214,7 @@ def process_transcript(
     Args:
         transcript_path (Path): Path to the transcript file.
         config_file (Path): Path to the config file.
+        n_tries (int): Number of tries to prompt the LLM model.
 
     Returns:
         LlmSpeakerIdentification: The speaker identification model.
@@ -228,42 +229,57 @@ def process_transcript(
 
     template = environment.get_template(prompt_template)
 
-    try:
-        prompt = construct_prompt(
-            transcript_path=transcript_path,
-            template=template,
-        )
-    except ValueError as e:
-        logger.error(f"Error: {e}")
-        return LlmSpeakerIdentification(
-            llm_source_transcript=transcript_path,
-            ollama_model_identifier="default",
-            llm_interviewer_label="undefined",
-            llm_metrics={},
-            llm_task_duration_s=0,
-            llm_timestamp=datetime.now(),
-        )
+    results: List[str] = []
+    llm_metrics: List[Dict[str, Any]] = []
 
     with utils.get_progress_bar() as progress:
-        _ = progress.add_task("Prompting LLM model...", total=None)
-        prompt_response = llm.prompt_llm(
-            prompt=prompt,
-            model=model,
-        )
+        task = progress.add_task("Identifying Interviewer...", total=n_tries)
+        for _ in range(n_tries):
+            try:
+                prompt = construct_prompt(
+                    transcript_path=transcript_path,
+                    template=template,
+                )
+            except ValueError as e:
+                logger.error(f"Error: {e}")
+                return LlmSpeakerIdentification(
+                    llm_source_transcript=transcript_path,
+                    ollama_model_identifier="default",
+                    llm_interviewer_label="undefined",
+                    llm_metrics={},
+                    llm_task_duration_s=0,
+                    llm_timestamp=datetime.now(),
+                )
 
-    identified_speaker: str = prompt_response["message"]["content"]
-    identified_speaker = identified_speaker.strip()
+            prompt_task = progress.add_task("Prompting LLM model...", total=None)
+            prompt_response = llm.prompt_llm(
+                prompt=prompt,
+                model=model,
+            )
+            progress.remove_task(prompt_task)
 
-    logger.info(f"Identified speaker: {identified_speaker}")
+            identified_speaker: str = prompt_response["message"]["content"]  # type: ignore
+            identified_speaker = identified_speaker.strip()
 
-    # delete 'message' key from prompt_response
-    del prompt_response["message"]
+            llm_metrics.append(prompt_response)
+            results.append(identified_speaker)
+
+            progress.update(
+                task, advance=1, description=f"Identified speaker: {results}"
+            )
+
+    # construct confidence percentage
+    most_common_speaker = max(set(results), key=results.count)
+    confidence = results.count(most_common_speaker) / len(results)
+
+    llm_metrics_json: Dict[str, Any] = {"runs": llm_metrics}
 
     speaker_identification = LlmSpeakerIdentification(
         llm_source_transcript=transcript_path,
         ollama_model_identifier=model,
         llm_interviewer_label=identified_speaker,
-        llm_metrics=prompt_response,
+        llm_confidence=confidence,
+        llm_metrics=llm_metrics_json,
         llm_task_duration_s=0,
         llm_timestamp=datetime.now(),
     )
