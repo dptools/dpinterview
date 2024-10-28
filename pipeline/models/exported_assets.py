@@ -21,7 +21,7 @@ except ValueError:
     pass
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pipeline.helpers import db, utils
 
@@ -39,7 +39,7 @@ class ExportedAsset:
         asset_export_type: Literal["GENERAL", "PROTECTED"],
         asset_tag: str,
         asset_destination: Path,
-        aset_exported_timestamp: datetime
+        aset_exported_timestamp: datetime,
     ):
         self.interview_name = interview_name
         self.asset_path = asset_path
@@ -110,6 +110,35 @@ class ExportedAsset:
         """
 
         return sql_query
+
+    @staticmethod
+    def get_exported_path(local_path: Path, config_file: Path) -> Optional[Path]:
+        """
+        Given a local path, return the path to the exported directory.
+
+        Note: The resulting path may require previleged access.
+
+        Args:
+            local_path (Path): The local path to the file/directory.
+            config_file (Path): The path to the configuration file.
+
+        Returns:
+            Optional[Path]: The path to the exported file/directory.
+                None if the path is not found.
+        """
+
+        query = f"""
+        SELECT asset_destination
+        FROM exported_assets
+        WHERE asset_path = '{local_path}';
+        """
+
+        results = db.fetch_record(config_file=config_file, query=query)
+
+        if results is None:
+            return None
+
+        return Path(results)
 
 
 if __name__ == "__main__":
