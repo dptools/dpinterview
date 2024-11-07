@@ -305,15 +305,27 @@ def view_transcript(interview_name: str) -> flask.Response:
         transcript_elements = transcript_df_to_transcript_elements(transcript_df)
 
         query = f"""
-        SELECT llm_interviewer_label FROM llm_speaker_identification
-        WHERE llm_source_transcript = '{transcript_file}';
+        SELECT llm_identified_speaker_label
+        FROM llm_speaker_identification
+        WHERE llm_source_transcript = '{transcript_file}' AND
+            llm_role = 'interviewer';
         """
 
         interviewer_label = db.fetch_record(config_file=config_file, query=query)
+
+        query = f"""
+        SELECT llm_identified_speaker_label
+        FROM llm_speaker_identification
+        WHERE llm_source_transcript = '{transcript_file}' AND
+            llm_role = 'subject';
+        """
+
+        subject_label = db.fetch_record(config_file=config_file, query=query)
     else:
         logger.info(f"Interview {interview_name} has no transcript file")
         transcript_elements = None
         interviewer_label = None
+        subject_label = None
 
     return flask.Response(
         flask.render_template(
@@ -323,6 +335,7 @@ def view_transcript(interview_name: str) -> flask.Response:
             interview_name=interview_name,
             transcript_elements=transcript_elements,
             interviewer_label=interviewer_label,
+            subject_label=subject_label,
         )
     )
 

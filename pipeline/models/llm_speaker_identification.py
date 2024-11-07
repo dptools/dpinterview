@@ -38,7 +38,9 @@ class LlmSpeakerIdentification(BaseModel):
     Attributes:
         llm_source_transcript (Path): The source transcript
         ollama_model_identifier (str): The Ollama model identifier
-        llm_interviewer_label (str): The interviewer label
+        llm_role (str): The role of the speaker
+        llm_identified_speaker_label (str): The identified speaker label
+        llm_confidence (float): The confidence score
         llm_metrics (Dict[str, Any]): The metrics
         llm_timestmap (datetime): The timestamp of when the response
             was generated.
@@ -46,7 +48,9 @@ class LlmSpeakerIdentification(BaseModel):
 
     llm_source_transcript: Path
     ollama_model_identifier: str
-    llm_interviewer_label: str
+    llm_role: str
+    llm_identified_speaker_label: str
+    llm_confidence: float
     llm_metrics: Dict[str, Any]
     llm_task_duration_s: Optional[float] = None
     llm_timestamp: datetime = datetime.now()
@@ -55,7 +59,8 @@ class LlmSpeakerIdentification(BaseModel):
         return f"""LlmSpeakerIdentification (
     llm_source_transcript={self.llm_source_transcript},
     ollama_model_identifier={self.ollama_model_identifier},
-    llm_interviewer_label={self.llm_interviewer_label},
+    llm_role={self.llm_role},
+    llm_confidence={self.llm_confidence},
     llm_metrics={self.llm_metrics},
     llm_timestamp={self.llm_timestamp}
     llm_task_duration_s={self.llm_task_duration_s}
@@ -74,11 +79,13 @@ class LlmSpeakerIdentification(BaseModel):
         CREATE TABLE llm_speaker_identification (
             llm_source_transcript TEXT NOT NULL,
             ollama_model_identifier TEXT NOT NULL,
-            llm_interviewer_label TEXT,
+            llm_role TEXT NOT NULL,
+            llm_identified_speaker_label TEXT NOT NULL,
+            llm_confidence FLOAT,
             llm_metrics JSONB NOT NULL,
             llm_timestamp TIMESTAMP NOT NULL,
             llm_task_duration_s FLOAT NOT NULL,
-            PRIMARY KEY (llm_source_transcript, ollama_model_identifier),
+            PRIMARY KEY (llm_source_transcript, ollama_model_identifier, llm_role),
             FOREIGN KEY (llm_source_transcript) REFERENCES transcript_files (transcript_file)
         );
         """
@@ -125,20 +132,25 @@ class LlmSpeakerIdentification(BaseModel):
         INSERT INTO llm_speaker_identification (
             llm_source_transcript,
             ollama_model_identifier,
-            llm_interviewer_label,
+            llm_role,
+            llm_identified_speaker_label,
+            llm_confidence,
             llm_metrics,
             llm_timestamp,
             llm_task_duration_s
         ) VALUES (
             '{str(self.llm_source_transcript)}',
             '{self.ollama_model_identifier}',
-            '{self.llm_interviewer_label}',
+            '{self.llm_role}',
+            '{self.llm_identified_speaker_label}',
+            {self.llm_confidence},
             '{json_str}',
             '{self.llm_timestamp}',
             '{llm_task_duration}'
-        ) ON CONFLICT (llm_source_transcript, ollama_model_identifier) DO UPDATE
+        ) ON CONFLICT (llm_source_transcript, ollama_model_identifier, llm_role) DO UPDATE
         SET
-            llm_interviewer_label = '{self.llm_interviewer_label}',
+            llm_identified_speaker_label = '{self.llm_identified_speaker_label}',
+            llm_confidence = {self.llm_confidence},
             llm_metrics = '{json_str}',
             llm_timestamp = '{self.llm_timestamp}',
             llm_task_duration_s = '{llm_task_duration}';
@@ -151,7 +163,9 @@ if __name__ == "__main__":
     config_file = utils.get_config_file_path()
 
     console.log("Initializing 'llm_speaker_identification' table...")
-    console.log("[red]This will delete all existing data in the 'llm_speaker_identification' table!")
+    console.log(
+        "[red]This will delete all existing data in the 'llm_speaker_identification' table!"
+    )
 
     drop_queries = [LlmSpeakerIdentification.drop_table_query()]
     create_queries = [LlmSpeakerIdentification.init_table_query()]
