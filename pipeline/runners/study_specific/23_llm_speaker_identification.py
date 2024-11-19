@@ -262,19 +262,31 @@ def process_transcript(
                         )
                     except ValueError as e:
                         logger.error(f"Error: {e}")
-                        result_list.append(
-                            LlmSpeakerIdentification(
-                                llm_source_transcript=transcript_path,
-                                ollama_model_identifier="default",
-                                llm_role=role,
-                                llm_identified_speaker_label="undefined",
-                                llm_confidence=0,
-                                llm_metrics={},
-                                llm_task_duration_s=0,
-                                llm_timestamp=datetime.now(),
-                            )
+                        subject_result = LlmSpeakerIdentification(
+                            llm_source_transcript=transcript_path,
+                            ollama_model_identifier="default",
+                            llm_role="subject",
+                            llm_identified_speaker_label="undefined",
+                            llm_confidence=0,
+                            llm_metrics={},
+                            llm_task_duration_s=0,
+                            llm_timestamp=datetime.now(),
                         )
-                        continue
+                        interviewer_result = LlmSpeakerIdentification(
+                            llm_source_transcript=transcript_path,
+                            ollama_model_identifier="default",
+                            llm_role="interviewer",
+                            llm_identified_speaker_label="undefined",
+                            llm_confidence=0,
+                            llm_metrics={},
+                            llm_task_duration_s=0,
+                            llm_timestamp=datetime.now(),
+                        )
+
+                        result_list.append(subject_result)
+                        result_list.append(interviewer_result)
+
+                        return result_list
 
                     prompt_task = progress.add_task(
                         "Prompting LLM model...", total=None
@@ -425,5 +437,6 @@ if __name__ == "__main__":
         )
 
         log_speaker_identification_result(
-            config_file=config_file, speaker_identification_list=speaker_identification_list
+            config_file=config_file,
+            speaker_identification_list=speaker_identification_list,
         )
