@@ -1,0 +1,3 @@
+[submodule "WhisperNote"]
+	path = WhisperNote
+	url = https://github.com/dptools/WhisperNote.git
