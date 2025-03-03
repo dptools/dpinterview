@@ -47,7 +47,7 @@ def get_file_to_decrypt(
         interview_files.interview_file NOT IN (
             SELECT source_path FROM decrypted_files
         ) AND interview_files.ignored = FALSE AND
-        interviews.interview_type = 'open' AND
+        interviews.interview_type = 'offsite' AND
         interview_files.interview_path NOT IN (
             SELECT interview_path FROM DuplicatesCTE
         )
@@ -126,8 +126,7 @@ def construct_dest_dir(
         "decrypted",
     )
 
-    if not destination_dir.exists():
-        destination_dir.mkdir(parents=True)
+    destination_dir.mkdir(parents=True, exist_ok=True)
 
     return Path(destination_dir)
 
