@@ -66,6 +66,7 @@ class Interview:
         interview_name (str): The name of the interview.
         interview_path (Path): The path to the interview.
         interview_type (InterviewType): The type of interview.
+        interview_day (int): The day of the interview. (day 1 is consent day)
         interview_datetime (datetime): The date and time of the interview.
         subject_id (str): The subject ID.
         study_id (str): The study ID.
@@ -76,6 +77,7 @@ class Interview:
         interview_name: str,
         interview_path: Path,
         interview_type: InterviewType,
+        interview_day: int,
         interview_datetime: datetime,
         subject_id: str,
         study_id: str,
@@ -85,6 +87,7 @@ class Interview:
         self.interview_name = interview_name
         self.interview_path = interview_path
         self.interview_type = interview_type
+        self.interview_day = interview_day
         self.interview_datetime = interview_datetime
         self.subject_id = subject_id
         self.study_id = study_id
@@ -106,6 +109,7 @@ class Interview:
             interview_name TEXT NOT NULL,
             interview_path TEXT NOT NULL UNIQUE,
             interview_type TEXT NOT NULL REFERENCES interview_types (interview_type),
+            interview_day INTEGER NOT NULL,
             interview_date TIMESTAMP NOT NULL,
             subject_id TEXT NOT NULL,
             study_id TEXT NOT NULL,
@@ -145,15 +149,16 @@ class Interview:
         return queries
 
     @staticmethod
-    def drop_table_query() -> str:
+    def drop_table_query() -> List[str]:
         """
         Return the SQL query to drop the 'interviews' table.
         """
-        sql_query = """
-        DROP TABLE IF EXISTS interviews;
-        """
+        drop_queries = [
+            "DROP VIEW IF EXISTS primary_interviews;",
+            "DROP TABLE IF EXISTS interviews;"
+        ]
 
-        return sql_query
+        return drop_queries
 
     def to_sql(self):
         """
@@ -167,8 +172,16 @@ class Interview:
         st_id = db.santize_string(self.study_id)
 
         sql_query = f"""
-        INSERT INTO interviews (interview_name, interview_path, interview_type, interview_date, subject_id, study_id)
-        VALUES ('{i_name}', '{i_path}', '{i_type}', '{i_date}', '{s_id}', '{st_id}')
+        INSERT INTO interviews (
+            interview_name, interview_path, interview_type,
+            interview_day, interview_date,
+            subject_id, study_id
+        )
+        VALUES (
+            '{i_name}', '{i_path}', '{i_type}',
+            {self.interview_day}, '{i_date}',
+            '{s_id}', '{st_id}'
+        )
         ON CONFLICT (interview_path) DO NOTHING;
         """
 
