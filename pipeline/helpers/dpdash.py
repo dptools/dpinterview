@@ -184,7 +184,12 @@ def parse_dpdash_name(name: str) -> Dict[str, Union[str, List[str], None]]:
     name = name.split(".")[0]
 
     parts = name.split("-")
-    if len(parts) != 4:
+    if len(parts) == 5:
+        # enhanced with session number
+        if 'session' not in name:
+            raise ValueError(f"Invalid name: {name} - session number not found")
+        parts = name.split("-", maxsplit=3)
+    else:
         raise ValueError(f"Invalid name: {name} - wrong number of parts({len(parts)})")
 
     study, subject, data_type_category_tags, time_range = parts
