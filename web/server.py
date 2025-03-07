@@ -251,8 +251,12 @@ def serve_file(file_path: str) -> flask.Response:
         return flask.Response("File not found.", status=404)
     if file_path.endswith(".pdf"):
         return flask.send_file(file_path, mimetype="application/pdf")
+    elif file_path.endswith(".mp3"):
+        return flask.send_file(file_path, mimetype="audio/mpeg")
     elif file_path.endswith(".mp4"):
         return flask.send_file(file_path, mimetype="video/mp4")
+    elif file_path.endswith(".m4a"):
+        return flask.send_file(file_path, mimetype="audio/m4a")
     elif file_path.endswith(".avi"):
         return flask.send_file(file_path, mimetype="video")
     elif file_path.endswith(".vtt"):
@@ -291,7 +295,7 @@ def view_transcript(interview_name: str) -> flask.Response:
 
     query = f"""
     SELECT transcript_file FROM transcript_files
-    WHERE interview_name = '{interview_name}';
+    WHERE identifier_name = '{interview_name}';
     """
 
     transcript_file = db.fetch_record(config_file=config_file, query=query)
@@ -355,7 +359,7 @@ def remove_speaker_identification(interview_name: str) -> flask.Response:
 
     query = f"""
     SELECT transcript_file FROM transcript_files
-    WHERE interview_name = '{interview_name}';
+    WHERE identifier_name = '{interview_name}';
     """
 
     transcript_file = db.fetch_record(config_file=config_file, query=query)
