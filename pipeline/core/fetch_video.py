@@ -4,12 +4,14 @@ Helper functions for fetching video files to decrypt.
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple, Callable
+from typing import Callable, List, Optional, Tuple
 
 from pipeline.helpers import db, dpdash
 from pipeline.models.decrypted_files import DecryptedFile
 
 logger = logging.getLogger(__name__)
+
+INTERVIEWS_TO_FETCH = "open"
 
 
 def get_file_to_decrypt(
@@ -47,7 +49,7 @@ def get_file_to_decrypt(
         interview_files.interview_file NOT IN (
             SELECT source_path FROM decrypted_files
         ) AND interview_files.ignored = FALSE AND
-        interviews.interview_type = 'offsite' AND
+        interviews.interview_type = '{INTERVIEWS_TO_FETCH}' AND
         interview_files.interview_path NOT IN (
             SELECT interview_path FROM DuplicatesCTE
         )
