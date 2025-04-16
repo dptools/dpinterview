@@ -3,7 +3,6 @@ Interview model
 """
 
 from pathlib import Path
-from datetime import datetime
 from typing import Optional, List
 from enum import Enum
 
@@ -62,11 +61,11 @@ class Interview:
     Represents an interview.
 
     Attributes:
-        interview_id (int): The interview ID.
         interview_name (str): The name of the interview.
         interview_path (Path): The path to the interview.
         interview_type (InterviewType): The type of interview.
         interview_day (int): The day of the interview. (day 1 is consent day)
+        interview_part (int): The part of the interview.
         interview_datetime (datetime): The date and time of the interview.
         subject_id (str): The subject ID.
         study_id (str): The study ID.
@@ -75,20 +74,12 @@ class Interview:
     def __init__(
         self,
         interview_name: str,
-        interview_path: Path,
         interview_type: InterviewType,
-        interview_day: int,
-        interview_datetime: datetime,
         subject_id: str,
         study_id: str,
-        interview_id: Optional[int] = None,
     ):
-        self.interview_id = interview_id
         self.interview_name = interview_name
-        self.interview_path = interview_path
         self.interview_type = interview_type
-        self.interview_day = interview_day
-        self.interview_datetime = interview_datetime
         self.subject_id = subject_id
         self.study_id = study_id
 
@@ -105,12 +96,8 @@ class Interview:
         """
         sql_query = """
         CREATE TABLE IF NOT EXISTS interviews (
-            interview_id SERIAL PRIMARY KEY,
-            interview_name TEXT NOT NULL,
-            interview_path TEXT NOT NULL UNIQUE,
+            interview_name TEXT NOT NULL PRIMARY KEY,
             interview_type TEXT NOT NULL REFERENCES interview_types (interview_type),
-            interview_day INTEGER NOT NULL,
-            interview_date TIMESTAMP NOT NULL,
             subject_id TEXT NOT NULL,
             study_id TEXT NOT NULL,
             FOREIGN KEY (subject_id, study_id) REFERENCES subjects (subject_id, study_id)
@@ -120,41 +107,11 @@ class Interview:
         return sql_query
 
     @staticmethod
-    def post_init_queries() -> List[str]:
-        """
-        Return the SQL queries to add the 'is_primary ' column and
-        unique constraint to the 'interviews' table.
-        """
-        queries: List[str] = []
-
-        primary_column = (
-            "ALTER TABLE interviews ADD COLUMN is_primary boolean DEFAULT false;"
-        )
-        unique_column = """
-        CREATE UNIQUE INDEX idx_unique_primary_interview
-        ON interviews(interview_name)
-        WHERE is_primary = true;
-        """
-        create_view = """
-        CREATE VIEW primary_interviews AS
-        SELECT interview_name
-        FROM interviews
-        WHERE is_primary = true;
-        """
-
-        queries.append(primary_column)
-        queries.append(unique_column)
-        queries.append(create_view)
-
-        return queries
-
-    @staticmethod
     def drop_table_query() -> List[str]:
         """
         Return the SQL query to drop the 'interviews' table.
         """
         drop_queries = [
-            "DROP VIEW IF EXISTS primary_interviews;",
             "DROP TABLE IF EXISTS interviews;"
         ]
 
@@ -165,24 +122,20 @@ class Interview:
         Return the SQL query to insert the Interview object into the 'interviews' table.
         """
         i_name = db.santize_string(self.interview_name)
-        i_path = db.santize_string(str(self.interview_path))
         i_type = db.santize_string(self.interview_type.value)
-        i_date = db.santize_string(str(self.interview_datetime))
         s_id = db.santize_string(self.subject_id)
         st_id = db.santize_string(self.study_id)
 
         sql_query = f"""
         INSERT INTO interviews (
-            interview_name, interview_path, interview_type,
-            interview_day, interview_date,
+            interview_name, interview_type,
             subject_id, study_id
         )
         VALUES (
-            '{i_name}', '{i_path}', '{i_type}',
-            {self.interview_day}, '{i_date}',
+            '{i_name}', '{i_type}',
             '{s_id}', '{st_id}'
         )
-        ON CONFLICT (interview_path) DO NOTHING;
+        ON CONFLICT (interview_name) DO NOTHING;
         """
 
         return sql_query
@@ -205,7 +158,7 @@ class Interview:
         query = f"""
         SELECT interview_name
         FROM interview_files
-        INNER JOIN interviews USING (interview_path)
+        LEFT JOIN interview_parts USING (interview_path)
         WHERE interview_file = '{santiized_interview_file}';
         """
 

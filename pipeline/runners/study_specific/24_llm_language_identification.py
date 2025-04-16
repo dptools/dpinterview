@@ -33,9 +33,9 @@ from rich.logging import RichHandler
 from pipeline import orchestrator
 from pipeline.helpers import cli, db, llm, utils
 from pipeline.helpers.timer import Timer
-from pipeline.models.llm_speaker_identification import LlmSpeakerIdentification
+from pipeline.models.llm_language_identification import LlmLanguageIdentification
 
-MODULE_NAME = "llm_speaker_identification"
+MODULE_NAME = "llm_language_identification"
 
 logger = logging.getLogger(MODULE_NAME)
 logargs = {
@@ -66,22 +66,14 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[Path]:
     """
 
     query = f"""
-    WITH subjectIndentified AS (
-        SELECT llm_source_transcript
-        FROM llm_speaker_identification
-        WHERE llm_role = 'subject'
-    ), interviewerIdentified AS (
-        SELECT llm_source_transcript
-        FROM llm_speaker_identification
-        WHERE llm_role = 'interviewer'
-    )
     SELECT transcript_file
     FROM transcript_files
     LEFT JOIN interviews using (interview_name)
     WHERE interviews.study_id = '{study_id}' AND
-        (
-            transcript_file NOT IN (SELECT * FROM subjectIndentified) OR
-            transcript_file NOT IN (SELECT * FROM interviewerIdentified)
+        transcript_file NOT IN (
+            SELECT llm_source_transcript
+            FROM llm_language_identification
+            WHERE llm_confidence > 0.5
         )
     ORDER BY RANDOM()
     LIMIT 1
@@ -201,7 +193,7 @@ def construct_prompt(
     else:
         # select TURNS_COUNT contiguous turns, starting from a random turn
         random_turn = random.randint(0, len(transcript_df) - TURNS_COUNT)
-        temp_df = transcript_df.iloc[random_turn: random_turn + 10]
+        temp_df = transcript_df.iloc[random_turn : random_turn + 10]
 
     transcript_text = ""
     for _, row in temp_df.iterrows():
@@ -209,147 +201,119 @@ def construct_prompt(
         transcript = row["transcript"]
         transcript_text += f"{speaker} {transcript}\n"
 
-    prompt = template.render(transcript=transcript_text)
+    prompt = template.render(transcript_text=transcript_text)
 
     return prompt
 
 
 def process_transcript(
     transcript_path: Path, config_file: Path, n_tries: int = 3
-) -> List[LlmSpeakerIdentification]:
+) -> LlmLanguageIdentification:
     """
-    Process the transcript and identify the speaker label.
+    Process the transcript and identify the language of the speaker.
 
     Args:
         transcript_path (Path): Path to the transcript file.
         config_file (Path): Path to the config file.
+        n_tries (int): Number of tries to identify the language.
 
     Returns:
-        List[LlmSpeakerIdentification]: The speaker identification model.
+        LlmLanguageIdentification: The language identification model.
     """
 
     templates_root = orchestrator.get_templates_root(config_file=config_file)
     environment = jinja2.Environment(loader=jinja2.FileSystemLoader(templates_root))
 
-    llm_config = utils.config(path=config_file, section="llm_speaker_identification")
-
+    llm_config = utils.config(path=config_file, section="llm_language_identification")
+    prompt_template = llm_config["jinja2_prompt_template"]
     model = llm_config["ollama_model"]
-    roles: List[str] = ["subject", "interviewer"]
-    result_list: List[LlmSpeakerIdentification] = []
+
+    template = environment.get_template(prompt_template)
+
+    results: List[str] = []
+    llm_metrics: List[Dict[str, Any]] = []
 
     with utils.get_progress_bar() as progress:
-        role_identifaction_task = progress.add_task(
-            "Identifying speaker role...", total=len(roles)
-        )
-        for role in roles:
-            results: List[str] = []
-            llm_metrics: List[Dict[str, Any]] = []
+        task = progress.add_task("Identifying language...", total=n_tries)
+        for _ in range(n_tries):
+            try:
+                prompt = construct_prompt(
+                    transcript_path=transcript_path,
+                    template=template,
+                )
+            except ValueError as e:
+                logger.error(f"Error: {e}")
+                return LlmLanguageIdentification(
+                    llm_source_transcript=transcript_path,
+                    ollama_model_identifier="default",
+                    llm_identified_language_code="undefined",
+                    llm_confidence=0,
+                    llm_metrics={},
+                    llm_task_duration_s=0,
+                    llm_timestamp=datetime.now(),
+                )
+
+            prompt_task = progress.add_task("Prompting LLM model...", total=None)
+            prompt_response = llm.prompt_llm(
+                prompt=prompt,
+                model=model,
+            )
+            progress.remove_task(prompt_task)
+
+            identified_language: str = prompt_response["message"]["content"]
+            identified_language = identified_language.strip()
+
+            if len(identified_language.split()) > 2:
+                logger.error(
+                    f"Error: Identified language is not valid: {identified_language}"
+                )
+                logger.error(f"Prompt: {prompt}")
+                raise ValueError("Identified language is not valid.")
+
+            # # delete 'message' key from prompt_response
+            # del prompt_response["message"]
+
+            llm_metrics.append(prompt_response)
+
+            results.append(identified_language)
             progress.update(
-                role_identifaction_task,
-                description=f"Identifying speaker role: {role}",
+                task, advance=1, description=f"Identifing language... {results}"
             )
-            prompt_template = llm_config[f"jinja2_prompt_template_{role}"]
 
-            template = environment.get_template(prompt_template)
+    # construct confidence percentage
+    most_common_language = max(set(results), key=results.count)
+    confidence = results.count(most_common_language) / len(results)
 
-            speaker_id_task = progress.add_task(f"Identifying {role}...", total=n_tries)
-            with Timer() as timer:
-                for _ in range(n_tries):
-                    try:
-                        prompt = construct_prompt(
-                            transcript_path=transcript_path,
-                            template=template,
-                        )
-                    except ValueError as e:
-                        logger.error(f"Error: {e}")
-                        subject_result = LlmSpeakerIdentification(
-                            llm_source_transcript=transcript_path,
-                            ollama_model_identifier="default",
-                            llm_role="subject",
-                            llm_identified_speaker_label="undefined",
-                            llm_confidence=0,
-                            llm_metrics={},
-                            llm_task_duration_s=0,
-                            llm_timestamp=datetime.now(),
-                        )
-                        interviewer_result = LlmSpeakerIdentification(
-                            llm_source_transcript=transcript_path,
-                            ollama_model_identifier="default",
-                            llm_role="interviewer",
-                            llm_identified_speaker_label="undefined",
-                            llm_confidence=0,
-                            llm_metrics={},
-                            llm_task_duration_s=0,
-                            llm_timestamp=datetime.now(),
-                        )
+    llm_metrics_json: Dict[str, Any] = {"runs": llm_metrics}
 
-                        result_list.append(subject_result)
-                        result_list.append(interviewer_result)
+    language_identification = LlmLanguageIdentification(
+        llm_source_transcript=transcript_path,
+        ollama_model_identifier=model,
+        llm_identified_language_code=identified_language,
+        llm_confidence=confidence,
+        llm_metrics=llm_metrics_json,
+        llm_task_duration_s=0,
+        llm_timestamp=datetime.now(),
+    )
 
-                        return result_list
-
-                    prompt_task = progress.add_task(
-                        "Prompting LLM model...", total=None
-                    )
-                    prompt_response = llm.prompt_llm(
-                        prompt=prompt,
-                        model=model,
-                    )
-                    progress.remove_task(prompt_task)
-
-                    identified_speaker: str = prompt_response["message"]["content"]
-                    identified_speaker = identified_speaker.strip()
-
-                    llm_metrics.append(prompt_response)
-                    results.append(identified_speaker)
-                    progress.update(
-                        speaker_id_task,
-                        advance=1,
-                        description=f"Identifing {role}... {results}",
-                    )
-                progress.update(role_identifaction_task, advance=1)
-
-            # Construct Confidence metrics
-            most_common_speaker = max(set(results), key=results.count)
-            confidence = results.count(most_common_speaker) / len(results)
-
-            llm_metrics_json: Dict[str, Any] = {"runs": llm_metrics}
-
-            speaker_identification = LlmSpeakerIdentification(
-                llm_source_transcript=transcript_path,
-                ollama_model_identifier=model,
-                llm_role=role,
-                llm_identified_speaker_label=most_common_speaker,
-                llm_confidence=confidence,
-                llm_metrics=llm_metrics_json,
-                llm_task_duration_s=timer.duration,
-                llm_timestamp=datetime.now(),
-            )
-            result_list.append(speaker_identification)
-
-    return result_list
+    return language_identification
 
 
-def log_speaker_identification_result(
-    config_file: Path, speaker_identification_list: List[LlmSpeakerIdentification]
+def log_language_identification_result(
+    config_file: Path, language_identification: LlmLanguageIdentification
 ) -> None:
     """
     Writes the speaker identification result to the database.
 
     Args:
         config_file (Path): Path to the config file.
-        speaker_identification_list (List[LlmSpeakerIdentification]):
-            The speaker identification model.
+        language_identification (LlmLanguageIdentification): The speaker identification model.
 
     Returns:
         None
     """
-    sql_queries: List[str] = []
-    for speaker_identification in speaker_identification_list:
-        sql_query = speaker_identification.to_sql()
-        sql_queries.append(sql_query)
-
-    db.execute_queries(config_file=config_file, queries=sql_queries, show_commands=True)
+    sql_query = language_identification.to_sql()
+    db.execute_queries(config_file=config_file, queries=[sql_query], show_commands=True)
 
 
 if __name__ == "__main__":
@@ -389,13 +353,14 @@ if __name__ == "__main__":
     COUNTER = 0
 
     logger.info(
-        "[bold green]Starting speaker identification loop...", extra={"markup": True}
+        "[bold green]Starting language identification loop...", extra={"markup": True}
     )
 
-    llm_config = utils.config(path=config_file, section="llm_speaker_identification")
+    llm_config = utils.config(path=config_file, section="llm_language_identification")
     model = llm_config["ollama_model"]
     logger.info(f"Using model: {model}", extra={"markup": True})
 
+    random.shuffle(studies)
     study_id = studies[0]
     logger.info(f"Starting with study: {study_id}", extra={"markup": True})
 
@@ -431,12 +396,17 @@ if __name__ == "__main__":
         COUNTER += 1
         logger.info(f"Processing file: {file_to_process}", extra={"markup": True})
 
-        speaker_identification_list = process_transcript(
-            transcript_path=file_to_process,
-            config_file=config_file,
-        )
+        with Timer() as timer:
+            try:
+                language_identification = process_transcript(
+                    transcript_path=file_to_process,
+                    config_file=config_file,
+                )
+            except ValueError:
+                continue
+        language_identification_duration = timer.duration
 
-        log_speaker_identification_result(
-            config_file=config_file,
-            speaker_identification_list=speaker_identification_list,
+        language_identification.llm_task_duration_s = language_identification_duration
+        log_language_identification_result(
+            config_file=config_file, language_identification=language_identification
         )

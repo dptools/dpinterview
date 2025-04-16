@@ -4,12 +4,14 @@ Helper functions for fetching video files to decrypt.
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple, Callable
+from typing import Callable, List, Optional, Tuple
 
 from pipeline.helpers import db, dpdash
 from pipeline.models.decrypted_files import DecryptedFile
 
 logger = logging.getLogger(__name__)
+
+INTERVIEWS_TO_FETCH = "open"
 
 
 def get_file_to_decrypt(
@@ -27,30 +29,18 @@ def get_file_to_decrypt(
     """
 
     query = f"""
-    WITH DuplicatesCTE AS (
-    SELECT
-        interview_path
-    FROM
-        public.interview_files
-    WHERE
-        interview_file_tags = 'video'
-    GROUP BY
-        interview_path
-    HAVING
-        COUNT(interview_file) > 1
-    ) SELECT interview_file, interview_type, interview_name
+    SELECT interview_file, interview_type, interview_name
     FROM interview_files
-    INNER JOIN interviews ON interview_files.interview_path = interviews.interview_path
+    LEFT join interview_parts USING(interview_path)
+    LEFT JOIN interviews USING(interview_name)
     WHERE interviews.study_id = '{study_id}' AND
-        interviews.is_primary = TRUE AND
+        interview_parts.is_primary IS TRUE AND
         interview_files.interview_file_tags LIKE '%%video%%' AND
         interview_files.interview_file NOT IN (
             SELECT source_path FROM decrypted_files
         ) AND interview_files.ignored = FALSE AND
-        interviews.interview_type = 'offsite' AND
-        interview_files.interview_path NOT IN (
-            SELECT interview_path FROM DuplicatesCTE
-        )
+        interviews.interview_type = '{INTERVIEWS_TO_FETCH}' AND
+        interview_parts.is_duplicate is FALSE
     ORDER BY RANDOM()
     LIMIT 1
     """
@@ -65,36 +55,6 @@ def get_file_to_decrypt(
     interview_name = df["interview_name"].iloc[0]
 
     return file_to_decrypt, interview_type, interview_name
-
-
-def check_if_interview_has_duplicates(interview_name: str, config_file: Path) -> bool:
-    """
-    Checks if multiple interviews with the same name exist in the database.
-
-    Args:
-        interview_name (str): The name of the interview.
-        config_file (Path): The path to the config file.
-
-    Returns:
-        bool: True if the interview has duplicates, False otherwise.
-    """
-    sql_query = f"""
-    SELECT *
-    FROM interviews
-    WHERE interview_name IN (
-        SELECT interview_name
-        FROM interviews
-        GROUP BY interview_name
-        HAVING COUNT(*) > 1
-    ) and interview_name = '{interview_name}';
-    """
-
-    df = db.execute_sql(config_file=config_file, query=sql_query)
-
-    if df.empty:
-        return False
-
-    return True
 
 
 # fetch_audio also points here

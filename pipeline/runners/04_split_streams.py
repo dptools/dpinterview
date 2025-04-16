@@ -79,6 +79,7 @@ if __name__ == "__main__":
 
     config_params = utils.config(config_file, section="general")
     studies = orchestrator.get_studies(config_file=config_file)
+    data_root = orchestrator.get_data_root(config_file=config_file)
 
     COUNTER = 0
     STREAMS_COUNTER = 0

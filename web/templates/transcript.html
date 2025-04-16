@@ -9,6 +9,9 @@
 <button type="button" class="btn btn-secondary"
     onclick="window.location.href='/interviews/view/{{ interview_name }}'">Show Frames
 </button>
+<button type="button" class="btn btn-secondary"
+    onclick="window.location.href='/interviews/watch/{{ interview_name }}'">Watch
+</button>
 
 {% if interviewer_label %}
 <button type="button" class="btn btn-danger"
@@ -27,8 +30,16 @@
 {% endif %} -->
 
 {% if interviewer_label %}
-<div class="mt-3 alert alert-info" role="alert">
-    <span>Identified Interviewer: {{ interviewer_label }}</span>
+<!-- 2 columns -->
+<div class="mt-3">
+    <form class="form-floating">
+        <input type="text" class="form-control" id="interviewer_label" value="{{ interviewer_label }}" disabled>
+        <label for="interviewer_label">Interviewer</label>
+    </form>
+    <form class="form-floating">
+        <input type="text" class="form-control" id="subject_label" value="{{ subject_label }}" disabled>
+        <label for="subject_label">Subject</label>
+    </form>
 </div>
 <div class="mt-3 alert alert-info" role="alert">
     <strong>Note:</strong> Text from <em>{{ interviewer_label }}</em> is shown in <span class="badge bg-secondary">gray</span> and <em>all other speakers</em> are shown in <span class="badge bg-info">blue</span>.

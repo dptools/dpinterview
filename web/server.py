@@ -22,26 +22,29 @@ try:
 except ValueError:
     pass
 
-from datetime import datetime
-from typing import Dict, Optional, List
 import logging
 import re
+from datetime import datetime
+from typing import Dict, List, Optional
 
 # from flask import Flask, send_file, request, Response
 import flask
-from flask_bootstrap import Bootstrap5
-from flask_wtf import FlaskForm, CSRFProtect
-import wtforms
+import flask_cors
 import pandas as pd
+from flask_bootstrap import Bootstrap5
+from flask_wtf import CSRFProtect
 from pydantic import BaseModel
 
-from pipeline.helpers import db, utils
 from pipeline import orchestrator
+from pipeline.helpers import db, utils
+from pipeline.models.manual_qc import ManualQC
+from web.models.qcfrom import QcForm
 
 app = flask.Flask(__name__)
 app.secret_key = "5u/9udJzoJWU2DqUSd7MgBpqNOb4ixA1VG2GRz/KI6gkvrm331pA4pTp"
 bootstrap = Bootstrap5(app)
 csrf = CSRFProtect(app)
+cors = flask_cors.CORS(app, resources={r"/*": {"origins": "*"}})
 
 logger = logging.getLogger(__name__)
 logargs = {
@@ -250,14 +253,22 @@ def serve_file(file_path: str) -> flask.Response:
         return flask.Response("File not found.", status=404)
     if file_path.endswith(".pdf"):
         return flask.send_file(file_path, mimetype="application/pdf")
+    elif file_path.endswith(".mp3"):
+        return flask.send_file(file_path, mimetype="audio/mpeg")
+    elif file_path.endswith(".WAV"):
+        return flask.send_file(file_path, mimetype="audio/wav")
     elif file_path.endswith(".mp4"):
         return flask.send_file(file_path, mimetype="video/mp4")
+    elif file_path.endswith(".m4a"):
+        return flask.send_file(file_path, mimetype="audio/m4a")
     elif file_path.endswith(".avi"):
         return flask.send_file(file_path, mimetype="video")
     elif file_path.endswith(".vtt"):
         return flask.send_file(file_path, mimetype="text/vtt")
     elif file_path.endswith(".png"):
         return flask.send_file(file_path, mimetype="image/png")
+    elif file_path.endswith(".txt"):
+        return flask.send_file(file_path, mimetype="text/plain")
     else:
         return flask.Response("File type not supported.", status=400)
 
@@ -277,7 +288,8 @@ def view_transcript(interview_name: str) -> flask.Response:
 
     if interview_name == "random":
         query = """
-        SELECT interview_name FROM transcript_files
+        SELECT identifier_name FROM transcript_files
+        WHERE identifier_type = 'interview'
         ORDER BY RANDOM()
         LIMIT 1;
         """
@@ -290,7 +302,7 @@ def view_transcript(interview_name: str) -> flask.Response:
 
     query = f"""
     SELECT transcript_file FROM transcript_files
-    WHERE interview_name = '{interview_name}';
+    WHERE identifier_name = '{interview_name}';
     """
 
     transcript_file = db.fetch_record(config_file=config_file, query=query)
@@ -304,15 +316,27 @@ def view_transcript(interview_name: str) -> flask.Response:
         transcript_elements = transcript_df_to_transcript_elements(transcript_df)
 
         query = f"""
-        SELECT llm_interviewer_label FROM llm_speaker_identification
-        WHERE llm_source_transcript = '{transcript_file}';
+        SELECT llm_identified_speaker_label
+        FROM llm_speaker_identification
+        WHERE llm_source_transcript = '{transcript_file}' AND
+            llm_role = 'interviewer';
         """
 
         interviewer_label = db.fetch_record(config_file=config_file, query=query)
+
+        query = f"""
+        SELECT llm_identified_speaker_label
+        FROM llm_speaker_identification
+        WHERE llm_source_transcript = '{transcript_file}' AND
+            llm_role = 'subject';
+        """
+
+        subject_label = db.fetch_record(config_file=config_file, query=query)
     else:
         logger.info(f"Interview {interview_name} has no transcript file")
         transcript_elements = None
         interviewer_label = None
+        subject_label = None
 
     return flask.Response(
         flask.render_template(
@@ -322,6 +346,7 @@ def view_transcript(interview_name: str) -> flask.Response:
             interview_name=interview_name,
             transcript_elements=transcript_elements,
             interviewer_label=interviewer_label,
+            subject_label=subject_label,
         )
     )
 
@@ -341,7 +366,7 @@ def remove_speaker_identification(interview_name: str) -> flask.Response:
 
     query = f"""
     SELECT transcript_file FROM transcript_files
-    WHERE interview_name = '{interview_name}';
+    WHERE identifier_name = '{interview_name}';
     """
 
     transcript_file = db.fetch_record(config_file=config_file, query=query)
@@ -427,6 +452,94 @@ def view_interview_frames(interview_name: str) -> flask.Response:
     )
 
 
+def get_openface_video(interview_name: str) -> Optional[List[Path]]:
+    """
+    Retrieve the OpenFace video for the given interview.
+
+    Args:
+        interview_name (str): Interview name.
+
+    Returns:
+        Optional[List[Path]]: OpenFace video path.
+    """
+    config_file = utils.get_config_file_path()
+    paths = ["subject_of_processed_path", "interviewer_of_processed_path"]
+
+    of_videos = []
+
+    for path in paths:
+        query = f"""
+        SELECT
+            COALESCE(exported_assets.asset_destination, {path}) AS of_path
+        FROM
+            load_openface
+        LEFT JOIN
+            exported_assets
+        ON
+            exported_assets.asset_path = {path}
+        WHERE
+            load_openface.interview_name = '{interview_name}';
+        """
+
+        of_path = db.fetch_record(config_file=config_file, query=query)
+
+        if of_path is None:
+            continue
+
+        of_path = Path(of_path)
+        of_video = next(of_path.glob("openface_aligned.mp4"), None)
+
+        if of_video is not None:
+            of_videos.append(of_video)
+
+    if len(of_videos) == 0:
+        return None
+
+    return of_videos
+
+
+@app.route("/interviews/watch/<interview_name>")
+def watch_video(interview_name: str) -> flask.Response:
+    """
+    View raw interview video.
+
+    Args:
+        interview_name (str): The name of the interview.
+
+    Returns:
+        Response: Flask response object.
+    """
+    config_file = utils.get_config_file_path()
+
+    if interview_name == "random":
+        query = """
+        SELECT interview_name FROM interview_files
+        LEFT JOIN interviews USING (interview_path)
+        WHERE interview_file_tags LIKE '%%video%%'
+        ORDER BY RANDOM()
+        LIMIT 1;
+        """
+        interview_name_r = db.fetch_record(config_file=config_file, query=query)
+
+        if not interview_name_r:
+            return flask.Response("No interviews found", status=404)
+
+        interview_name = interview_name_r
+
+    video_query = f"""
+    SELECT interview_file FROM interview_files
+    LEFT JOIN interviews USING (interview_path)
+    WHERE interview_name = '{interview_name}' AND interview_file_tags LIKE '%%video%%'
+    """
+
+    video_file = db.fetch_record(config_file=config_file, query=video_query)
+
+    if video_file is None:
+        return flask.Response("No video found for interview", status=404)
+
+    return flask.redirect(f"/payload=[{video_file}]")  # type: ignore
+
+
 @app.route("/interviews/openface/view/<interview_name>")
 def view_openface_video(interview_name: str) -> flask.Response:
     """
@@ -453,36 +566,202 @@ def view_openface_video(interview_name: str) -> flask.Response:
 
         interview_name = interview_name_r
 
-    query = f"""
-    SELECT
-        COALESCE(exported_assets.asset_destination, subject_of_processed_path) AS of_path
-    FROM
-        load_openface
-    LEFT JOIN
-        exported_assets
-    ON
-        exported_assets.asset_path = subject_of_processed_path
-    WHERE
-        load_openface.interview_name = '{interview_name}';
-    """
+    of_videos = get_openface_video(interview_name)
 
-    of_path = db.fetch_record(config_file=config_file, query=query)
-
-    if not of_path:
-        return flask.Response(
-            f"No OpenFace data found for interview {interview_name}", status=404
-        )
-
-    of_path = Path(of_path)
-    of_video = next(of_path.glob("openface_aligned.mp4"), None)
-
-    if not of_video:
-        return flask.Response(
-            f"No OpenFace video found for interview at {of_path}", status=404
-        )
+    if of_videos is None:
+        return flask.Response("No OpenFace video found for interview", status=404)
 
     # Redirect to the video file
+    of_video = of_videos[0]
     return flask.redirect(f"/payload=[{of_video}]")  # type: ignore
+
+
+def get_qc_results(interview_id: int) -> Optional[Dict[str, str]]:
+    """
+    Get QC results from the database.
+
+    Args:
+        interview_id (int): Interview ID.
+
+    Returns:
+        Optional[Dict[str, str]]: QC results.
+    """
+    config_file = utils.get_config_file_path()
+
+    select_query = ManualQC.get_row_query(str(interview_id))
+    results: pd.DataFrame = db.execute_sql(config_file=config_file, query=select_query)
+
+    if results.empty:
+        return None
+
+    qc_data = results["qc_data"].values[0]
+
+    qc_issues_found = qc_data.get("qc_issues_found", None)
+    qc_user_id = results["qc_user_id"].values[0]
+    qc_comments = results["qc_comments"].values[0]
+    qc_pass = qc_data.get("qc_pass", None)
+    qc_timestamp = results["qc_timestamp"].values[0]
+
+    qc_results = {
+        "qc_user": qc_user_id,
+        "qc_comment": qc_comments,
+        "qc_issues_found": qc_issues_found,
+        "qc_pass": qc_pass,
+        "qc_timestamp": qc_timestamp,
+    }
+
+    return qc_results
+
+
+def submit_qc_results(
+    interview_id: int,
+    user_id: str,
+    comments: str,
+    issues_found: List[str],
+    qc_pass: bool,
+) -> None:
+    """
+    Submit QC results to the database.
+
+    Args:
+        interview_id (int): Interview ID.
+        user_id (str): User ID.
+        comments (str): Comments.
+        issues_found (List[str]): Issues found.
+        qc_pass (bool): QC pass.
+    """
+    # qc_data = {
+    #     "qc_issues_found": issues_found,
+    #     "qc_pass": qc_pass,
+    # }
+
+    # manual_qc = ManualQC(
+    #     interview_id=interview_id,
+    #     qc_comments=comments,
+    #     qc_data=qc_data,
+    #     qc_user_id=user_id,
+    #     qc_timestamp=datetime.now(),
+    # )
+
+    # config_file = utils.get_config_file_path()
+
+    # insert_query = manual_qc.to_sql()
+
+    # db.execute_queries(config_file=config_file, queries=[insert_query])
+
+
+@app.route("/interviews/qc/post/interview_id=<interview_id>", methods=("GET", "POST"))
+def show_qc_form(interview_id: int) -> flask.Response:
+    """
+    Show the QC form for the given interview ID.
+
+    Allows users to input QC results to the form, with
+    a submit button to send the results to the database.
+
+    Args:
+        interview_id (int): Interview ID.
+
+    Returns:
+        Response: Flask response object.
+    """
+    config_file = utils.get_config_file_path()
+    metadata: Metadata = Metadata(flask.request)
+
+    form = QcForm()
+
+    if form.validate_on_submit():
+        print("Form validated.")
+
+        user_id = form.user_id.data
+        comments = form.comments.data
+        issues_found = form.issues_found.data
+        no_issues = form.no_issues.data
+
+        print(f"User ID: {user_id}")
+        print(f"Comments: {comments}")
+        print(f"Issues Found: {issues_found}")
+        print(f"No Issues: {no_issues}")
+
+        if user_id:
+            submit_qc_results(
+                interview_id=interview_id,
+                user_id=user_id,
+                comments=comments,
+                issues_found=issues_found,  # type: ignore
+                qc_pass=no_issues,
+            )
+
+            flask.flash("Saved QC results to DB successfully.")
+
+            return flask.redirect(
+                flask.url_for("show_qc_form", interview_id=interview_id)
+            )  # type: ignore
+
+    has_existing_data: bool = False
+    qc_results = get_qc_results(interview_id)
+
+    interview_name_query = f"""
+    SELECT interview_name FROM interviews
+    WHERE interview_id = {interview_id};
+    """
+
+    interview_name = db.fetch_record(
+        config_file=config_file, query=interview_name_query
+    )
+
+    interview_video_query = f"""
+    SELECT interview_file FROM interviews
+    LEFT JOIN interview_files USING (interview_path)
+    WHERE interview_id = {interview_id} AND interview_file_tags LIKE '%%video%%'
+    """
+
+    interview_files_df = db.execute_sql(
+        config_file=config_file, query=interview_video_query
+    )
+    if interview_files_df.empty:
+        interview_files = None
+        has_multiple_videos = False
+    else:
+        interview_files = interview_files_df["interview_file"].tolist()
+        interview_file = f"[{interview_files[0]}]"
+        if len(interview_files) > 1:
+            has_multiple_videos = True
+        else:
+            has_multiple_videos = False
+
+    # interview_videos = get_openface_video(interview_name)  # type: ignore
+    # if interview_videos is None:
+    #     subject_video = None
+    #     interviewer_video = None
+    # else:
+    #     subject_video = f"[{interview_videos[0]}]"
+    #     if len(interview_videos) > 1:
+    #         interviewer_video = f"[{interview_videos[1]}]"
+
+    # pdf_report = get_pdf_report(interview_id)
+    # pdf_report = f"[{pdf_report}]"
+
+    if qc_results is not None:
+        has_existing_data = True
+        form.user_id.data = qc_results["qc_user"]
+        form.comments.data = qc_results["qc_comment"]
+        form.issues_found.data = qc_results["qc_issues_found"]  # type: ignore
+        form.no_issues.data = qc_results["qc_pass"]  # type: ignore
+
+    return flask.Response(
+        flask.render_template(
+            "qc_form.html",
+            metadata=metadata,
+            title="QC Form",
+            interview_id=interview_id,
+            interview_name=interview_name,
+            form=form,
+            has_existing_data=has_existing_data,
+            interview_video=interview_file,
+            has_multiple_videos=has_multiple_videos,
+            # interview_pdf=pdf_report,
+        )
+    )
 
 
 @app.route("/")
@@ -509,3 +788,4 @@ def index() -> flask.Response:
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=45000, debug=True)
+

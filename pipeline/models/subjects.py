@@ -3,8 +3,12 @@ Subject Model
 """
 
 from datetime import datetime
+from typing import Optional
+import logging
 
 from pipeline.helpers import db
+
+logger = logging.getLogger(__name__)
 
 
 class Subject:
@@ -68,6 +72,39 @@ class Subject:
         """
 
         return sql_query
+
+    @staticmethod
+    def get_consent_date(study_id: str, subject_id: str, config_file) -> Optional[datetime]:
+        """
+        Return the consent date of the subject.
+
+        Args:
+            study_id (str): The study ID.
+            subject_id (str): The subject ID.
+
+        Returns:
+            datetime: The consent date of the subject.
+        """
+        sql_query = f"""
+        SELECT consent_date
+        FROM subjects
+        WHERE study_id = '{study_id}' AND subject_id = '{subject_id}';
+        """
+
+        result = db.fetch_record(
+            query=sql_query,
+            config_file=config_file,
+        )
+
+        if result is None:
+            return None
+        else:
+            try:
+                result_dt = datetime.strptime(result, "%Y-%m-%d")
+            except ValueError:
+                logger.error(f"Error parsing consent date {result} for {subject_id}")
+                raise
+            return result_dt
 
     def to_sql(self) -> str:
         """

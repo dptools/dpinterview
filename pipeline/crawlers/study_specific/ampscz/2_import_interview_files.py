@@ -42,6 +42,7 @@ from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
+from pipeline.models.interview_parts import InterviewParts
 from pipeline.models.interviews import Interview, InterviewType
 
 MODULE_NAME = "import_interview_files"
@@ -140,7 +141,7 @@ def catogorize_audio_files(
     return files
 
 
-def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
+def fetch_interview_files(interview_part: InterviewParts) -> List[InterviewFile]:
     """
     Fetches the interview files for a given interview.
 
@@ -152,9 +153,17 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
     """
 
     interview_files: List[InterviewFile] = []
-    subject_id = interview.subject_id
 
-    interview_path = interview.interview_path
+    dp_dash_dict = dpdash.parse_dpdash_name(
+        interview_part.interview_name
+    )
+    subject_id = dp_dash_dict["subject"]
+    if not isinstance(subject_id, str):
+        logger.error(f"Could not parse subject ID from {interview_part.interview_name}")
+        logger.error(f"dp_dash_dict: {dp_dash_dict}")
+        logger.error(f"subject_id: {subject_id} - {type(subject_id)}")
+        raise ValueError(f"Could not parse subject ID from {interview_part.interview_name}")
+    interview_path = interview_part.interview_path
 
     if interview_path.is_file():
         interview_files.append(
@@ -211,9 +220,50 @@ def fetch_interview_files(interview: Interview) -> List[InterviewFile]:
     return interview_files
 
 
+def handle_multi_part_interviews(
+    interview_parts: List[InterviewParts]
+) -> List[InterviewParts]:
+    """
+    Sorts and groups the interviews by day, fixing part numbers chronologically.
+
+    Args:
+        interview_parts (List[InterviewParts]): A list of InterviewParts objects, with arbitrary part numbers.
+
+    Returns:
+        List[InterviewParts]: A list of InterviewParts objects, with part numbers fixed.
+    """
+    # sort the interviews by datetime
+    interview_parts.sort(key=lambda x: x.interview_datetime)
+
+    for idx, interview in enumerate(interview_parts):
+        if idx == 0:
+            prev_interview = None
+            # interview_name_w_session = f"{interview.interview_name}-part{1:03d}"
+            # interview.interview_name = interview_name_w_session
+            interview.interview_part = 1
+        else:
+            prev_interview = interview_parts[idx - 1]
+
+            current_interview_date = interview.interview_datetime.date()
+            prev_interview_date = prev_interview.interview_datetime.date()
+
+            if prev_interview_date == current_interview_date:
+                prev_interview_session_number = prev_interview.interview_part
+                interview.interview_part = prev_interview_session_number + 1
+                # interview_name_w_session = f"{interview.interview_name}-part{interview.interview_part:03d}"
+                # interview.interview_name = interview_name_w_session
+            else:
+                prev_interview = None
+                interview.interview_part = 1
+                # interview_name_w_session = f"{interview.interview_name}-part{1:03d}"
+                # interview.interview_name = interview_name_w_session
+
+    return interview_parts
+
+
 def fetch_interviews(
     config_file: Path, subject_id: str, study_id: str
-) -> List[Interview]:
+) -> List[InterviewParts]:
     """
     Fetches the interviews for a given subject ID.
 
@@ -230,7 +280,7 @@ def fetch_interviews(
     study_path: Path = data_root / "PROTECTED" / study_id
     interview_types: List[InterviewType] = [InterviewType.OPEN, InterviewType.PSYCHS]
 
-    interviews: List[Interview] = []
+    interview_parts: List[InterviewParts] = []
     for interview_type in interview_types:
         interview_type_path = (
             study_path / "raw" / subject_id / "interviews" / interview_type.value
@@ -244,21 +294,26 @@ def fetch_interviews(
             continue
         interview_dirs = [d for d in interview_type_path.iterdir() if d.is_dir()]
 
+        interview_type_parts: List[InterviewParts] = []
         for interview_dir in interview_dirs:
             base_name = interview_dir.name
             parts = base_name.split(" ")
 
             try:
                 date_dt = date.fromisoformat(parts[0])
+                # time format: 14.35.34
+                actual_time_dt = time.fromisoformat(parts[1].replace(".", ":"))
                 # Time is of the form HH.MM.SS
                 # Ignore time information, to get accurate day
                 time_dt = time.fromisoformat("00:00:00")
                 interview_datetime = datetime.combine(date_dt, time_dt)
-            except ValueError:
+                actual_interview_datetime = datetime.combine(date_dt, actual_time_dt)
+            except (ValueError, IndexError):
                 logger.warning(
                     f"{subject_id}: Could not parse date and time from {base_name}. Skipping..."
                 )
                 continue
+
             consent_date_s = core.get_consent_date_from_subject_id(
                 config_file=config_file, subject_id=subject_id, study_id=study_id
             )
@@ -274,33 +329,38 @@ def fetch_interviews(
                 consent_date=consent_date,
                 event_date=interview_datetime,
             )
-
-            interview = Interview(
-                interview_name=interview_name,
-                interview_path=interview_dir,
-                interview_datetime=interview_datetime,
-                interview_type=interview_type,
-                subject_id=subject_id,
-                study_id=study_id,
+            interview_day = dpdash.get_days_between_dates(
+                consent_date=consent_date, event_date=interview_datetime
             )
 
-            interviews.append(interview)
+            interview_part = InterviewParts(
+                interview_name=interview_name,
+                interview_path=interview_dir,
+                interview_day=interview_day,
+                interview_part=1,
+                interview_datetime=actual_interview_datetime,
+            )
 
-        wav_files = list(interview_type_path.glob("*.WAV"))
+            interview_type_parts.append(interview_part)
+
+        wav_files = [
+            f for f in interview_type_path.glob("*.WAV")
+            if not f.name.startswith(".check_sum_")
+        ]
 
         for wav_file in wav_files:
             interview_datetime_str = wav_file.stem  # YYYYMMDDHHMMSS
             try:
-                interview_datetime = datetime.strptime(
+                actual_interview_datetime = datetime.strptime(
                     interview_datetime_str, "%Y%m%d%H%M%S"
                 )
                 # truncate time
-                interview_datetime = interview_datetime.replace(
+                interview_datetime = actual_interview_datetime.replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
             except ValueError:
                 logger.warning(
-                    f"Could not parse date and time from {interview_datetime_str}. Skipping..."
+                    f"Could not parse date and time from {wav_file}. Skipping..."
                 )
                 continue
 
@@ -320,19 +380,24 @@ def fetch_interviews(
                 consent_date=consent_date,
                 event_date=interview_datetime,
             )
-
-            interview = Interview(
-                interview_name=interview_name,
-                interview_path=wav_file,
-                interview_datetime=interview_datetime,
-                interview_type=interview_type,
-                subject_id=subject_id,
-                study_id=study_id,
+            interview_day = dpdash.get_days_between_dates(
+                consent_date=consent_date, event_date=interview_datetime
             )
 
-            interviews.append(interview)
+            interview_part = InterviewParts(
+                interview_name=interview_name,
+                interview_path=wav_file,
+                interview_day=interview_day,
+                interview_part=1,
+                interview_datetime=actual_interview_datetime,
+            )
 
-    return interviews
+            interview_type_parts.append(interview_part)
+
+        interview_type_parts = handle_multi_part_interviews(interview_type_parts)
+        interview_parts.extend(interview_type_parts)
+
+    return interview_parts
 
 
 def hash_file_worker(params: Tuple[InterviewFile, Path]) -> File:
@@ -351,7 +416,7 @@ def hash_file_worker(params: Tuple[InterviewFile, Path]) -> File:
 
 
 def generate_queries(
-    interviews: List[Interview],
+    interview_parts: List[InterviewParts],
     interview_files: List[InterviewFile],
     config_file: Path,
     progress: Progress,
@@ -390,9 +455,26 @@ def generate_queries(
     for file in files:
         sql_queries.append(file.to_sql())
 
-    # Insert the interviews
-    for interview in interviews:
+    # Create Interview Object from InterviewParts
+    for interview_part in interview_parts:
+        dp_dash_dict = dpdash.parse_dpdash_name(interview_part.interview_name)
+        subject_id = dp_dash_dict["subject"]
+        study_id = dp_dash_dict["study"]
+        data_type = dp_dash_dict["data_type"]
+
+        interview_type = InterviewType(utils.camel_case_split(data_type)[0])  # type: ignore
+        interview = Interview(
+            interview_name=interview_part.interview_name,
+            interview_type=interview_type,
+            subject_id=subject_id,  # type: ignore
+            study_id=study_id,  # type: ignore
+        )
+
         sql_queries.append(interview.to_sql())
+
+    # Insert the interviews parts
+    for interview_part in interview_parts:
+        sql_queries.append(interview_part.to_sql())
 
     # Insert the interview files
     for interview_file in interview_files:
@@ -414,14 +496,14 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
 
     # Get the interviews
     logger.info(f"Fetching interviews for {study_id}")
-    interviews: List[Interview] = []
+    interview_parts: List[InterviewParts] = []
 
     task = progress.add_task("Fetching interviews for subjects", total=len(subjects))
     for subject_id in subjects:
         progress.update(
             task, advance=1, description=f"Fetching {subject_id}'s interviews..."
         )
-        interviews.extend(
+        interview_parts.extend(
             fetch_interviews(
                 config_file=config_file, subject_id=subject_id, study_id=study_id
             )
@@ -433,23 +515,23 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     interview_files: List[InterviewFile] = []
 
     interview_counter = 0
-    task = progress.add_task("Fetching interview files...", total=len(interviews))
-    for interview in interviews:
+    task = progress.add_task("Fetching interview files...", total=len(interview_parts))
+    for interview_part in interview_parts:
         interview_counter += 1
         progress.update(task, advance=1)
-        interview_files.extend(fetch_interview_files(interview=interview))
+        interview_files.extend(fetch_interview_files(interview_part=interview_part))
     progress.remove_task(task)
 
     # Generate the SQL queries to import the interview files
     sql_queries = generate_queries(
-        interviews=interviews,
+        interview_parts=interview_parts,
         interview_files=interview_files,
         config_file=config_file,
         progress=progress,
     )
 
     # Execute the SQL queries
-    db.execute_queries(config_file=config_file, queries=sql_queries)
+    db.execute_queries(config_file=config_file, queries=sql_queries, show_commands=False)
 
 
 def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
@@ -466,16 +548,23 @@ def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
         None
     """
     query = f"""
-    WITH duplicate_interview_names AS (
-        SELECT interview_name
-        FROM public.interviews
-        GROUP BY interview_name
-        HAVING COUNT(*) = 1
+    WITH duplicate_groups AS (
+        SELECT ip.interview_name, ip.interview_day
+        FROM public.interview_parts ip
+        JOIN public.interviews i ON ip.interview_name = i.interview_name
+        WHERE i.study_id = '{study_id}'
+        GROUP BY ip.interview_name, ip.interview_day
+        HAVING COUNT(*) > 1
     )
-    UPDATE public.interviews
-    SET is_primary = TRUE
-    WHERE interview_name IN (SELECT interview_name FROM duplicate_interview_names) AND
-        study_id = '{study_id}';
+    UPDATE public.interview_parts ip
+    SET is_primary = true
+    FROM public.interviews i
+    WHERE ip.interview_name = i.interview_name
+    AND i.study_id = '{study_id}'
+    AND (ip.interview_name, ip.interview_day) NOT IN (
+        SELECT dg.interview_name, dg.interview_day
+        FROM duplicate_groups dg
+    );
     """
 
     db.execute_queries(config_file=config_file, queries=[query])

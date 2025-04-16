@@ -129,14 +129,23 @@ def make_standard_deviation_heatmap(
                 df_heatmap.loc[i, feature] = max_val
             elif df_heatmap.loc[i, feature] < min_val:
                 df_heatmap.loc[i, feature] = min_val
+            else:
+                current_value = df_heatmap.loc[i, feature]
+                new_value = ((current_value - min_val) / (max_val - min_val)) * max_val
+                df_heatmap.loc[i, feature] = new_value
 
     # Normalize the data if normalize is True
     if normalize:
-        df_heatmap[features] = df_heatmap[features].apply(
-            lambda x: (
-                (x - x.min()) / (x.max() - x.min()) if (x.max() - x.min()) != 0 else 0
+        for col, feature in zip(cols, features):
+            dist_mean = fau_avgs[col]
+            dist_std = fau_stds[col]
+
+            max_val = dist_mean + (3 * dist_std)
+            min_val = dist_mean - (3 * dist_std)
+
+            df_heatmap[feature] = df_heatmap[feature].apply(
+                lambda x: ((x - min_val) / (max_val - min_val))
             )
-        )
 
     # Setup Color Map
     cmap: mpl.colors.Colormap = mpl.colormaps["bwr"]  # type: ignore

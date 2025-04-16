@@ -40,12 +40,13 @@ def get_file_to_process(
     sql_query = f"""
         SELECT vs.vs_path, vs.ir_role, vs.video_path, if.interview_name
         FROM video_streams AS vs
-        INNER JOIN (
+        LEFT JOIN (
             SELECT decrypted_files.destination_path, interview_files.interview_file_tags, interviews.interview_name
             FROM interview_files
-            JOIN decrypted_files
+            LEFT JOIN decrypted_files
                 ON interview_files.interview_file = decrypted_files.source_path
-            join interviews using (interview_path)
+            LEFT JOIN interview_parts USING (interview_path)
+            LEFT JOIN interviews USING (interview_name)
         ) AS if
         ON vs.video_path = if.destination_path
         WHERE vs.vs_path NOT IN (
@@ -53,7 +54,8 @@ def get_file_to_process(
         ) AND vs.video_path IN (
             SELECT destination_path FROM decrypted_files
             JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
-            JOIN interviews USING (interview_path)
+            LEFT JOIN interview_parts USING (interview_path)
+            LEFT JOIN interviews USING (interview_name)
             WHERE interviews.study_id = '{study_id}'
         )
         ORDER BY RANDOM()
@@ -98,7 +100,8 @@ def get_other_stream_to_process(
             FROM interview_files
             JOIN decrypted_files
                 ON interview_files.interview_file = decrypted_files.source_path
-            join interviews using (interview_path)
+            LEFT JOIN interview_parts USING (interview_path)
+            LEFT JOIN interviews USING (interview_name)
         ) AS if
         ON vs.video_path = if.destination_path
         WHERE NOT EXISTS (

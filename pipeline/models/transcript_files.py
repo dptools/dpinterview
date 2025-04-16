@@ -30,17 +30,19 @@ class TranscriptFile:
 
     Attributes:
         transcript_file (Path): The path to the file.
-        interview_name (str): The name of the interview.
+        identifier_name (str): The name of the interview / diary.
+        identifier_type (str): Is the transcript file associated with an interview or diary?
         tags (str): The tags associated with the file.
     """
 
-    def __init__(self, transcript_file: Path, interview_name: str, tags: str):
+    def __init__(self, transcript_file: Path, identifier_name: str, identifier_type: str, tags: str):
         self.transcript_file = transcript_file
-        self.interview_name = interview_name
+        self.identifier_name = identifier_name
+        self.identifier_type = identifier_type
         self.tags = tags
 
     def __str__(self):
-        return f"TranscriptFile({self.transcript_file}, {self.interview_name})"
+        return f"TranscriptFile({self.transcript_file}, {self.identifier_name}, {self.identifier_type})"
 
     def __repr__(self):
         return self.__str__()
@@ -65,7 +67,8 @@ class TranscriptFile:
         sql_query = """
         CREATE TABLE IF NOT EXISTS transcript_files (
             transcript_file TEXT UNIQUE NOT NULL REFERENCES files (file_path),
-            interview_name TEXT NOT NULL,
+            identifier_name TEXT NOT NULL,
+            identifier_type TEXT NOT NULL,
             transcript_file_tags TEXT,
             PRIMARY KEY (transcript_file)
         );
@@ -78,10 +81,14 @@ class TranscriptFile:
         Return the SQL query to insert the object into the 'transcript_files' table.
         """
         sql_query = f"""
-        INSERT INTO transcript_files (transcript_file, interview_name, transcript_file_tags)
-        VALUES ('{self.transcript_file}', '{self.interview_name}', '{self.tags}')
+        INSERT INTO transcript_files (transcript_file, identifier_name,
+            identifier_type, transcript_file_tags)
+        VALUES ('{self.transcript_file}', '{self.identifier_name}',
+            '{self.identifier_type}', '{self.tags}')
         ON CONFLICT (transcript_file)
-        DO UPDATE SET interview_name = '{self.interview_name}', transcript_file_tags = '{self.tags}';
+        DO UPDATE SET identifier_name = '{self.identifier_name}',
+            identifier_type = '{self.identifier_type}',
+            transcript_file_tags = '{self.tags}';
         """
 
         return sql_query

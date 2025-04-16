@@ -13,6 +13,7 @@ import pandas as pd
 from pipeline import constants
 from pipeline.helpers import db, dpdash, utils
 from pipeline.models.interview_roles import InterviewRole
+from pipeline.models.exported_assets import ExportedAsset
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,7 @@ def get_openface_path(
     config_file: Path,
     interview_name: str,
     role: InterviewRole,
+    redirect_to_exported_assets: bool = False,
 ) -> Optional[Path]:
     """
     Get the path to the openface directory for the given interview, subject, and role.
@@ -176,8 +178,14 @@ subject {subject_id}, study {study_id}: Probably not loaded into the database ye
     except TypeError:
         return None
 
-    if not of_path.exists():
-        raise FileNotFoundError(f"OpenFace path {of_path} does not exist")
+    if not of_path.exists() and redirect_to_exported_assets:
+        # check if exported assets contains the path
+        asset = ExportedAsset.get_exported_path(
+            local_path=of_path, config_file=config_file
+        )
+        if asset is None:
+            raise FileNotFoundError(f"OpenFace path {of_path} does not exist")
+        of_path = asset
 
     return of_path
 
@@ -186,6 +194,7 @@ def get_openfece_features_overlaid_video_path(
     config_file: Path,
     interview_name: str,
     role: InterviewRole,
+    redirect_to_exported_assets: bool = False,
 ) -> Optional[Path]:
     """
     Get the path to the openface directory for the given interview, subject, and role.
@@ -208,6 +217,15 @@ def get_openfece_features_overlaid_video_path(
 
     if of_path is None:
         return None
+    else:
+        if not of_path.exists() and redirect_to_exported_assets:
+            # check if exported assets contains the path
+            asset = ExportedAsset.get_exported_path(
+                local_path=of_path, config_file=config_file
+            )
+            if asset is None:
+                raise FileNotFoundError(f"OpenFace path {of_path} does not exist")
+            of_path = asset
 
     overlaid_video_path = of_path / "openface_aligned.mp4"
 
@@ -392,7 +410,10 @@ def get_interview_stream(
         role (InterviewRole): The role of the user.
     """
     of_path = get_openface_path(
-        config_file=config_file, interview_name=interview_name, role=role
+        config_file=config_file,
+        interview_name=interview_name,
+        role=role,
+        redirect_to_exported_assets=False,
     )
 
     stream_query = f"""
@@ -404,6 +425,9 @@ def get_interview_stream(
     stream_path = db.fetch_record(config_file=config_file, query=stream_query)
 
     if stream_path is None:
+        logger.warning(
+            f"No video stream found for interview {interview_name} - {of_path}"
+        )
         return None
 
     return Path(stream_path)
@@ -461,34 +485,11 @@ def get_interview_duration(config_file: Path, interview_name: str) -> int:
     results = db.fetch_record(config_file=config_file, query=query)
 
     if results is None:
-        raise ValueError(f"No interview duration found for interview {interview_name}")
+        raise ValueError(
+            f"No interview duration found for interview {interview_name} - {stream_path}"
+        )
 
     return int(float(results))
-
-
-def get_interview_path(interview_name: str, config_file: Path) -> Optional[Path]:
-    """
-    Get the path to the interview for the given interview name.
-
-    Args:
-        interview_name (str): The name of the interview.
-        config_file (Path): The path to the configuration file.
-
-    Returns:
-        Optional[Path]: The path to the interview if found, None otherwise.
-    """
-    query = f"""
-    SELECT interview_path
-    FROM interviews
-    WHERE interview_name = '{interview_name}'
-    """
-
-    result = db.fetch_record(config_file=config_file, query=query)
-
-    if result is not None:
-        interview_path = Path(result)
-
-        return interview_path
 
 
 def list_to_tuple(function: Callable) -> Any:

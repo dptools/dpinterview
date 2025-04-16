@@ -30,7 +30,9 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[str]:
             FROM ffprobe_metadata
         ) AND source_path IN (
             SELECT interview_file
-            FROM interview_files JOIN interviews USING (interview_path)
+            FROM interview_files
+            LEFT JOIN interview_parts USING (interview_path)
+            LEFT JOIN interviews USING (interview_name)
             WHERE study_id = '{study_id}'
         ) AND decrypted = TRUE
         AND requested_by = 'fetch_video'
@@ -48,9 +50,11 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[str]:
                 SELECT fm_source_path
                 FROM ffprobe_metadata
             ) AND video_path IN (
-                SELECT destination_path FROM decrypted_files
-                JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
-                JOIN interviews USING (interview_path)
+                SELECT destination_path
+                FROM decrypted_files
+                LEFT JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+                LEFT JOIN interview_parts USING (interview_path)
+                JOIN interviews USING (interview_name)
                 WHERE interviews.study_id = '{study_id}'
             )
             ORDER BY RANDOM()

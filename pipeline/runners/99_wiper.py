@@ -27,6 +27,7 @@ from typing import List
 from rich.logging import RichHandler
 
 # from pipeline import data
+from pipeline import orchestrator
 from pipeline.core import wipe
 from pipeline.helpers import cli, db, utils
 from pipeline.helpers.timer import Timer
@@ -138,73 +139,75 @@ if __name__ == "__main__":
     logger.info(f"Using config file: {config_file}")
 
     config_params = utils.config(config_file, section="general")
-    study_id = config_params["study"]
+    studies = orchestrator.get_studies(config_file=config_file)
     data_root = Path(config_params["data_root"])
 
     COUNTER = 0
 
-    logger.info("[bold green]Starting wipe loop...", extra={"markup": True})
+    for study_id in studies:
+        logger.info(f"Starting with study: {study_id}", extra={"markup": True})
+        logger.info("[bold green]Starting wipe loop...", extra={"markup": True})
 
-    interview_list = get_interviews_to_wipe(config_file=config_file, study_id=study_id)
+        interview_list = get_interviews_to_wipe(config_file=config_file, study_id=study_id)
 
-    for interview_to_wipe in interview_list:
-        # # Get interview to wipe
-        # interview_to_wipe = wipe.get_interview_to_wipe(
-        #     config_file=config_file, study_id=study_id
-        # )
+        for interview_to_wipe in interview_list:
+            # # Get interview to wipe
+            # interview_to_wipe = wipe.get_interview_to_wipe(
+            #     config_file=config_file, study_id=study_id
+            # )
 
-        # if interview_to_wipe is None:
-        #     # Log if any interviews were wiped
-        #     if COUNTER > 0:
-        #         data.log(
-        #             config_file=config_file,
-        #             module_name=MODULE_NAME,
-        #             message=f"Wiped {COUNTER} interviews.",
-        #         )
-        #         COUNTER = 0
+            # if interview_to_wipe is None:
+            #     # Log if any interviews were wiped
+            #     if COUNTER > 0:
+            #         data.log(
+            #             config_file=config_file,
+            #             module_name=MODULE_NAME,
+            #             message=f"Wiped {COUNTER} interviews.",
+            #         )
+            #         COUNTER = 0
 
-        #     # Exit if no interviews to wipe
-        #     logger.info("No interviews to wipe.")
-        #     sys.exit(0)
-
-        COUNTER += 1
-        logger.info(
-            f"Wiping interview: [bold blue]{interview_to_wipe}",
-            extra={"markup": True},
-        )
-
-        related_files = wipe.get_interview_files(
-            config_file=config_file, interview_name=interview_to_wipe
-        )
-        drop_queries = wipe.drop_interview_queries(
-            config_file=config_file, interview_name=interview_to_wipe
-        )
-
-        with Timer() as timer:
-            # if not cli.confirm_action(
-            #     f"Interview '{interview_to_wipe}' will be wiped. Do you want to continue?"
-            # ):
-            #     logger.info("Exiting...")
+            #     # Exit if no interviews to wipe
+            #     logger.info("No interviews to wipe.")
             #     sys.exit(0)
-            delete_files(files=related_files, data_root=data_root)
 
-            logger.info("Droping openface features...")
-            wipe.drop_openface_features_query(
+            COUNTER += 1
+            logger.info(
+                f"Wiping interview: [bold blue]{interview_to_wipe}",
+                extra={"markup": True},
+            )
+
+            related_files = wipe.get_interview_files(
                 config_file=config_file, interview_name=interview_to_wipe
             )
-            try:
-                db.execute_queries(
-                    config_file=config_file,
-                    queries=drop_queries,
-                    show_commands=True,
+            drop_queries = wipe.drop_interview_queries(
+                config_file=config_file, interview_name=interview_to_wipe
+            )
+
+            with Timer() as timer:
+                # if not cli.confirm_action(
+                #     f"Interview '{interview_to_wipe}' will be wiped. Do you want to continue?"
+                # ):
+                #     logger.info("Exiting...")
+                #     sys.exit(0)
+                delete_files(files=related_files, data_root=data_root)
+
+                logger.info("Droping openface features...")
+                wipe.drop_openface_features_query(
+                    config_file=config_file, interview_name=interview_to_wipe
                 )
-            except Exception as e:
-                logger.error(f"Error: {e}")
-                logger.error("Continuing...")
-        logger.info(
-            f"Wiped interview: [bold blue]{interview_to_wipe} in {timer.duration} seconds.",
-            extra={"markup": True},
-        )
+                try:
+                    db.execute_queries(
+                        config_file=config_file,
+                        queries=drop_queries,
+                        show_commands=True,
+                    )
+                except Exception as e:
+                    logger.error(f"Error: {e}")
+                    logger.error("Continuing...")
+            logger.info(
+                f"Wiped interview: [bold blue]{interview_to_wipe} in {timer.duration} seconds.",
+                extra={"markup": True},
+            )
 
     wipe.wipe_all_interview_data(config_file=config_file)
 
