@@ -32,17 +32,32 @@ def get_interview_name_to_process(
     """
 
     query = f"""
-        SELECT interview_name
-        FROM load_openface
-        WHERE study_id = '{study_id}' AND
-            lof_report_generation_possible = TRUE AND
-            interview_name NOT IN (
-                SELECT interview_name
-                FROM pdf_reports
-                WHERE pr_version = '{report_version}'
+    SELECT
+        interview_name
+    FROM
+        load_openface
+    WHERE
+        study_id = '{study_id}'
+        AND lof_report_generation_possible = TRUE
+        AND interview_name NOT IN (
+            SELECT interview_name
+            FROM pdf_reports
+            WHERE pr_version = '{report_version}'
+        )
+        AND subject_of_processed_path IN (
+            SELECT of_processed_path
+            FROM openface_qc
+        )
+        AND (
+            interviewer_of_processed_path IS NULL
+            OR interviewer_of_processed_path IN (
+                SELECT of_processed_path
+                FROM openface_qc
             )
-        ORDER BY RANDOM()
-        LIMIT 1;
+        )
+    ORDER BY
+        RANDOM()
+    LIMIT 1;
     """
 
     interview_name = db.fetch_record(config_file=config_file, query=query)
