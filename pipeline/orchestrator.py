@@ -277,7 +277,7 @@ def request_decrytion(config_file: Path):
     query = """
         UPDATE key_store
         SET value = 'enabled'
-        WHERE name = 'decryption';
+        WHERE name = 'fetch_video';
     """
 
     db.execute_queries(
