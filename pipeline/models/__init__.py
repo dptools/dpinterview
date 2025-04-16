@@ -9,6 +9,7 @@ from pipeline.models.study import Study
 from pipeline.models.subjects import Subject
 from pipeline.models.interviews import InterviewType
 from pipeline.models.interviews import Interview
+from pipeline.models.interview_parts import InterviewParts
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
 from pipeline.models.key_store import KeyStore
@@ -23,7 +24,10 @@ from pipeline.models.load_openface import LoadOpenface
 from pipeline.models.pdf_reports import PdfReport
 from pipeline.models.ffprobe_metadata import FfprobeMetadata
 from pipeline.models.fau_role_validation import FauRoleValidation
-from pipeline.models.transcript_quick_qc import TranscriptQuickQc
+from pipeline.models.transcript_files import TranscriptFile
+from pipeline.models.llm_language_identification import LlmLanguageIdentification
+from pipeline.models.llm_speaker_identification import LlmSpeakerIdentification
+from pipeline.models.audio_journals import AudioJournal
 
 from pipeline.helpers import db
 
@@ -66,9 +70,13 @@ def init_db(config_file: Path):
         VideoStream.drop_table_query(),
         InterviewRole.drop_table_query(),
         VideoQuickQc.drop_table_query(),
+        LlmSpeakerIdentification.drop_table_query(),
+        LlmLanguageIdentification.drop_table_query(),
+        TranscriptFile.drop_table_query(),
+        AudioJournal.drop_table_query(),
         DecryptedFile.drop_table_query(),
-        TranscriptQuickQc.drop_table_query(),
         InterviewFile.drop_table_query(),
+        InterviewParts.drop_table_query(),
         Interview.drop_table_query(),
         InterviewType.drop_table_query(),
         File.drop_table_query(),
@@ -86,10 +94,9 @@ def init_db(config_file: Path):
         Subject.init_table_query(),
         InterviewType.init_table_query(),
         Interview.init_table_query(),
-        Interview.post_init_queries(),
+        InterviewParts.init_table_query(),
         File.init_table_query(),
         InterviewFile.init_table_query(),
-        TranscriptQuickQc.init_table_query(),
         DecryptedFile.init_table_query(),
         VideoQuickQc.init_table_query(),
         InterviewRole.init_table_query(),
@@ -100,6 +107,10 @@ def init_db(config_file: Path):
         FauRoleValidation.init_table_query(),
         PdfReport.init_table_query(),
         FfprobeMetadata.init_table_query(),
+        TranscriptFile.init_table_query(),
+        LlmLanguageIdentification.init_table_query(),
+        LlmSpeakerIdentification.init_table_query(),
+        AudioJournal.init_table_query(),
     ]
 
     drop_queries = flatten_list(drop_queries_l)

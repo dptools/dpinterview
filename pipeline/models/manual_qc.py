@@ -34,34 +34,30 @@ class ManualQC:
     Interview-specific manual QC.
 
     Attributes:
-        interview_id (int): The interview ID.
-        qc_comments (str): The manual QC comments.
+        qc_target_id (str): The ID of the target
+        qc_target_type (str): The type of the target
         qc_data (dict): The manual QC data.
         qc_user_id (str): The ID of the user who performed the manual QC.
-        qc_timestamp (datetime): The timestamp of when the manual QC was
     """
 
     def __init__(
         self,
-        interview_id: int,
-        qc_comments: str,
+        qc_target_id: str,
+        qc_target_type: str,
         qc_data: Dict[str, Any],
         qc_user_id: str,
-        qc_timestamp: datetime,
     ):
-        self.interview_id = interview_id
-        self.qc_comments = qc_comments
+        self.qc_target_id = qc_target_id
+        self.qc_target_type = qc_target_type
         self.qc_data = qc_data
         self.qc_user_id = qc_user_id
-        self.qc_timestamp = qc_timestamp
 
     def __repr__(self):
         return f"""ManualQc(
-    interview_id={self.interview_id},
+    qc_target_id={self.qc_target_id},
+    qc_target_type={self.qc_target_type},
     qc_data={self.qc_data},
-    qc_comments={self.qc_comments},
     qc_user_id={self.qc_user_id},
-    qc_timestamp={self.qc_timestamp}
 )"""
 
     def __str__(self):
@@ -74,11 +70,12 @@ class ManualQC:
         """
         sql_query = """
         CREATE TABLE IF NOT EXISTS manual_qc (
-            interview_id INTEGER PRIMARY KEY,
-            qc_comments TEXT,
-            qc_data JSONB,
+            qc_target_id TEXT NOT NULL,
+            qc_target_type TEXT NOT NULL,
+            qc_data JSONB NOT NULL,
             qc_user_id TEXT NOT NULL,
-            qc_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            qc_timestamp TIMESTAMP NOT NULL,
+            PRIMARY KEY (qc_target_id, qc_target_type)
         );
         """
         return sql_query
@@ -111,7 +108,7 @@ class ManualQC:
         return sql_query
 
     @staticmethod
-    def drop_row_query(interview_id: str) -> str:
+    def drop_row_query(qc_target_id: str, qc_target_type: str) -> str:
         """
         Return the SQL query to drop a row from the 'manual_qc' table.
 
@@ -123,7 +120,8 @@ class ManualQC:
         """
         sql_query = f"""
         DELETE FROM manual_qc
-        WHERE interview_id = '{interview_id}';
+        WHERE qc_target_id = '{qc_target_id}'
+        AND qc_target_type = '{qc_target_type}';
         """
         return sql_query
 
@@ -136,16 +134,21 @@ class ManualQC:
 
         sql_query = f"""
         INSERT INTO manual_qc (
-            interview_id, qc_comments, qc_data,
-            qc_user_id, qc_timestamp
+            qc_target_id,
+            qc_target_type,
+            qc_data,
+            qc_user_id,
         ) VALUES (
-            {self.interview_id}, '{self.qc_comments}', '{qc_data_json}',
-            '{self.qc_user_id}', '{self.qc_timestamp}'
-        ) ON CONFLICT (interview_id) DO UPDATE SET
-            qc_comments = '{self.qc_comments}',
+            '{self.qc_target_id}',
+            '{self.qc_target_type}',
+            '{qc_data_json}',
+            '{self.qc_user_id}',
+        )
+        ON CONFLICT (qc_target_id, qc_target_type)
+        DO UPDATE SET
             qc_data = '{qc_data_json}',
             qc_user_id = '{self.qc_user_id}',
-            qc_timestamp = '{self.qc_timestamp}';
+            qc_timestamp = '{datetime.now().isoformat()}'
         """
 
         return sql_query

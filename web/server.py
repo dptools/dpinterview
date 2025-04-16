@@ -29,6 +29,7 @@ from typing import Dict, List, Optional
 
 # from flask import Flask, send_file, request, Response
 import flask
+import flask_cors
 import pandas as pd
 from flask_bootstrap import Bootstrap5
 from flask_wtf import CSRFProtect
@@ -43,6 +44,7 @@ app = flask.Flask(__name__)
 app.secret_key = "5u/9udJzoJWU2DqUSd7MgBpqNOb4ixA1VG2GRz/KI6gkvrm331pA4pTp"
 bootstrap = Bootstrap5(app)
 csrf = CSRFProtect(app)
+cors = flask_cors.CORS(app, resources={r"/*": {"origins": "*"}})
 
 logger = logging.getLogger(__name__)
 logargs = {
@@ -253,6 +255,8 @@ def serve_file(file_path: str) -> flask.Response:
         return flask.send_file(file_path, mimetype="application/pdf")
     elif file_path.endswith(".mp3"):
         return flask.send_file(file_path, mimetype="audio/mpeg")
+    elif file_path.endswith(".WAV"):
+        return flask.send_file(file_path, mimetype="audio/wav")
     elif file_path.endswith(".mp4"):
         return flask.send_file(file_path, mimetype="video/mp4")
     elif file_path.endswith(".m4a"):
@@ -263,6 +267,8 @@ def serve_file(file_path: str) -> flask.Response:
         return flask.send_file(file_path, mimetype="text/vtt")
     elif file_path.endswith(".png"):
         return flask.send_file(file_path, mimetype="image/png")
+    elif file_path.endswith(".txt"):
+        return flask.send_file(file_path, mimetype="text/plain")
     else:
         return flask.Response("File type not supported.", status=400)
 
@@ -282,7 +288,8 @@ def view_transcript(interview_name: str) -> flask.Response:
 
     if interview_name == "random":
         query = """
-        SELECT interview_name FROM transcript_files
+        SELECT identifier_name FROM transcript_files
+        WHERE identifier_type = 'interview'
         ORDER BY RANDOM()
         LIMIT 1;
         """
@@ -623,24 +630,24 @@ def submit_qc_results(
         issues_found (List[str]): Issues found.
         qc_pass (bool): QC pass.
     """
-    qc_data = {
-        "qc_issues_found": issues_found,
-        "qc_pass": qc_pass,
-    }
+    # qc_data = {
+    #     "qc_issues_found": issues_found,
+    #     "qc_pass": qc_pass,
+    # }
 
-    manual_qc = ManualQC(
-        interview_id=interview_id,
-        qc_comments=comments,
-        qc_data=qc_data,
-        qc_user_id=user_id,
-        qc_timestamp=datetime.now(),
-    )
+    # manual_qc = ManualQC(
+    #     interview_id=interview_id,
+    #     qc_comments=comments,
+    #     qc_data=qc_data,
+    #     qc_user_id=user_id,
+    #     qc_timestamp=datetime.now(),
+    # )
 
-    config_file = utils.get_config_file_path()
+    # config_file = utils.get_config_file_path()
 
-    insert_query = manual_qc.to_sql()
+    # insert_query = manual_qc.to_sql()
 
-    db.execute_queries(config_file=config_file, queries=[insert_query])
+    # db.execute_queries(config_file=config_file, queries=[insert_query])
 
 
 @app.route("/interviews/qc/post/interview_id=<interview_id>", methods=("GET", "POST"))
@@ -781,3 +788,4 @@ def index() -> flask.Response:
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=45000, debug=True)
+

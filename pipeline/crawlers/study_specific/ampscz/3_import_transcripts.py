@@ -26,7 +26,7 @@ from typing import List, Tuple
 
 from rich.logging import RichHandler
 
-from pipeline import core, orchestrator
+from pipeline import orchestrator
 from pipeline.helpers import cli, utils, db
 from pipeline.models.files import File
 from pipeline.models.transcript_files import TranscriptFile
@@ -100,13 +100,13 @@ def transcripts_to_models(
             logger.error("Skipping.")
             continue
 
-        interview_path = core.get_interview_path(
-            interview_name=interview_name, config_file=config_file
-        )
+        # interview_path = core.get_interview_path(
+        #     interview_name=interview_name, config_file=config_file
+        # )
 
-        if interview_path is None:
-            logger.warning(f"Interview path not found for {interview_name}. Skipping.")
-            continue
+        # if interview_path is None:
+        #     logger.warning(f"Interview path not found for {interview_name}. Skipping.")
+        #     continue
 
         file = File(file_path=transcript)
         t_file = TranscriptFile(

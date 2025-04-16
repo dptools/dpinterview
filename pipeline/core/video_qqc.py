@@ -31,15 +31,18 @@ def get_file_to_process(
         FROM ffprobe_metadata AS fm
         INNER JOIN (
             SELECT decrypted_files.destination_path, interview_files.interview_file_tags
-            FROM interview_files JOIN decrypted_files ON interview_files.interview_file = decrypted_files.source_path
+            FROM interview_files
+            LEFT JOIN decrypted_files ON interview_files.interview_file = decrypted_files.source_path
         ) AS if
             ON fm.fm_source_path = if.destination_path
         WHERE fm.fm_source_path NOT IN (
             SELECT video_path FROM video_quick_qc
         ) AND fm.fm_source_path IN (
-            SELECT destination_path FROM decrypted_files
-            JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
-            JOIN interviews USING (interview_path)
+            SELECT destination_path
+            FROM decrypted_files
+            LEFT JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+            LEFT JOIN interview_parts USING (interview_path)
+            JOIN interviews USING (interview_name)
             WHERE interviews.study_id = '{study_id}'
         ) AND fm.fm_duration IS NOT NULL
         ORDER BY RANDOM()

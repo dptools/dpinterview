@@ -47,7 +47,7 @@ class InterviewFile:
         """
         sql_query = """
         CREATE TABLE IF NOT EXISTS interview_files (
-            interview_path TEXT NOT NULL REFERENCES interviews (interview_path),
+            interview_path TEXT NOT NULL REFERENCES interview_parts (interview_path),
             interview_file TEXT UNIQUE NOT NULL REFERENCES files (file_path),
             interview_file_tags TEXT,
             ignored BOOLEAN DEFAULT FALSE,
@@ -109,10 +109,12 @@ class InterviewFile:
         """
 
         query = f"""
-            SELECT interview_file FROM interview_files
-            INNER JOIN interviews USING (interview_path)
+            SELECT interview_file
+            FROM interview_files
+            LEFT JOIN interview_parts USING (interview_path)
             WHERE interview_name = '{interview_name}'
-                AND interview_file_tags LIKE '%%{tag}%%';
+                AND interview_parts.is_primary = TRUE
+                AND interview_files.interview_file_tags LIKE '%%{tag}%%';
         """
 
         results_df = db.execute_sql(config_file=config_file, query=query)

@@ -29,17 +29,21 @@ def get_file_to_process(
     sql_query = f"""
         SELECT vqqc.video_path, vqqc.has_black_bars, vqqc.black_bar_height
         FROM video_quick_qc AS vqqc
-        INNER JOIN (
+        LEFT JOIN (
             SELECT decrypted_files.destination_path, interview_files.interview_file_tags
-            FROM interview_files JOIN decrypted_files ON interview_files.interview_file = decrypted_files.source_path
+            FROM interview_files
+            LEFT JOIN decrypted_files ON interview_files.interview_file = decrypted_files.source_path
         ) AS if
             ON vqqc.video_path = if.destination_path
         WHERE vqqc.video_path NOT IN (
-            SELECT video_path FROM video_streams
+            SELECT video_path
+            FROM video_streams
         ) AND vqqc.video_path IN (
-            SELECT destination_path FROM decrypted_files
-            JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
-            JOIN interviews USING (interview_path)
+            SELECT destination_path
+            FROM decrypted_files
+            LEFT JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+            LEFT JOIN interview_parts USING (interview_path)
+            LEFT JOIN interviews USING (interview_name)
             WHERE interviews.study_id = '{study_id}'
         )
         ORDER BY RANDOM()

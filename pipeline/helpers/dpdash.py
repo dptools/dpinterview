@@ -189,6 +189,8 @@ def parse_dpdash_name(name: str) -> Dict[str, Union[str, List[str], None]]:
         if 'session' not in name:
             raise ValueError(f"Invalid name: {name} - session number not found")
         parts = name.split("-", maxsplit=3)
+    elif len(parts) == 4:
+        parts = name.split("-", maxsplit=3)
     else:
         raise ValueError(f"Invalid name: {name} - wrong number of parts({len(parts)})")
 
