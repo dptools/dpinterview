@@ -113,6 +113,7 @@ if __name__ == "__main__":
                     file_to_decrypt=source_path,
                     path_for_decrypted_file=destination_path,
                 )
+                orchestrator.fix_permissions(config_file=config_file, file_path=destination_path)
 
             DecryptedFile.update_decrypted_status(
                 config_file=config_file,
