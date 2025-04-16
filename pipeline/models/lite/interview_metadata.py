@@ -126,6 +126,8 @@ class InterviewMetadata:
         study = dpdash_dict["study"]
         subject = dpdash_dict["subject"]
         study_time = dpdash_dict["time_range"]  # day###
+        if len(study_time.split("-")) > 1:  # type: ignore
+            study_time = study_time.split("-")[0]  # type: ignore
         study_time = study_time[3:]  # type: ignore Remove "day" prefix
         study_day = int(study_time)  # type: ignore
 
