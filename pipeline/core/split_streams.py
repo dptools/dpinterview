@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from pipeline import orchestrator
 from pipeline.helpers import db, dpdash, ffmpeg, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.interview_roles import InterviewRole
@@ -143,7 +144,10 @@ def split_streams(
                     source=video_path,
                     target=stream_file_path,
                     crop_params=crop_params,
-                    progress=progress
+                    progress=progress,
+                )
+                orchestrator.fix_permissions(
+                    config_file=config_file, file_path=stream_file_path
                 )
 
             logger.info(

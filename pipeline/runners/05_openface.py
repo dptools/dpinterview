@@ -158,7 +158,9 @@ if __name__ == "__main__":
                 if study_id == studyies[-1]:
                     logger.info("[bold green] No file to process.")
                     openface.await_decrytion(
-                        config_file=config_file, counter=COUNTER, module_name=MODULE_NAME
+                        config_file=config_file,
+                        counter=COUNTER,
+                        module_name=MODULE_NAME,
                     )
                     COUNTER = 0
                     study_id = studyies[0]
@@ -168,10 +170,11 @@ if __name__ == "__main__":
                     study_id = studyies[studyies.index(study_id) + 1]
                     logger.info(f"[bold green]Switching to study: {study_id}")
                     continue
-                # continue
+
             file_to_process = openface.get_file_to_process(
                 config_file=config_file, study_id=study_id
             )
+            continue
         else:
             SKIP_COUNTER = 0
             COUNTER += 1
@@ -181,15 +184,16 @@ if __name__ == "__main__":
         )
 
         try:
-            process_name = cli.spawn_dummy_process(
-                process_name=str(interview_name)
-            )
+            process_name = cli.spawn_dummy_process(process_name=str(interview_name))
             # Run OpenFace
             with Timer() as timer:
                 openface.run_openface(
                     config_file=config_file,
                     file_path_to_process=video_stream_path,
                     output_path=openface_path,
+                )
+                orchestrator.fix_permissions(
+                    config_file=config_file, file_path=openface_path
                 )
             of_duration = timer.duration
 
@@ -202,11 +206,13 @@ if __name__ == "__main__":
                     output_video_path=openface_path / "openface_aligned.mp4",
                     temp_dir_prefix=f"{interview_name}_",
                 )
+                orchestrator.fix_permissions(
+                    config_file=config_file,
+                    file_path=openface_path / "openface_aligned.mp4",
+                )
             overlay_duration = timer.duration
 
-            cli.kill_processes(
-                process_name=process_name
-            )
+            cli.kill_processes(process_name=process_name)
         except KeyboardInterrupt:
             logger.error("KeyboardInterrupt: Exiting...")
             logger.info("Cleaning up...")
