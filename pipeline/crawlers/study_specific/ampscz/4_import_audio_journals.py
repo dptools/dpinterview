@@ -11,7 +11,7 @@ file = Path(__file__).resolve()
 parent = file.parent
 ROOT = None
 for parent in file.parents:
-    if parent.name == "av-pipeline-v2":
+    if parent.name == "dpinterview":
         ROOT = parent
 sys.path.append(str(ROOT))
 

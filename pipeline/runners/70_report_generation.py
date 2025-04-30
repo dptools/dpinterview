@@ -10,7 +10,7 @@ file = Path(__file__).resolve()
 parent = file.parent
 ROOT = None
 for parent in file.parents:
-    if parent.name == "av-pipeline-v2":
+    if parent.name == "dpinterview":
         ROOT = parent
 sys.path.append(str(ROOT))
 
@@ -94,7 +94,7 @@ if __name__ == "__main__":
         "[bold green]Starting report_generation loop...", extra={"markup": True}
     )
     study_id = studies[0]
-    logger.info(f"Statring with study: {study_id}")
+    logger.info(f"Starting with study: {study_id}")
 
     report_params = utils.config(config_file, section="report_generation")
     report_version = report_params["report_version"]
@@ -141,6 +141,10 @@ if __name__ == "__main__":
                 config_file=config_file,
                 interview_name=interview_name,
                 report_path=report_path,
+            )
+            orchestrator.fix_permissions(
+                config_file=config_file,
+                file_path=report_path
             )
 
         pr_generation_time = timer.duration

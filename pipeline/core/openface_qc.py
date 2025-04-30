@@ -31,8 +31,8 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[Path]:
     sql_query = f"""
         SELECT of_processed_path
         FROM openface AS of
-        INNER JOIN video_streams vs USING (vs_path)
-        INNER JOIN (
+        LEFT JOIN video_streams vs USING (vs_path)
+        LEFT JOIN (
             SELECT decrypted_files.destination_path, interview_files.interview_file_tags
             FROM interview_files JOIN decrypted_files
             ON interview_files.interview_file = decrypted_files.source_path
@@ -42,8 +42,9 @@ def get_file_to_process(config_file: Path, study_id: str) -> Optional[Path]:
             SELECT of_processed_path FROM openface_qc
         ) AND vs.video_path IN (
             SELECT destination_path FROM decrypted_files
-            JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
-            JOIN interviews USING (interview_path)
+            LEFT JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+            LEFT JOIN interview_parts USING (interview_path)
+            LEFT JOIN interviews USING (interview_name)
             WHERE interviews.study_id = '{study_id}'
         )
         ORDER BY RANDOM()

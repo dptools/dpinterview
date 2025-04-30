@@ -305,9 +305,10 @@ def get_interview_visit_count(config_file: Path, interview_name: str) -> Optiona
 
     sql_query = f"""
         SELECT buffer.interview_count FROM (
-            SELECT interview_name, interview_date,
-                DENSE_RANK() OVER(ORDER BY interview_date ASC) AS interview_count
-            FROM interviews AS osi
+            SELECT interview_name, interview_datetime,
+                DENSE_RANK() OVER(ORDER BY interview_datetime ASC) AS interview_count
+            FROM interview_parts
+            LEFT JOIN interviews USING (interview_name)
             WHERE subject_id = '{subject_id}'
         ) AS buffer
         WHERE buffer.interview_name = '{interview_name}';
@@ -358,9 +359,11 @@ def get_interview_datetime(config_file: Path, interview_name: str) -> datetime:
         datetime: The datetime of the interview.
     """
     query = f"""
-    SELECT interview_date
-    FROM interviews
-    WHERE interview_name = '{interview_name}';
+    SELECT interview_datetime
+    FROM interview_parts
+    LEFT JOIN interviews USING (interview_name)
+    WHERE interview_name = '{interview_name}' AND
+        is_primary = TRUE;
     """
 
     results = db.fetch_record(config_file=config_file, query=query)

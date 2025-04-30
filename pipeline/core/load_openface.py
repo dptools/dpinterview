@@ -32,14 +32,13 @@ def get_interview_to_process(config_file: Path, study_id: str):
     query = f"""
     SELECT interview_files.interview_name
     FROM openface
-    INNER JOIN video_streams USING (vs_path)
-    INNER JOIN (
-        SELECT decrypted_files.destination_path, interviews.interview_name
+    LEFT JOIN video_streams USING (vs_path)
+    LEFT JOIN (
+        SELECT decrypted_files.destination_path, interview_parts.interview_name
         FROM interview_files
-        JOIN decrypted_files
+        LEFT JOIN decrypted_files
         ON interview_files.interview_file = decrypted_files.source_path
-        JOIN interviews
-        ON interview_files.interview_path = interviews.interview_path
+        LEFT JOIN interview_parts USING (interview_path)
     ) AS interview_files
     ON video_streams.video_path = interview_files.destination_path
     WHERE interview_files.interview_name NOT IN (
@@ -47,26 +46,28 @@ def get_interview_to_process(config_file: Path, study_id: str):
     ) AND interview_files.interview_name NOT IN (  -- Exclude interviews that are yet to be processed by OpenFace
         SELECT if.interview_name
         FROM video_streams AS vs
-        INNER JOIN (
-            SELECT decrypted_files.destination_path, interview_files.interview_file_tags, interviews.interview_name
+        LEFT JOIN (
+            SELECT decrypted_files.destination_path, interview_files.interview_file_tags, interview_parts.interview_name
             FROM interview_files
-            JOIN decrypted_files
+            LEFT JOIN decrypted_files
                 ON interview_files.interview_file = decrypted_files.source_path
-            join interviews using (interview_path)
+            LEFT JOIN interview_parts using (interview_path)
         ) AS if
         ON vs.video_path = if.destination_path
         WHERE vs.vs_path NOT IN (
             SELECT vs_path FROM openface
         ) AND vs.video_path IN (
             SELECT destination_path FROM decrypted_files
-            JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
-            JOIN interviews USING (interview_path)
+            LEFT JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+            LEFT JOIN interview_parts USING (interview_path)
+            LEFT JOIN interviews USING (interview_name)
             WHERE interviews.study_id = '{study_id}'
         )
     ) AND video_streams.video_path IN (
         SELECT destination_path FROM decrypted_files
-        JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
-        JOIN interviews USING (interview_path)
+        LEFT JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+        LEFT JOIN interview_parts USING (interview_path)
+        LEFT JOIN interviews USING (interview_name)
         WHERE interviews.study_id = '{study_id}'
     )
     ORDER BY RANDOM()
@@ -94,14 +95,13 @@ def get_openface_runs(config_file: Path, interview_name: str) -> pd.DataFrame:
     query = f"""
     SELECT openface.of_processed_path, openface.ir_role, interview_files.interview_name
     FROM openface
-    INNER JOIN video_streams USING (vs_path)
-    INNER JOIN (
-        SELECT decrypted_files.destination_path, interviews.interview_name
+    LEFT JOIN video_streams USING (vs_path)
+    LEFT JOIN (
+        SELECT decrypted_files.destination_path, interview_parts.interview_name
         FROM interview_files
-        JOIN decrypted_files
+        LEFT JOIN decrypted_files
         ON interview_files.interview_file = decrypted_files.source_path
-        JOIN interviews
-        ON interview_files.interview_path = interviews.interview_path
+        LEFT JOIN interview_parts USING (interview_path)
     ) AS interview_files
     ON video_streams.video_path = interview_files.destination_path
     WHERE interview_files.interview_name = '{interview_name}'

@@ -53,7 +53,7 @@ def get_file_to_process(
             SELECT vs_path FROM openface
         ) AND vs.video_path IN (
             SELECT destination_path FROM decrypted_files
-            JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+            LEFT JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
             LEFT JOIN interview_parts USING (interview_path)
             LEFT JOIN interviews USING (interview_name)
             WHERE interviews.study_id = '{study_id}'

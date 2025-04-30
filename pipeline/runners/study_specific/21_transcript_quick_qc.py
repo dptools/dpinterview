@@ -10,7 +10,7 @@ file = Path(__file__).resolve()
 parent = file.parent
 ROOT = None
 for parent in file.parents:
-    if parent.name == "av-pipeline-v2":
+    if parent.name == "dpinterview":
         ROOT = parent
 sys.path.append(str(ROOT))
 
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         "[bold green]Starting transcript_quick_qc loop...", extra={"markup": True}
     )
     study_id = studies[0]
-    logger.info(f"Statring with study: {study_id}")
+    logger.info(f"Starting with study: {study_id}")
 
     while True:
         # Get file to process
