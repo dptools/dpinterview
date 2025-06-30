@@ -11,7 +11,7 @@ from pipeline.models.decrypted_files import DecryptedFile
 
 logger = logging.getLogger(__name__)
 
-INTERVIEWS_TO_FETCH = "offsite"
+INTERVIEWS_TO_FETCH = "open"
 
 
 def get_file_to_decrypt(
