@@ -164,3 +164,50 @@ def images_to_vid(
     with utils.get_progress_bar() as progress:
         progress.add_task("[green]Converting images to video...", total=None)
         cli.execute_commands(command_array=cli_command_array)
+
+
+def convert_audio(
+    source: Path,
+    target: Path,
+) -> None:
+    """
+    Convert an audio file to a different format using FFmpeg.
+
+    Args:
+        source (Path): The path to the input audio file.
+        target (Path): The path to the output audio file.
+
+    Returns:
+        None
+    """
+    cli_command_array = [
+        "ffmpeg",
+        "-y",  # overwrite output file if it exists
+        "-i",
+        str(source),
+        str(target),
+    ]
+
+    source_extension = source.suffix[1:]
+    target_extension = target.suffix[1:]
+
+    # Check if the source and target extensions are the same
+    if source_extension == target_extension:
+        logger.warning(
+            f"[yellow]Source and target extensions are the same: {source_extension} -> {target_extension}",
+            extra={"markup": True},
+        )
+
+    with utils.get_progress_bar() as progress:
+        task = progress.add_task(
+            f"Converting audio ({source_extension} -> {target_extension})...",
+            total=None,
+        )
+        cli.execute_commands(command_array=cli_command_array)
+        progress.remove_task(task)
+        logger.info(
+            f"[green]Converted audio ({source_extension} -> {target_extension})",
+            extra={"markup": True},
+        )
+
+    return None

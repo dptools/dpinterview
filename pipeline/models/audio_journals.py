@@ -37,7 +37,7 @@ class AudioJournal:
     Attributes:
         aj_path (Path): Path to the source file
         aj_name (str): Name of the audio journal
-        aj_date (datetime): Date of the audio journal
+        aj_datetime (datetime): Date of the audio journal
         aj_day (int): Day of the audio journal (1 is the first day / consent day)
         aj_session (int): Session of the audio journal, for multiple audio journals in a day
         subject_id (str): The subject ID of the person in the audio journal
@@ -48,7 +48,7 @@ class AudioJournal:
         self,
         aj_path: Path,
         aj_name: str,
-        aj_date: datetime,
+        aj_datetime: datetime,
         aj_day: int,
         aj_session: int,
         subject_id: str,
@@ -56,7 +56,7 @@ class AudioJournal:
     ):
         self.aj_path = aj_path
         self.aj_name = aj_name
-        self.aj_date = aj_date
+        self.aj_datetime = aj_datetime
         self.aj_day = aj_day
         self.aj_session = aj_session
         self.subject_id = subject_id
@@ -76,8 +76,8 @@ class AudioJournal:
         sql_query = """
         CREATE TABLE IF NOT EXISTS audio_journals (
             aj_path TEXT NOT NULL PRIMARY KEY REFERENCES files (file_path),
-            aj_name TEXT NOT NULL UNIQUE,
-            aj_date DATE NOT NULL,
+            aj_name TEXT NOT NULL,
+            aj_datetime TIMESTAMP NOT NULL,
             aj_day INTEGER NOT NULL,
             aj_session INTEGER NOT NULL,
             subject_id TEXT NOT NULL,
@@ -106,13 +106,15 @@ class AudioJournal:
         """
 
         sanitized_path = db.santize_string(str(self.aj_path))
+
         sql_query = f"""
-        INSERT INTO audio_journals (aj_path, aj_name, aj_date, aj_day,
+        INSERT INTO audio_journals (aj_path, aj_name, aj_datetime, aj_day,
             aj_session, subject_id, study_id)
-        VALUES ('{sanitized_path}', '{self.aj_name}', '{self.aj_date}', {self.aj_day},
+        VALUES ('{sanitized_path}', '{self.aj_name}', '{self.aj_datetime}', {self.aj_day},
             {self.aj_session}, '{self.subject_id}', '{self.study_id}')
-        ON CONFLICT (aj_path) DO UPDATE SET aj_name = excluded.aj_name,
-            aj_date = excluded.aj_date,
+        ON CONFLICT (aj_path) DO UPDATE SET
+            aj_name = excluded.aj_name,
+            aj_datetime = excluded.aj_datetime,
             aj_day = excluded.aj_day,
             aj_session = excluded.aj_session,
             subject_id = excluded.subject_id,
