@@ -344,53 +344,58 @@ class FfprobeMetadata:
                 ) ON CONFLICT (fmv_source_path) DO NOTHING;
             """
         elif stream["codec_type"] == "audio":
-            query = f"""
-                INSERT INTO ffprobe_metadata_audio (
-                    fma_source_path,
-                    fma_requested_by,
-                    fma_index,
-                    fma_codec_name,
-                    fma_codec_long_name,
-                    fma_profile,
-                    fma_codec_type,
-                    fma_codec_tag_string,
-                    fma_codec_tag,
-                    fma_sample_fmt,
-                    fma_sample_rate,
-                    fma_channels,
-                    fma_channel_layout,
-                    fma_bits_per_sample,
-                    fma_r_frame_rate,
-                    fma_avg_frame_rate,
-                    fma_time_base,
-                    fma_start_pts,
-                    fma_start_time,
-                    fma_duration,
-                    fma_extradata_size
-                ) VALUES (
-                    '{source_path}',
-                    '{requested_by}',
-                    {stream['index']},
-                    '{stream['codec_name']}',
-                    '{stream['codec_long_name']}',
-                    '{stream['profile']}',
-                    '{stream['codec_type']}',
-                    '{stream['codec_tag_string']}',
-                    '{stream['codec_tag']}',
-                    '{stream['sample_fmt']}',
-                    {stream['sample_rate']},
-                    {stream['channels']},
-                    '{stream['channel_layout']}',
-                    {stream['bits_per_sample']},
-                    '{stream['r_frame_rate']}',
-                    '{stream['avg_frame_rate']}',
-                    '{stream['time_base']}',
-                    {stream['start_pts']},
-                    '{stream['start_time']}',
-                    '{duration}',
-                    {stream['extradata_size']}
-                ) ON CONFLICT (fma_source_path) DO NOTHING;
-            """
+            try:
+                query = f"""
+                    INSERT INTO ffprobe_metadata_audio (
+                        fma_source_path,
+                        fma_requested_by,
+                        fma_index,
+                        fma_codec_name,
+                        fma_codec_long_name,
+                        fma_profile,
+                        fma_codec_type,
+                        fma_codec_tag_string,
+                        fma_codec_tag,
+                        fma_sample_fmt,
+                        fma_sample_rate,
+                        fma_channels,
+                        fma_channel_layout,
+                        fma_bits_per_sample,
+                        fma_r_frame_rate,
+                        fma_avg_frame_rate,
+                        fma_time_base,
+                        fma_start_pts,
+                        fma_start_time,
+                        fma_duration,
+                        fma_extradata_size
+                    ) VALUES (
+                        '{source_path}',
+                        '{requested_by}',
+                        {stream['index']},
+                        '{stream['codec_name']}',
+                        '{stream['codec_long_name']}',
+                        '{stream.get('profile', 'NULL')}',
+                        '{stream['codec_type']}',
+                        '{stream['codec_tag_string']}',
+                        '{stream['codec_tag']}',
+                        '{stream['sample_fmt']}',
+                        {stream['sample_rate']},
+                        {stream['channels']},
+                        '{stream['channel_layout']}',
+                        {stream['bits_per_sample']},
+                        '{stream['r_frame_rate']}',
+                        '{stream['avg_frame_rate']}',
+                        '{stream['time_base']}',
+                        {stream['start_pts']},
+                        '{stream['start_time']}',
+                        '{duration}',
+                        {stream['extradata_size']}
+                    ) ON CONFLICT (fma_source_path) DO NOTHING;
+                """
+            except KeyError as e:
+                logger.error(f"Key error: {e}")
+                logger.debug(f"Stream: {stream}")
+                raise e
         else:
             logger.warning(f"Unknown codec_type: {stream['codec_type']}")
             logger.info(f"Stream: {stream}")
@@ -460,6 +465,42 @@ class FfprobeMetadata:
 
         sql_queries = []
 
+        keys_to_check = {
+            "format_name": "format_name",
+            "format_long_name": "format_long_name",
+            "duration": "duration",
+            "size": "size",
+            "bit_rate": "bit_rate",
+            "probe_score": "probe_score",
+            "tags": "tags",
+        }
+
+        format_values = {}
+        missing_keys = []
+
+        for key_name, dict_key in keys_to_check.items():
+            value = format_dict.get(dict_key)
+            if value is None:
+                format_values[key_name] = "NULL"
+                missing_keys.append(dict_key)
+            else:
+                format_values[key_name] = value
+
+        format_name = format_values["format_name"]
+        format_long_name = format_values["format_long_name"]
+        duration = format_values["duration"]
+        size = format_values["size"]
+        bit_rate = format_values["bit_rate"]
+        probe_score = format_values["probe_score"]
+        tags = format_values["tags"]
+
+        if missing_keys:
+            for missing_key in missing_keys:
+                logger.error(
+                    f"Key '{missing_key}' missing in 'format' dictionary for {self.source_path}."
+                )
+            logger.debug(f"Format dictionary: {format_dict}")
+
         query = f"""
             INSERT INTO ffprobe_metadata (
                 fm_source_path,
@@ -474,16 +515,17 @@ class FfprobeMetadata:
             ) VALUES (
                 '{self.source_path}',
                 '{self.requested_by}',
-                '{format_dict['format_name']}',
-                '{format_dict['format_long_name']}',
-                '{format_dict['duration']}',
-                '{format_dict['size']}',
-                '{format_dict['bit_rate']}',
-                '{format_dict['probe_score']}',
-                '{db.santize_string(str(format_dict['tags']))}'
+                '{format_name}',
+                '{format_long_name}',
+                '{duration}',
+                '{size}',
+                '{bit_rate}',
+                '{probe_score}',
+                '{db.santize_string(str(tags))}'
             ) ON CONFLICT (fm_source_path) DO NOTHING;
         """
 
+        query = db.handle_null(query)
         sql_queries.append(query)
 
         for stream in streams:
