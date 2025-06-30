@@ -26,7 +26,7 @@ except ValueError:
 import argparse
 import json
 import subprocess
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 import logging
 
 from pipeline.helpers import cli
@@ -47,7 +47,7 @@ class FFProbeResult(NamedTuple):
     error: str
 
 
-def get_metadata(config_file: Path, file_path_to_process: Path) -> dict:
+def get_metadata(config_file: Optional[Path], file_path_to_process: Path) -> dict:
     """
     Retrieves metadata from a file using ffprobe.
 
@@ -70,7 +70,7 @@ def get_metadata(config_file: Path, file_path_to_process: Path) -> dict:
     return metadata
 
 
-def ffprobe(file_path, config_file=None) -> FFProbeResult:
+def ffprobe(file_path: Path, config_file: Optional[Path] = None) -> FFProbeResult:
     """
     Runs ffprobe on a file and returns the result.
 
