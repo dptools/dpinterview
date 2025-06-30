@@ -49,7 +49,7 @@ def handle_nan(query: str) -> str:
     return query
 
 
-def santize_string(string: str) -> str:
+def santize_string(string: str | Path) -> str:
     """
     Sanitizes a string by escaping single quotes.
 
@@ -59,6 +59,7 @@ def santize_string(string: str) -> str:
     Returns:
         str: The sanitized string.
     """
+    string = str(string)
     return string.replace("'", "''")
 
 
@@ -80,6 +81,13 @@ def sanitize_json(json_dict: dict) -> str:
 
     # Replace NaN with NULL
     json_str = json_str.replace("NaN", "null")
+    # Replace infinity values with null
+    json_str = json_str.replace("-Infinity", "null")
+    json_str = json_str.replace("Infinity", "null")
+
+    # Cast True and False to boolean values
+    json_str = json_str.replace("True", "true")
+    json_str = json_str.replace("False", "false")
 
     return json_str
 
@@ -160,9 +168,17 @@ def execute_queries(
 
         orchestrator.fix_permissions(config_file=config_file, file_path=backup_file)
 
+    conn: Optional[psycopg2.extensions.connection] = None
     try:
         credentials = get_db_credentials(config_file=config_file, db=db)
-        conn: psycopg2.extensions.connection = psycopg2.connect(**credentials)  # type: ignore
+        conn = psycopg2.connect(**credentials)  # type: ignore
+
+        if conn is None:
+            raise psycopg2.DatabaseError(
+                "[bold red]Could not establish a connection to the database.",
+                extra={"markup": True},
+            )
+
         cur = conn.cursor()
 
         def execute_query(query: str):

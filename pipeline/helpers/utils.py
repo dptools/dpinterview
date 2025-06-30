@@ -80,7 +80,9 @@ def configure_logging(config_file: Path, module_name: str, logger: logging.Logge
 
         log_file = repo_root / log_file_r
 
-    if log_file.exists() and log_file.stat().st_size > 10000000:  # 10MB
+    # Rotate log file if it exists and is larger than 10MB
+    if log_file.exists() and log_file.stat().st_size > 10 * 1024 * 1024:  # 10 MB
+        logger.info(f"Log file {log_file} is larger than 10MB, rotating...")
         archive_file = (
             log_file.parent
             / "archive"
