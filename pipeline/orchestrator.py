@@ -255,8 +255,10 @@ def log(module_name: str, message: str, config_file: Path) -> None:
     """
     logger.info(f"{module_name}: {message}")
 
+    log_message = db.santize_string(message)
+
     # Log to database
-    db_log(config_file=config_file, module_name=module_name, message=message)
+    db_log(config_file=config_file, module_name=module_name, message=log_message)
     notifications.send_notification(
         title=module_name,
         body=message,

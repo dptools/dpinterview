@@ -84,4 +84,4 @@ def log_metadata(
     sql_queries = ffprobe_metadata.to_sql()
 
     logger.info("Logging metadata...", extra={"markup": True})
-    db.execute_queries(config_file=config_file, queries=sql_queries)
+    db.execute_queries(config_file=config_file, queries=sql_queries, show_commands=False, silent=True)
