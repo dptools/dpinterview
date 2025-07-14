@@ -405,11 +405,14 @@ if __name__ == "__main__":
         "PronetCM",
         "PronetGA",
         "PronetHA",
+        "PronetKC",
         "PronetMA",
         "PronetMT",
         "PronetMU",
         "PronetNC",
+        "PronetNL",
         "PronetNN",
+        "PronetOR",
         "PronetPA",
         "PronetPI",
         "PronetPV",
@@ -423,10 +426,7 @@ if __name__ == "__main__":
     ]
     held_studies = [
         "PronetIR",
-        "PronetKC",
         "PronetLA",
-        "PronetNL",
-        "PronetOR",
         "PronetSI",
     ]
 
