@@ -233,13 +233,12 @@ if __name__ == "__main__":
                     )
                     COUNTER = 0
 
-                # Snooze if no files to process
-                orchestrator.snooze(config_file=config_file)
-                study_id = studies[0]
+                # Exit if all studies are done
                 logger.info(
-                    f"Restarting with study: {study_id}", extra={"markup": True}
+                    "No more audio journals to process. Exiting.",
+                    extra={"markup": True},
                 )
-                continue
+                sys.exit(0)
             else:
                 study_id = studies[studies.index(study_id) + 1]
                 logger.info(f"Switching to study: {study_id}", extra={"markup": True})
