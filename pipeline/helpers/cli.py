@@ -46,7 +46,9 @@ def get_repo_root_from_config(config_file: Path) -> str:
     return repo_root
 
 
-def create_link(source: Path, destination: Path, softlink: bool = True) -> None:
+def create_link(
+    source: Path, destination: Path, softlink: bool = True, overwrite: bool = False
+) -> None:
     """
     Create a link from the source to the destination.
 
@@ -68,8 +70,16 @@ def create_link(source: Path, destination: Path, softlink: bool = True) -> None:
         raise FileNotFoundError
 
     if destination.exists():
-        logger.error(f"Destination path already exists: {destination}")
-        raise FileExistsError
+        if not overwrite:
+            logger.error(f"Destination path already exists: {destination}")
+            raise FileExistsError
+        logger.warning(f"Destination path already exists: {destination}. Overwriting.")
+        remove(destination)
+
+    dest_parent_dir = destination.parent
+    if not dest_parent_dir.exists():
+        logger.debug(f"Creating parent directory: {dest_parent_dir}")
+        dest_parent_dir.mkdir(parents=True, exist_ok=True)
 
     if softlink:
         logger.debug(f"Creating soft link from {source} to {destination}")
@@ -520,7 +530,7 @@ def copy(source: Path, destination: Path) -> None:
         None
     """
     if source.is_dir():
-        shutil.copytree(source, destination)
+        shutil.copytree(source, destination, dirs_exist_ok=True)
     else:
         shutil.copy2(source, destination)
 

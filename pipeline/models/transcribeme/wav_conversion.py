@@ -72,7 +72,7 @@ class WavConversion:
                     ON UPDATE CASCADE
             );
         """
-        return sql_query
+        return [sql_query]
 
     @staticmethod
     def drop_table_query() -> List[str]:
@@ -82,7 +82,7 @@ class WavConversion:
         sql_query = """
             DROP TABLE IF EXISTS transcribeme.wav_conversion;
         """
-        return sql_query
+        return [sql_query]
 
     def to_sql(self) -> str:
         """

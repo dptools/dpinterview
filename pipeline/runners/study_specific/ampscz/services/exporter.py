@@ -108,7 +108,8 @@ SELECT vs_path FROM video_streams
 INNER JOIN video_quick_qc USING(video_path)
 INNER JOIN decrypted_files ON video_streams.video_path = decrypted_files.destination_path
 INNER JOIN interview_files ON decrypted_files.source_path = interview_files.interview_file
-INNER JOIN interviews USING (interview_path)
+INNER JOIN interview_parts USING (interview_path)
+INNER JOIN interviews USING (interview_name)
 INNER JOIN subjects USING(subject_id, study_id)
 WHERE interview_name = '{interview_name}'
 """
@@ -137,7 +138,8 @@ SELECT video_path FROM video_streams
 INNER JOIN video_quick_qc USING(video_path)
 INNER JOIN decrypted_files ON video_streams.video_path = decrypted_files.destination_path
 INNER JOIN interview_files ON decrypted_files.source_path = interview_files.interview_file
-INNER JOIN interviews USING (interview_path)
+INNER JOIN interview_parts USING (interview_path)
+INNER JOIN interviews USING (interview_name)
 INNER JOIN subjects USING(subject_id, study_id)
 WHERE interview_name = '{interview_name}'
 """
@@ -172,7 +174,8 @@ INNER JOIN video_streams USING (vs_path, video_path, ir_role)
 INNER JOIN video_quick_qc USING(video_path)
 INNER JOIN decrypted_files ON video_streams.video_path = decrypted_files.destination_path
 INNER JOIN interview_files ON decrypted_files.source_path = interview_files.interview_file
-INNER JOIN interviews USING (interview_path)
+INNER JOIN interview_parts USING (interview_path)
+INNER JOIN interviews USING (interview_name)
 INNER JOIN subjects USING(subject_id, study_id)
 WHERE interview_name = '{interview_name}'
 """
@@ -356,7 +359,8 @@ def get_interview_files_to_clean(interview_name: str, config_file: Path) -> List
     SELECT destination_path
     FROM decrypted_files
     INNER JOIN interview_files ON decrypted_files.source_path = interview_files.interview_file
-    INNER JOIN interviews USING (interview_path)
+    INNER JOIN interview_parts USING (interview_path)
+    INNER JOIN interviews USING (interview_name)
     WHERE interview_name = '{interview_name}' AND
         requested_by = 'fetch_video'
     """
@@ -494,7 +498,7 @@ if __name__ == "__main__":
 
     COUNTER = 0
 
-    studies = ["external"] + studies
+    # studies = ["external"] + studies
 
     study_id = studies[0]
     logger.info(f"Starting with study: {study_id}")
@@ -595,6 +599,7 @@ if __name__ == "__main__":
                             source=of_features_csv,
                             destination=of_features_csv_general_path,
                             softlink=True,
+                            overwrite=True,
                         )
             else:
                 logger.error(f"Unknown asset type: {asset.asset_type} for {asset}")
