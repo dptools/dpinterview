@@ -234,9 +234,11 @@ def process_interview(streams_df: pd.DataFrame, config_file: Path) -> None:
             return
 
     with tempfile.TemporaryDirectory(
-        prefix="face_pipe", suffix=f"_{interview_name}"
+        prefix="face_pipe", suffix=f"_{interview_name}",
     ) as temp_dir:
         temp_dir = Path(temp_dir).resolve()
+        # temp_dir = Path("/home/dm2637/temp").resolve() / f"face_pipe_{interview_name}"
+        # temp_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Using temporary directory: {temp_dir}")
 
         streams_dir = temp_dir / "streams"
