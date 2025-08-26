@@ -95,6 +95,9 @@ if __name__ == "__main__":
 
     study_id = studies[0]
     logger.info(f"Starting with study: {study_id}", extra={"markup": True})
+
+    continuous: bool = False
+
     while True:
         if orchestrator.check_if_decryption_requested(
             config_file=config_file, requester=MODULE_NAME
@@ -102,6 +105,21 @@ if __name__ == "__main__":
             # Update decryption_count
             decrytion_count = orchestrator.get_decryption_count(config_file=config_file)
             logger.info(f"decrytion_count: {decrytion_count}")
+
+            if decrytion_count < 0 and not continuous:
+                continuous = cli.confirm_action(
+                    "Unrestricted decryption count set. Do you want to continue?"
+                )
+                if not continuous:
+                    logger.info("Exiting...")
+                    sys.exit(0)
+
+            if continuous:
+                decrytion_count = sys.maxsize
+                logger.info(
+                    "Continuing with unrestricted decryption count.",
+                    extra={"markup": True},
+                )
 
             while COUNTER < decrytion_count:
                 logger.info(f"Fetching file to decrypt. Counter: {COUNTER}")

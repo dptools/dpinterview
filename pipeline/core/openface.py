@@ -145,15 +145,17 @@ def construct_output_path(config_file: Path, video_path: Path) -> Path:
         raise ValueError(f"Could not parse data type from {base_name}")
 
     data_type_parts = utils.camel_case_split(dp_data_type)  # type: ignore
-    data_type = "_".join(data_type_parts)
+    data_type = "interviews"
+    interview_type = data_type_parts[0]
 
     output_path = Path(
         data_root,
         "PROTECTED",
         dp_dash_dict["study"],  # type: ignore
+        "processed",
         dp_dash_dict["subject"],  # type: ignore
         data_type,  # type: ignore
-        "processed",
+        interview_type,  # type: ignore
         "openface",
         base_name,
     )
@@ -190,67 +192,71 @@ def run_openface(
     max_retry = int(params["openface_max_retry"])
     retry_count = 1
 
-    command_array = [
-        "FeatureExtraction",
-        "-f",
-        file_path_to_process,
-        "-out_dir",
-        output_path,
-    ]
-
-    command_array = cli.singularity_run(config_file, command_array)
-
-    # Fix OPENBLAS_NUM_THREADS to avoid error
-    #
-    # OpenBLAS : Program is Terminated. Because you tried to allocate too many memory regions.
-    # This library was built to support a maximum of 128 threads - either rebuild OpenBLAS
-    # with a larger NUM_THREADS value or set the environment variable OPENBLAS_NUM_THREADS to
-    # a sufficiently small number. This error typically occurs when the software that relies on
-    # OpenBLAS calls BLAS functions from many threads in parallel, or when your computer has more
-    # cpu cores than what OpenBLAS was configured to handle.
-
     openblas_num_threads = params.get("openblas_num_threads", "4")
     cli.set_environment_variable("OPENBLAS_NUM_THREADS", openblas_num_threads)
 
     non_completed = True
 
-    def _on_fail():
-        nonlocal retry_count, non_completed
-        non_completed = True
-        logger.warning("[red]OpenFace failed.", extra={"markup": True})
-        logger.info(
-            f"[red]Clearing output path: {output_path}[/red]", extra={"markup": True}
-        )
-        cli.remove_directory(output_path)
-
-        if retry_count >= max_retry:
-            logger.error(
-                f"[red]OpenFace failed after {max_retry} attempts.[/red]",
-                extra={"markup": True},
-            )
-            logger.error(
-                f"[red]File: {file_path_to_process}[/red]",
-                extra={"markup": True},
-            )
-            logger.error(
-                "Exiting with error code 1.",
-                extra={"markup": True},
-            )
-            sys.exit(1)
-
-        logger.warning(
-            f"[yellow]Retrying OpenFace. Attempt {retry_count} of {max_retry}",
-            extra={"markup": True},
-        )
-        retry_count += 1
-
     while retry_count < max_retry and non_completed:
-        with utils.get_progress_bar() as progress:
-            progress.add_task("[green]Running OpenFace...", total=None)
+        with tempfile.TemporaryDirectory(prefix="openface_tmp_") as temp_dir:
+            temp_output_path = Path(temp_dir)
+            command_array = [
+                "FeatureExtraction",
+                "-f",
+                file_path_to_process,
+                "-out_dir",
+                temp_output_path,
+            ]
+            command_array = cli.singularity_run(
+                config_file=config_file,
+                command_array=command_array,
+                optional_params=f"-B {temp_output_path}:{temp_output_path}",
+            )
 
-            non_completed = False
-            cli.execute_commands(command_array=command_array, on_fail=_on_fail)
+            def _on_fail():
+                nonlocal retry_count, non_completed
+                non_completed = True
+                logger.warning("[red]OpenFace failed.", extra={"markup": True})
+                logger.info(
+                    f"[red]Clearing temp output path: {temp_output_path}[/red]",
+                    extra={"markup": True},
+                )
+                cli.remove_directory(temp_output_path)
 
+                if retry_count >= max_retry:
+                    logger.error(
+                        f"[red]OpenFace failed after {max_retry} attempts.[/red]",
+                        extra={"markup": True},
+                    )
+                    logger.error(
+                        f"[red]File: {file_path_to_process}[/red]",
+                        extra={"markup": True},
+                    )
+                    logger.error(
+                        "Exiting with error code 1.",
+                        extra={"markup": True},
+                    )
+                    sys.exit(1)
+
+                logger.warning(
+                    f"[yellow]Retrying OpenFace. Attempt {retry_count} of {max_retry}",
+                    extra={"markup": True},
+                )
+                retry_count += 1
+
+            with utils.get_progress_bar() as progress:
+                progress.add_task("[green]Running OpenFace...", total=None)
+                non_completed = False
+                cli.execute_commands(command_array=command_array, on_fail=_on_fail)
+
+            # If completed, copy results to output_path
+            if not non_completed:
+                if not output_path.exists():
+                    output_path.mkdir(parents=True, exist_ok=True)
+                cli.copy(
+                    source=temp_output_path,
+                    destination=output_path,
+                )
     return
 
 

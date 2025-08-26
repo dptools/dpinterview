@@ -70,7 +70,10 @@ def import_file(source_path: Path, destination_path: Path) -> None:
         if not destination_path.parent.exists():
             destination_path.parent.mkdir(parents=True)
 
-        shutil.copy(source_path, destination_path)
+        cli.create_link(
+            source=source_path, destination=destination_path, softlink=False
+        )
+        # shutil.copy(source_path, destination_path)
 
 
 def get_external_audio_source(config_file: Path) -> Path:
@@ -201,20 +204,24 @@ if __name__ == "__main__":
             with Timer() as timer:
                 import_file(source_path=source_path, destination_path=destination_path)
 
-                if interview_name is not None:
-                    import_audio_files(
-                        config_file=config_file,
-                        interview_name=interview_name,
-                        dest_root=external_audio_source,
-                    )
-                else:
-                    logger.warning(
-                        f"No interview found for file: {source_path}. Skipping..."
-                    )
-
                 orchestrator.fix_permissions(
-                    config_file=config_file, file_path=data_root
+                    config_file=config_file, file_path=destination_path
                 )
+
+                # if interview_name is not None:
+                #     import_audio_files(
+                #         config_file=config_file,
+                #         interview_name=interview_name,
+                #         dest_root=external_audio_source,
+                #     )
+                # else:
+                #     logger.warning(
+                #         f"No interview found for file: {source_path}. Skipping..."
+                #     )
+
+                # orchestrator.fix_permissions(
+                #     config_file=config_file, file_path=data_root
+                # )
 
             DecryptedFile.update_decrypted_status(
                 config_file=config_file,

@@ -374,13 +374,17 @@ def execute_commands(
     return result
 
 
-def singularity_run(config_file: Path, command_array: list) -> list:
+def singularity_run(
+    config_file: Path, command_array: list, optional_params: Optional[str] = None
+) -> list:
     """
     Add Singularity-specific arguments to the command.
 
     Args:
         config_file_path (str): The path to the configuration file.
         command_array (list): The command to run inside the container.
+        optional_params (str, optional): Optional parameters to add to the Singularity command.
+            Defaults to None.
 
     Returns:
         list: The command to run inside the container, with Singularity-specific arguments added.
@@ -409,6 +413,7 @@ def singularity_run(config_file: Path, command_array: list) -> list:
         "singularity",
         "exec",
         f"-B {bind_params}",
+        optional_params if optional_params is not None else "",
         singularity_image_path,
     ] + command_array
 
