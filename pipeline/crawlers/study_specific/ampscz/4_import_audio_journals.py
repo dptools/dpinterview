@@ -82,6 +82,17 @@ study_timezones: Dict[str, str] = {
     "PronetUR": "America/New_York",
     "PronetWU": "US/Central",
     "PronetYA": "America/New_York",
+
+    "PrescientBM": "Europe/London",
+    "PrescientCG": "Europe/Berlin",
+    "PrescientCP": "Europe/Berlin",
+    "PrescientGW": "Asia/Seoul",
+    "PrescientHK": "Asia/Hong_Kong",
+    "PrescientJE": "Europe/Berlin",
+    "PrescientLS": "Europe/Zurich",
+    "PrescientME": "Australia/Melbourne",
+    "PrescientSG": "Asia/Singapore",
+    "PrescientST": "America/Santiago",
 }
 
 
