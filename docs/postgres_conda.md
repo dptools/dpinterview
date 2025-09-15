@@ -1,8 +1,6 @@
 Source:
 [https://gist.github.com/gwangjinkim/f13bf596fefa7db7d31c22efd1627c7a](https://gist.github.com/gwangjinkim/f13bf596fefa7db7d31c22efd1627c7a)
 
-Sure, I can help you with that. Here is the reformatted version of your gist in proper Markdown:
-
 # How to install and start postgresql locally using conda
 
 This gist I write, because I couldn't find step by step instructions
