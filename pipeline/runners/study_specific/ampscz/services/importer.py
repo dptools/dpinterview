@@ -27,12 +27,11 @@ except ValueError:
 
 import argparse
 import logging
-import shutil
 
 from rich.logging import RichHandler
 
 from pipeline import orchestrator
-from pipeline.helpers import cli, utils, dpdash
+from pipeline.helpers import cli, db, utils, dpdash
 from pipeline.helpers.timer import Timer
 from pipeline.models.decrypted_files import DecryptedFile
 from pipeline.models.interview_files import InterviewFile
@@ -188,8 +187,11 @@ if __name__ == "__main__":
             destination_path = Path(row["destination_path"])
 
             if not source_path.exists():
-                logger.error(f"Error: File to import does not exist: {source_path}")
-                sys.exit(1)
+                logger.warning(f"Error: File to import does not exist: {source_path}")
+                ignore_query = InterviewFile.ignore_file(interview_file=source_path)
+                db.execute_queries(config_file=config_file, queries=[ignore_query])
+                logger.info(f"Ignored file: {source_path}")
+                continue
 
             if destination_path.exists():
                 logger.warning(
