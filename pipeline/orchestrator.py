@@ -156,6 +156,7 @@ def fix_permissions(
         logger.warning("Pipeline user and group not set. Skipping permission fix...")
         return
 
+    logger.info(f"Fixing permissions for {file_path}...")
     cli.chown(
         file_path=file_path,
         user=pipeline_user,

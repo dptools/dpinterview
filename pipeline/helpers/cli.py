@@ -534,6 +534,7 @@ def copy(source: Path, destination: Path) -> None:
     Returns:
         None
     """
+    logger.debug(f"Copying {source} -> {destination}")
     if source.is_dir():
         shutil.copytree(source, destination, dirs_exist_ok=True)
     else:
