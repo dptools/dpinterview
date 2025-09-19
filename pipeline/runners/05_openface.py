@@ -29,7 +29,7 @@ from rich.logging import RichHandler
 from pipeline import orchestrator
 from pipeline.core import openface
 from pipeline.helpers import cli, utils
-from pipeline.helpers.timer import Timer
+# from pipeline.helpers.timer import Timer
 from pipeline.models.interview_roles import InterviewRole
 
 MODULE_NAME = "openface"
@@ -184,35 +184,42 @@ if __name__ == "__main__":
         )
 
         try:
-            process_name = cli.spawn_dummy_process(process_name=str(interview_name))
-            # Run OpenFace
-            with Timer() as timer:
-                openface.run_openface(
-                    config_file=config_file,
-                    file_path_to_process=video_stream_path,
-                    output_path=openface_path,
-                )
-                orchestrator.fix_permissions(
-                    config_file=config_file, file_path=openface_path
-                )
-            of_duration = timer.duration
+            of_duration, overlay_duration = openface.run_openface_with_overlay(
+                config_file=config_file,
+                interview_name=interview_name,
+                file_path_to_process=video_stream_path,
+                output_path=openface_path,
+            )
 
-            # Run OpenFace overlay (re-runs OpenFace on face-aligned frames)
-            with Timer() as timer:
-                openface.run_openface_overlay(
-                    config_file=config_file,
-                    openface_path=openface_path,
-                    face_aligned_video_path=openface_path / "face_aligned.mp4",
-                    output_video_path=openface_path / "openface_aligned.mp4",
-                    temp_dir_prefix=f"{interview_name}_",
-                )
-                orchestrator.fix_permissions(
-                    config_file=config_file,
-                    file_path=openface_path / "openface_aligned.mp4",
-                )
-            overlay_duration = timer.duration
+            # process_name = cli.spawn_dummy_process(process_name=str(interview_name))
+            # # Run OpenFace
+            # with Timer() as timer:
+            #     openface.run_openface(
+            #         config_file=config_file,
+            #         file_path_to_process=video_stream_path,
+            #         output_path=openface_path,
+            #     )
+            #     orchestrator.fix_permissions(
+            #         config_file=config_file, file_path=openface_path
+            #     )
+            # of_duration = timer.duration
 
-            cli.kill_processes(process_name=process_name)
+            # # Run OpenFace overlay (re-runs OpenFace on face-aligned frames)
+            # with Timer() as timer:
+            #     openface.run_openface_overlay(
+            #         config_file=config_file,
+            #         openface_path=openface_path,
+            #         face_aligned_video_path=openface_path / "face_aligned.mp4",
+            #         output_video_path=openface_path / "openface_aligned.mp4",
+            #         temp_dir_prefix=f"{interview_name}_",
+            #     )
+            #     orchestrator.fix_permissions(
+            #         config_file=config_file,
+            #         file_path=openface_path / "openface_aligned.mp4",
+            #     )
+            # overlay_duration = timer.duration
+
+            # cli.kill_processes(process_name=process_name)
         except KeyboardInterrupt:
             logger.error("KeyboardInterrupt: Exiting...")
             logger.info("Cleaning up...")

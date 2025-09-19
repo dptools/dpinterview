@@ -11,6 +11,7 @@ import tempfile
 
 from pipeline import orchestrator
 from pipeline.helpers import cli, db, dpdash, utils, image, ffmpeg
+from pipeline.helpers.timer import Timer
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.openface import Openface
 
@@ -198,65 +199,58 @@ def run_openface(
     non_completed = True
 
     while retry_count < max_retry and non_completed:
-        with tempfile.TemporaryDirectory(prefix="openface_tmp_") as temp_dir:
-            temp_output_path = Path(temp_dir)
-            command_array = [
-                "FeatureExtraction",
-                "-f",
-                file_path_to_process,
-                "-out_dir",
-                temp_output_path,
-            ]
-            command_array = cli.singularity_run(
-                config_file=config_file,
-                command_array=command_array,
-                optional_params=f"-B {temp_output_path}:{temp_output_path}",
+        if not output_path.exists():
+            output_path.mkdir(parents=True, exist_ok=True)
+        command_array = [
+            "FeatureExtraction",
+            "-f",
+            file_path_to_process,
+            "-out_dir",
+            output_path,
+        ]
+        command_array = cli.singularity_run(
+            config_file=config_file,
+            command_array=command_array,
+            # optional_params=(
+            #     f"-B {output_path}:{output_path}"
+            # ),
+        )
+
+        def _on_fail():
+            nonlocal retry_count, non_completed
+            non_completed = True
+            logger.warning("[red]OpenFace failed.", extra={"markup": True})
+            logger.info(
+                f"[red]Clearing output path: {output_path}[/red]",
+                extra={"markup": True},
             )
+            cli.remove_directory(output_path)
 
-            def _on_fail():
-                nonlocal retry_count, non_completed
-                non_completed = True
-                logger.warning("[red]OpenFace failed.", extra={"markup": True})
-                logger.info(
-                    f"[red]Clearing temp output path: {temp_output_path}[/red]",
+            if retry_count >= max_retry:
+                logger.error(
+                    f"[red]OpenFace failed after {max_retry} attempts.[/red]",
                     extra={"markup": True},
                 )
-                cli.remove_directory(temp_output_path)
-
-                if retry_count >= max_retry:
-                    logger.error(
-                        f"[red]OpenFace failed after {max_retry} attempts.[/red]",
-                        extra={"markup": True},
-                    )
-                    logger.error(
-                        f"[red]File: {file_path_to_process}[/red]",
-                        extra={"markup": True},
-                    )
-                    logger.error(
-                        "Exiting with error code 1.",
-                        extra={"markup": True},
-                    )
-                    sys.exit(1)
-
-                logger.warning(
-                    f"[yellow]Retrying OpenFace. Attempt {retry_count} of {max_retry}",
+                logger.error(
+                    f"[red]File: {file_path_to_process}[/red]",
                     extra={"markup": True},
                 )
-                retry_count += 1
-
-            with utils.get_progress_bar() as progress:
-                progress.add_task("[green]Running OpenFace...", total=None)
-                non_completed = False
-                cli.execute_commands(command_array=command_array, on_fail=_on_fail)
-
-            # If completed, copy results to output_path
-            if not non_completed:
-                if not output_path.exists():
-                    output_path.mkdir(parents=True, exist_ok=True)
-                cli.copy(
-                    source=temp_output_path,
-                    destination=output_path,
+                logger.error(
+                    "Exiting with error code 1.",
+                    extra={"markup": True},
                 )
+                sys.exit(1)
+
+            logger.warning(
+                f"[yellow]Retrying OpenFace. Attempt {retry_count} of {max_retry}",
+                extra={"markup": True},
+            )
+            retry_count += 1
+
+        with utils.get_progress_bar() as progress:
+            progress.add_task("[green]Running OpenFace...", total=None)
+            non_completed = False
+            cli.execute_commands(command_array=command_array, on_fail=_on_fail)
     return
 
 
@@ -370,6 +364,67 @@ def run_openface_overlay(
         )
 
     return
+
+
+def run_openface_with_overlay(
+    config_file: Path,
+    interview_name: str,
+    file_path_to_process: Path,
+    output_path: Path,
+) -> Tuple[float, float]:
+    """
+    Run OpenFace with overlay
+
+    Args:
+        config_file (Path): Path to config file
+        interview_name (str): Interview name
+        file_path_to_process (Path): Path to video stream
+        output_path (Path): Path to output directory
+
+    Returns:
+        Tuple[float, float]: Tuple of OpenFace processing time and overlay processing time
+    """
+    process_name = cli.spawn_dummy_process(process_name=str(interview_name))
+
+    with tempfile.TemporaryDirectory(prefix=f"openface_{interview_name}") as temp_dir:
+        temp_output_path = Path(temp_dir)
+        # Run OpenFace
+        with Timer() as timer:
+            run_openface(
+                config_file=config_file,
+                file_path_to_process=file_path_to_process,
+                output_path=temp_output_path,
+            )
+        of_duration = timer.duration
+
+        # Run OpenFace overlay (re-runs OpenFace on face-aligned frames)
+        with Timer() as timer:
+            run_openface_overlay(
+                config_file=config_file,
+                openface_path=temp_output_path,
+                face_aligned_video_path=temp_output_path / "face_aligned.mp4",
+                output_video_path=temp_output_path / "openface_aligned.mp4",
+                temp_dir_prefix=f"openfaceOverlay_{interview_name}_",
+            )
+        overlay_duration = timer.duration
+
+        cli.kill_processes(process_name=process_name)
+
+        clean_up_after_openface(openface_path=temp_output_path)
+
+        # Copy temp output to final output path
+        cli.copy(source=temp_output_path, destination=output_path)
+        orchestrator.fix_permissions(
+            config_file=config_file,
+            file_path=output_path,
+        )
+
+    durations = (
+        of_duration if of_duration is not None else 0.0,
+        overlay_duration if overlay_duration is not None else 0.0
+    )
+
+    return durations
 
 
 def clean_up_after_openface(openface_path: Path) -> None:

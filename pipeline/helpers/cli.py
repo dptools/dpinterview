@@ -393,6 +393,8 @@ def singularity_run(
     singularity_image_path = params["singularity_image_path"]
     bind_params = params["bind_params"]
 
+    temp_root = tempfile.gettempdir()
+
     # Check if singularity binary exists
     if shutil.which("singularity") is None:
         logger.error(
@@ -409,15 +411,20 @@ def singularity_run(
         logger.error(f"Could not read file: {singularity_image_path}")
         sys.exit(1)
 
-    command_array = [
+    command_array_to_run = [
         "singularity",
         "exec",
         f"-B {bind_params}",
-        optional_params if optional_params is not None else "",
-        singularity_image_path,
-    ] + command_array
+        f"-B {temp_root}:{temp_root}",
+    ]
 
-    return command_array
+    if optional_params:
+        command_array_to_run.append(optional_params)
+
+    command_array_to_run.append(singularity_image_path)
+    command_array_to_run.extend(command_array)
+
+    return command_array_to_run
 
 
 def send_email(
