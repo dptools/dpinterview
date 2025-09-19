@@ -221,7 +221,7 @@ def get_psychs_interviews(study: str, config_file: Path) -> List[ExpectedIntervi
 
 
 def models_to_db(
-    expected_interviews: List[ExpectedInterview], config_file: Path
+    expected_interviews: List[ExpectedInterview], study_id: str, config_file: Path
 ) -> None:
     """
     Imports the ExpectedInterview models into the database.
@@ -234,6 +234,10 @@ def models_to_db(
         None
     """
     sql_queries = []
+
+    sql_queries.append(
+        ExpectedInterview.truncate_by_study_query(study=study_id)
+    )
 
     for expected_interview in expected_interviews:
         sql_queries.append(expected_interview.to_sql())
@@ -274,7 +278,7 @@ def import_expected_interviews(
             f"{study}: {len(open_interviews)} open interviews, {len(psychs_interviews)} psychs interviews."
         )
 
-    models_to_db(expected_interviews=expected_interviews, config_file=config_file)
+    models_to_db(expected_interviews=expected_interviews, config_file=config_file, study_id=study)
 
 
 if __name__ == "__main__":

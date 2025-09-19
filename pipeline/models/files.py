@@ -7,7 +7,7 @@ from pathlib import Path
 from datetime import datetime
 
 from pipeline.helpers import db
-from pipeline.helpers.hash import compute_hash
+from pipeline.helpers.hash import compute_fingerprint
 
 
 class File:
@@ -43,7 +43,7 @@ class File:
         self.file_size_mb = file_path.stat().st_size / 1024 / 1024
         self.m_time = datetime.fromtimestamp(file_path.stat().st_mtime)
         if with_hash:
-            self.md5 = compute_hash(file_path=file_path, hash_type="md5")
+            self.md5 = compute_fingerprint(file_path=file_path, hash_type="md5")
         else:
             self.md5 = None
 

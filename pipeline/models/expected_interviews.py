@@ -140,6 +140,23 @@ class ExpectedInterview(BaseModel):
         """
         return sql_query
 
+    @staticmethod
+    def truncate_by_study_query(study: str) -> str:
+        """
+        Returns the SQL query to truncate the expected_interviews table by study.
+
+        Args:
+            study (str): The study name.
+
+        Returns:
+            str: The SQL query to truncate the expected_interviews table by study.
+        """
+        sql_query = f"""
+        DELETE FROM expected_interviews
+        WHERE study_id = '{study}'
+        """
+        return sql_query
+
 
 if __name__ == "__main__":
     config_file = utils.get_config_file_path()
