@@ -155,7 +155,9 @@ class DecryptedFile:
         """
         sql_query = f"""
         SELECT * FROM decrypted_files
-        WHERE decrypted = FALSE
+        LEFT JOIN interview_files ON interview_files.interview_file = decrypted_files.source_path
+        WHERE decrypted = FALSE AND
+            interview_files.ignored = FALSE
         LIMIT {limit};
         """
 
