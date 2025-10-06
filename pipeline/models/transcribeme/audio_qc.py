@@ -106,6 +106,7 @@ class AudioQC:
         """
         Convert the AudioQC object to an SQL insert statement.
         """
+        aqc_source_path = db.santize_string(self.aqc_source_path)
         metrics_str = db.sanitize_json(self.aqc_metrics)
 
         if self.aqc_fail_reasons is None:
@@ -122,7 +123,7 @@ class AudioQC:
                 aqc_duration_s,
                 aqc_timestamp
             ) VALUES (
-                '{self.aqc_source_path}',
+                '{aqc_source_path}',
                 {self.aqc_passed},
                 '{metrics_str}',
                 '{fail_reasons_str}',
