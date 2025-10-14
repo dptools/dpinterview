@@ -310,6 +310,7 @@ def get_number_of_running_processes(process_name: str) -> int:
 def execute_commands(
     command_array: list,
     shell: bool = False,
+    cwd: Optional[Path] = None,
     on_fail: Callable = lambda: sys.exit(1),
 ) -> subprocess.CompletedProcess:
     """
@@ -338,6 +339,7 @@ def execute_commands(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             shell=True,
+            cwd=cwd,
             check=False,
         )
     else:
@@ -380,7 +382,9 @@ def singularity_run(config_file: Path, command_array: list) -> list:
     bind_params = params["bind_params"]
 
     # Check if singularity binary exists
-    if shutil.which("singularity") is None:
+    singularity_bin = params.get("singularity_bin", "singularity")
+    logger.debug(f"Using singularity binary: {singularity_bin}")
+    if shutil.which(singularity_bin) is None:
         logger.error(
             "[red][u]singularity[/u] binary not found.[/red]", extra={"markup": True}
         )
@@ -396,7 +400,7 @@ def singularity_run(config_file: Path, command_array: list) -> list:
         sys.exit(1)
 
     command_array = [
-        "singularity",
+        singularity_bin,
         "exec",
         f"-B {bind_params}",
         singularity_image_path,

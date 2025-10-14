@@ -51,9 +51,10 @@ console = utils.get_console()
 noisy_modules: List[str] = []
 utils.silence_logs(noisy_modules=noisy_modules)
 
-PYTHON_PATH = Path("/opt/software/env/face-analysis/bin/python")
+PYTHON_PATH = Path("/home/dm2637/.local/bin/uv run")
+FACEPIPE_ROOT = Path("/opt/software/face-pipe").resolve()
 FEATURE_EXTRACTION_SCRIPT_PATH = Path(
-    "/opt/software/face-pipe/hybrid/hybrid_video_pipeline_server.py"
+    "/opt/software/face-pipe/hybrid/hybrid_video_pipeline_ampscz_gpu.py"
 )
 QC_SCRIPT_PATH = Path("/opt/software/face-pipe/hybrid/video_stats_qc_only.py")
 
@@ -69,51 +70,71 @@ def get_file_to_process(config_file: Path) -> Optional[pd.DataFrame]:
         pd.DataFrame: DataFrame containing the file to process.
     """
     sql_query = """
-    WITH passed_qc AS (
-        SELECT
-            mq.qc_target_id,
-            mq.qc_data ->> 'comments' AS qc_comments
-        FROM manual_qc AS mq
-        WHERE mq.qc_target_type = 'interview'
-        AND mq.qc_data ->> 'hasNoIssues' = 'true'
+    WITH passed_qc AS (    
+        SELECT    
+            mq.qc_target_id,    
+            mq.qc_data ->> 'comments' AS qc_comments    
+        FROM manual_qc AS mq    
+        WHERE mq.qc_target_type = 'interview'    
+        AND mq.qc_data ->> 'hasNoIssues' = 'true'    
+    ),  
+    video_stream_counts AS (  
+        SELECT  
+            ip.interview_name,  
+            COUNT(vs.video_path) AS stream_count  
+        FROM video_streams AS vs    
+        LEFT JOIN video_quick_qc AS vq USING(video_path)    
+        LEFT JOIN decrypted_files AS df ON vq.video_path = df.destination_path    
+        LEFT JOIN interview_files AS iff ON df.source_path = iff.interview_file    
+        LEFT JOIN interview_parts AS ip USING(interview_path)  
+        WHERE ip.is_primary AND  
+            iff.ignored IS FALSE  
+        GROUP BY ip.interview_name  
+    ),  
+    eligible_interviews AS (
+        SELECT DISTINCT ip.interview_name    
+        FROM video_streams AS vs    
+        LEFT JOIN video_quick_qc AS vq USING(video_path)    
+        LEFT JOIN decrypted_files AS df ON vq.video_path = df.destination_path    
+        LEFT JOIN interview_files AS iff ON df.source_path = iff.interview_file    
+        LEFT JOIN interview_parts AS ip USING(interview_path)    
+        LEFT JOIN passed_qc AS pq ON ip.interview_name = pq.qc_target_id  
+        JOIN video_stream_counts AS vsc ON ip.interview_name = vsc.interview_name  
+        WHERE vq.has_black_bars AND    
+            pq.qc_target_id IS NOT NULL AND    
+            vs.video_path NOT IN (    
+                SELECT fp_source_video_path    
+                FROM facepipe.facepipe_runs    
+            ) AND    
+            ip.is_primary AND  
+            vsc.stream_count = 2
     ),
     random_eligible_interview AS (
-        SELECT DISTINCT ip.interview_name
-        FROM video_streams AS vs
-        LEFT JOIN video_quick_qc AS vq USING(video_path)
-        LEFT JOIN decrypted_files AS df ON vq.video_path = df.destination_path
-        LEFT JOIN interview_files AS iff ON df.source_path = iff.interview_file
-        LEFT JOIN interview_parts AS ip USING(interview_path)
-        LEFT JOIN passed_qc AS pq ON ip.interview_name = pq.qc_target_id
-        WHERE vq.has_black_bars AND
-            pq.qc_target_id IS NOT NULL AND
-            vs.video_path NOT IN (
-                SELECT fp_source_video_path
-                FROM facepipe.facepipe_runs
-            ) AND
-            ip.is_primary
+        SELECT interview_name
+        FROM eligible_interviews
+        ORDER BY RANDOM()
         LIMIT 1
     )
-    SELECT
-        i.*,
-        -- Conditionally select the path: exported_assets.asset_destination if available, else vs.vs_path
-        CASE
-            WHEN ea.asset_destination IS NOT NULL THEN ea.asset_destination
-            ELSE vs.vs_path
-        END AS parsed_vs_path,
-        vs_path,
-        ir_role,
-        vs.video_path
-    FROM video_streams AS vs
-    LEFT JOIN video_quick_qc AS vq USING(video_path)
-    LEFT JOIN decrypted_files AS df ON vq.video_path = df.destination_path
-    LEFT JOIN interview_files AS iff ON df.source_path = iff.interview_file
-    LEFT JOIN interview_parts AS ip USING(interview_path)
-    LEFT JOIN interviews AS i USING (interview_name)
-    LEFT JOIN passed_qc AS pq ON ip.interview_name = pq.qc_target_id
-    LEFT JOIN public.exported_assets AS ea
-        ON vs.vs_path = ea.asset_path AND ea.asset_tag = 'streams'
-    WHERE
+    SELECT  
+        i.*,  
+        -- Conditionally select the path: exported_assets.asset_destination if available, else vs.vs_path  
+        CASE  
+            WHEN ea.asset_destination IS NOT NULL THEN ea.asset_destination  
+            ELSE vs.vs_path  
+        END AS parsed_vs_path,  
+        vs_path,  
+        ir_role,  
+        vs.video_path  
+    FROM video_streams AS vs  
+    LEFT JOIN video_quick_qc AS vq USING(video_path)  
+    LEFT JOIN decrypted_files AS df ON vq.video_path = df.destination_path  
+    LEFT JOIN interview_files AS iff ON df.source_path = iff.interview_file  
+    LEFT JOIN interview_parts AS ip USING(interview_path)  
+    LEFT JOIN interviews AS i USING (interview_name)  
+    LEFT JOIN passed_qc AS pq ON ip.interview_name = pq.qc_target_id  
+    LEFT JOIN public.exported_assets AS ea  
+        ON vs.vs_path = ea.asset_path AND ea.asset_tag = 'streams'  
+    WHERE  
         ip.interview_name IN (SELECT interview_name FROM random_eligible_interview);
     """
 
@@ -261,10 +282,14 @@ def process_interview(streams_df: pd.DataFrame, config_file: Path) -> None:
                 streams_dir,
                 out_dir,
                 log_dir,
+                "--au_proc",
+                "--emo_device",
+                "cuda",
             ]
             cli.execute_commands(
                 command_array=command_array,
                 shell=True,
+                cwd=FACEPIPE_ROOT,
             )
             logger.info("Face Pipe feature extraction completed.")
 
@@ -279,6 +304,7 @@ def process_interview(streams_df: pd.DataFrame, config_file: Path) -> None:
             cli.execute_commands(
                 command_array=qc_command_array,
                 shell=True,
+                cwd=FACEPIPE_ROOT,
             )
 
         elapsed_time = timer.duration
@@ -345,6 +371,7 @@ if __name__ == "__main__":
     logger.info(f"Using config file: {config_file}")
 
     COUNTER = 0
+    SKIP_COUNTER = 0
 
     logger.info("Starting face_pipe loop...", extra={"markup": True})
     orchestrator.redirect_temp_dir(config_file=config_file)
@@ -365,7 +392,32 @@ if __name__ == "__main__":
             orchestrator.snooze(config_file=config_file)
             continue
 
+        interview_name = file_to_process_df["interview_name"].unique().tolist()[0]
+        logger.info(f"Found interview to process: {interview_name}")
+
+        if cli.check_if_running(process_name=str(interview_name)):
+            logger.warning(
+                f"Another process is running with the same interview: {interview_name}. Skipping..."
+            )
+            SKIP_COUNTER += 1
+
+            if SKIP_COUNTER > orchestrator.get_max_instances(
+                config_file=config_file,
+                module_name=MODULE_NAME,
+            ):
+                SKIP_COUNTER = 0
+                COUNTER = 0
+                logger.info(
+                    "Max skip counter reached. Snoozing to avoid busy wait..."
+                )
+                orchestrator.snooze(config_file=config_file)
+            continue
+
+        COUNTER += 1
+
+        process_name = cli.spawn_dummy_process(process_name=str(interview_name))
         process_interview(
             streams_df=file_to_process_df,
             config_file=config_file,
         )
+        cli.kill_processes(process_name=process_name)
