@@ -238,7 +238,7 @@ def construct_sftp_upload_path(
     """
     dpdash_dict = dpdash.parse_dpdash_name(interview_name)
     dpdash_dict["data_type"] = "interviewAudioTranscript"
-    dpdash_dict["interview_type"] = interview_type
+    dpdash_dict["category"] = interview_type
 
     dpdash_name = dpdash.get_dpdash_name_from_dict(dpdash_dict)
 
