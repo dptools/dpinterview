@@ -1,0 +1,17 @@
+@daily /usr/bin/find /var/lib/prescient/soft/cache/singularity -mtime +2 -exec rm -rf {} \;
+
+0 2 * * * /var/lib/prescient/soft/av-pipeline/dpinterview/.venv/bin/python /var/lib/prescient/soft/av-pipeline/dpinterview/pipeline/crawlers/study_specific/ampscz/1_import_study_metadata.py -c /var/lib/prescient/soft/av-pipeline/dpinterview/config.ini
+
+10 2 * * * /var/lib/prescient/soft/av-pipeline/dpinterview/.venv/bin/python /var/lib/prescient/soft/av-pipeline/dpinterview/pipeline/crawlers/study_specific/ampscz/2_import_interview_files.py -c /var/lib/prescient/soft/av-pipeline/dpinterview/config.ini
+
+0 3 * * * /var/lib/prescient/soft/av-pipeline/dpinterview/.venv/bin/python /var/lib/prescient/soft/av-pipeline/dpinterview/pipeline/crawlers/study_specific/ampscz/3_import_transcripts.py -c /var/lib/prescient/soft/av-pipeline/dpinterview/config.ini
+
+0 4 * * * /var/lib/prescient/soft/av-pipeline/dpinterview/.venv/bin/python /var/lib/prescient/soft/av-pipeline/dpinterview/pipeline/crawlers/study_specific/ampscz/4_import_audio_journals.py -c /var/lib/prescient/soft/av-pipeline/dpinterview/config.ini
+
+0 5 * * * /var/lib/prescient/soft/av-pipeline/dpinterview/.venv/bin/python /var/lib/prescient/soft/av-pipeline/dpinterview/pipeline/crawlers/study_specific/ampscz/5_import_journal_transcripts.py -c /var/lib/prescient/soft/av-pipeline/dpinterview/config.ini
+
+0 6 * * * /var/lib/prescient/soft/av-pipeline/dpinterview/.venv/bin/python /var/lib/prescient/soft/av-pipeline/dpinterview/pipeline/crawlers/study_specific/ampscz/6_import_data_dictionary.py -c /var/lib/prescient/soft/av-pipeline/dpinterview/config.ini
+
+0 7 * * * /var/lib/prescient/soft/av-pipeline/dpinterview/.venv/bin/python /var/lib/prescient/soft/av-pipeline/dpinterview/pipeline/crawlers/study_specific/ampscz/prescient/7_import_form_data.py -c /var/lib/prescient/soft/av-pipeline/dpinterview/config.ini
+
+0 8 * * * /var/lib/prescient/soft/av-pipeline/dpinterview/.venv/bin/python /var/lib/prescient/soft/av-pipeline/dpinterview/pipeline/crawlers/study_specific/ampscz/8_import_expected_interviews.py -c /var/lib/prescient/soft/av-pipeline/dpinterview/config.ini
