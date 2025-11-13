@@ -369,7 +369,8 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
     db.execute_queries(
         queries=sql_queries,
         config_file=config_file,
-        silent=True,
+        show_commands=False,
+        show_progress=True,
         on_failure=lambda: (logger.error("Error executing queries")),
     )
 
