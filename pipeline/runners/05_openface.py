@@ -28,7 +28,7 @@ from rich.logging import RichHandler
 
 from pipeline import orchestrator
 from pipeline.core import openface
-from pipeline.helpers import cli, utils
+from pipeline.helpers import cli, utils, ffmpeg
 # from pipeline.helpers.timer import Timer
 from pipeline.models.interview_roles import InterviewRole
 
@@ -80,6 +80,11 @@ if __name__ == "__main__":
 
     config_params = utils.config(config_file, section="general")
     studyies = orchestrator.get_studies(config_file=config_file)
+
+    ffmpeg_params = utils.config(config_file, section="ffmpeg")
+    ffmpeg_bin_path = ffmpeg_params.get("ffmpeg_bin_path", None)
+    if ffmpeg_bin_path:
+        ffmpeg.set_ffmpeg_bin_path(ffmpeg_bin_path)
 
     INSTANCE_NAME = utils.get_instance_name(
         module_name=INSTANCE_NAME, process_name=sys.argv[0]

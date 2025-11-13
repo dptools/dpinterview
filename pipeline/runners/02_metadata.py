@@ -76,6 +76,11 @@ if __name__ == "__main__":
     config_params = utils.config(config_file, section="general")
     studies = orchestrator.get_studies(config_file=config_file)
 
+    ffmpeg_params = utils.config(config_file, section="ffmpeg")
+    ffmpeg_bin_path = ffmpeg_params.get("ffmpeg_bin_path", None)
+    if ffmpeg_bin_path:
+        ffprobe.set_ffmpeg_bin_path(ffmpeg_bin_path)
+
     COUNTER = 0
 
     logger.info(

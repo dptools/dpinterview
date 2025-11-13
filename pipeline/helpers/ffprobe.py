@@ -31,6 +31,25 @@ import logging
 
 from pipeline.helpers import cli
 
+logger = logging.getLogger(__name__)
+
+FFMPEG_LIB_BIN_PATH = None
+FFPROBE_BIN_PATH = 'ffprobe'  # default to system ffprobe
+
+
+def set_ffmpeg_bin_path(path: str) -> None:
+    """
+    Set the FFmpeg binary path.
+
+    Args:
+        path (str): The path to the FFmpeg binary.
+    """
+    global FFMPEG_LIB_BIN_PATH  # pylint: disable=global-statement
+    global FFPROBE_BIN_PATH  # pylint: disable=global-statement
+    FFMPEG_LIB_BIN_PATH = path
+    FFPROBE_BIN_PATH = str(Path(FFMPEG_LIB_BIN_PATH) / "ffprobe")
+    logger.info(f"FFmpeg library path set to: {FFMPEG_LIB_BIN_PATH}")
+
 
 class FFProbeResult(NamedTuple):
     """
@@ -81,21 +100,32 @@ def ffprobe(file_path: Path, config_file: Optional[Path] = None) -> FFProbeResul
     Returns:
         FFProbeResult: The result of the ffprobe command.
     """
-    command_array = [
-        "ffprobe",
-        "-v",
-        "quiet",
-        "-print_format",
-        "json",
-        "-show_format",
-        "-show_streams",
-        f"'{file_path}'",
-    ]
 
-    if config_file is not None:
+    if config_file is not None and not FFMPEG_LIB_BIN_PATH:
+        command_array = [
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            f"'{file_path}'",
+        ]
         command_array = cli.singularity_run(
             config_file=config_file, command_array=command_array
         )
+    else:
+        command_array = [
+            FFPROBE_BIN_PATH,
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            str(file_path),
+        ]
 
     logger = logging.getLogger(__name__)
     logger.debug(f"Running ffprobe command: {' '.join(command_array)}")
