@@ -27,7 +27,7 @@ from rich.logging import RichHandler
 
 from pipeline import orchestrator
 from pipeline.core import video_qqc
-from pipeline.helpers import cli, utils
+from pipeline.helpers import cli, utils, ffmpeg
 from pipeline.helpers.timer import Timer
 from pipeline.models.video_qqc import VideoQuickQc
 
@@ -76,6 +76,11 @@ if __name__ == "__main__":
 
     config_params = utils.config(config_file, section="general")
     studies = orchestrator.get_studies(config_file=config_file)
+
+    ffmpeg_params = utils.config(config_file, section="ffmpeg")
+    ffmpeg_bin_path = ffmpeg_params.get("ffmpeg_bin_path", None)
+    if ffmpeg_bin_path:
+        ffmpeg.set_ffmpeg_bin_path(ffmpeg_bin_path)
 
     COUNTER = 0
 
@@ -129,10 +134,6 @@ if __name__ == "__main__":
         with Timer() as timer:
             qc_result: VideoQuickQc = video_qqc.do_video_qqc(
                 video_path=video_path, duration=duration, frames_path=frames_path
-            )
-            orchestrator.fix_permissions(
-                config_file=config_file,
-                file_path=video_path
             )
 
         # Add process time to qc_result

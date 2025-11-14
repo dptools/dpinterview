@@ -9,6 +9,7 @@ from pipeline.models.study import Study
 from pipeline.models.subjects import Subject
 from pipeline.models.interviews import InterviewType
 from pipeline.models.interviews import Interview
+from pipeline.models.expected_interviews import ExpectedInterview
 from pipeline.models.interview_parts import InterviewParts
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
@@ -28,6 +29,7 @@ from pipeline.models.transcript_files import TranscriptFile
 from pipeline.models.llm_language_identification import LlmLanguageIdentification
 from pipeline.models.llm_speaker_identification import LlmSpeakerIdentification
 from pipeline.models.audio_journals import AudioJournal
+from pipeline.models.form_data import FormData
 
 from pipeline.helpers import db
 
@@ -80,6 +82,8 @@ def init_db(config_file: Path):
         Interview.drop_table_query(),
         InterviewType.drop_table_query(),
         File.drop_table_query(),
+        ExpectedInterview.drop_table_query(),
+        FormData.drop_table_query(),
         Subject.drop_table_query(),
         Study.drop_table_query(),
         KeyStore.drop_table_query(),
@@ -92,8 +96,10 @@ def init_db(config_file: Path):
         Log.init_table_query(),
         Study.init_table_query(),
         Subject.init_table_query(),
+        FormData.init_table_query(),
         InterviewType.init_table_query(),
         Interview.init_table_query(),
+        ExpectedInterview.init_table_query(),
         InterviewParts.init_table_query(),
         File.init_table_query(),
         InterviewFile.init_table_query(),

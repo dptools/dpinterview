@@ -390,13 +390,14 @@ def singularity_run(
         list: The command to run inside the container, with Singularity-specific arguments added.
     """
     params = config(path=config_file, section="singularity")
+    singularity_binary_path = params.get("singularity_binary_path", "singularity")
     singularity_image_path = params["singularity_image_path"]
     bind_params = params["bind_params"]
 
     temp_root = tempfile.gettempdir()
 
     # Check if singularity binary exists
-    if shutil.which("singularity") is None:
+    if shutil.which("singularity") is None and singularity_binary_path == "singularity":
         logger.error(
             "[red][u]singularity[/u] binary not found.[/red]", extra={"markup": True}
         )
@@ -412,7 +413,7 @@ def singularity_run(
         sys.exit(1)
 
     command_array_to_run = [
-        "singularity",
+        singularity_binary_path,
         "exec",
         f"-B {bind_params}",
         f"-B {temp_root}:{temp_root}",

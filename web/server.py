@@ -8,13 +8,13 @@ Allows POST requests to put QC results in a database.
 import sys
 from pathlib import Path
 
-file = Path("/home/dm2637/dev/av-pipeline-v2/pipeline/runners/01_fetch_video.py")
+file = Path(__file__).resolve()
 parent = file.parent
-root = None
+ROOT = None
 for parent in file.parents:
-    if parent.name == "av-pipeline-v2":
-        root = parent
-sys.path.append(str(root))
+    if parent.name == "dpinterview":
+        ROOT = parent
+sys.path.append(str(ROOT))
 
 # remove current directory from path
 try:

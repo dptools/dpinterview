@@ -150,7 +150,7 @@ class FfprobeMetadata:
 
         metadata_video_table = """
             CREATE TABLE ffprobe_metadata_video (
-                fmv_source_path TEXT NOT NULL PRIMARY KEY REFERENCES ffprobe_metadata (fm_source_path),
+            fmv_source_path TEXT NOT NULL PRIMARY KEY REFERENCES ffprobe_metadata (fm_source_path),
                 fmv_requested_by TEXT NOT NULL,
                 ir_role VARCHAR(255),
                 fmv_index INTEGER NOT NULL,
@@ -164,15 +164,15 @@ class FfprobeMetadata:
                 fmv_height INTEGER NOT NULL,
                 fmv_coded_width INTEGER NOT NULL,
                 fmv_coded_height INTEGER NOT NULL,
-                fmv_closed_captions INTEGER NOT NULL,
-                fmv_film_grain INTEGER NOT NULL,
+                fmv_closed_captions INTEGER,
+                fmv_film_grain INTEGER,
                 fmv_has_b_frames INTEGER NOT NULL,
-                fmv_sample_aspect_ratio VARCHAR(255) NOT NULL,
-                fmv_display_aspect_ratio VARCHAR(255) NOT NULL,
+                fmv_sample_aspect_ratio VARCHAR(255),
+                fmv_display_aspect_ratio VARCHAR(255),
                 fmv_pix_fmt VARCHAR(255) NOT NULL,
                 fmv_level INTEGER NOT NULL,
-                fmv_color_range VARCHAR(255) NOT NULL,
-                fmv_chrorma_location VARCHAR(255) NOT NULL,
+                fmv_color_range VARCHAR(255),
+                fmv_chrorma_location VARCHAR(255),
                 fmv_field_order VARCHAR(255) NOT NULL,
                 fmv_refs INTEGER NOT NULL,
                 fmv_r_frame_rate VARCHAR(255) NOT NULL,
@@ -192,7 +192,7 @@ class FfprobeMetadata:
                 fma_index INTEGER NOT NULL,
                 fma_codec_name VARCHAR(255) NOT NULL,
                 fma_codec_long_name VARCHAR(255) NOT NULL,
-                fma_profile VARCHAR(255) NOT NULL,
+                fma_profile VARCHAR(255),
                 fma_codec_type VARCHAR(255) NOT NULL,
                 fma_codec_tag_string VARCHAR(255) NOT NULL,
                 fma_codec_tag VARCHAR(255) NOT NULL,
@@ -222,7 +222,7 @@ class FfprobeMetadata:
             List[str]: A list of SQL queries.
         """
         drop_metadata_table = """
-        DROP TABLE IF EXISTS ffprobe_metadata;
+            DROP TABLE IF EXISTS ffprobe_metadata;
         """
 
         drop_metadata_video_table = """
@@ -323,8 +323,8 @@ class FfprobeMetadata:
                     {stream['height']},
                     {stream['coded_width']},
                     {stream['coded_height']},
-                    {stream['closed_captions']},
-                    {stream['film_grain']},
+                    '{metric_or_null('closed_captions', stream)}',
+                    '{metric_or_null('film_grain', stream)}',
                     {stream['has_b_frames']},
                     '{metric_or_null('sample_aspect_ratio', stream)}',
                     '{metric_or_null('display_aspect_ratio', stream)}',
@@ -374,7 +374,7 @@ class FfprobeMetadata:
                         {stream['index']},
                         '{stream['codec_name']}',
                         '{stream['codec_long_name']}',
-                        '{stream.get('profile', 'NULL')}',
+                        '{metric_or_null('profile', stream)}',
                         '{stream['codec_type']}',
                         '{stream['codec_tag_string']}',
                         '{stream['codec_tag']}',
@@ -401,6 +401,8 @@ class FfprobeMetadata:
             logger.info(f"Stream: {stream}")
             logger.warning("Skipping stream...")
             query = "SELECT 1;"  # No-op
+
+        query = db.handle_null(query=query)
 
         return query
 

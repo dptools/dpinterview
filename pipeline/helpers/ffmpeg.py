@@ -14,6 +14,24 @@ from pipeline.helpers import cli, utils
 logger = logging.getLogger(__name__)
 
 
+FFMPEG_LIB_BIN_PATH = None
+FFMPEG_BIN_PATH = 'ffmpeg'  # default to system ffmpeg
+
+
+def set_ffmpeg_bin_path(path: str) -> None:
+    """
+    Set the FFmpeg binary path.
+
+    Args:
+        path (str): The path to the FFmpeg binary.
+    """
+    global FFMPEG_LIB_BIN_PATH  # pylint: disable=global-statement
+    global FFMPEG_BIN_PATH  # pylint: disable=global-statement
+    FFMPEG_LIB_BIN_PATH = path
+    FFMPEG_BIN_PATH = str(Path(FFMPEG_LIB_BIN_PATH) / "ffmpeg")
+    logger.info(f"FFmpeg library path set to: {FFMPEG_LIB_BIN_PATH}")
+
+
 def extract_screenshots_from_video(
     video_file: Path,
     video_duration: float,
@@ -34,6 +52,7 @@ def extract_screenshots_from_video(
     Returns:
         List[Path]: A list of paths to the extracted screenshots.
     """
+    global FFMPEG_BIN_PATH  # pylint: disable=global-variable-not-assigned
     # Extract screenshots from video using ffmpeg
     logger.info("[green]Extracting frames from video...", extra={"markup": True})
 
@@ -54,7 +73,7 @@ def extract_screenshots_from_video(
     # Extract screenshots
     extension: str = "png"
     command_array = [
-        "ffmpeg",
+        FFMPEG_BIN_PATH,
         "-i",
         str(video_file),
         "-vf",
@@ -94,8 +113,9 @@ def crop_video(
     Returns:
         None
     """
+    global FFMPEG_BIN_PATH  # pylint: disable=global-variable-not-assigned
     cli_command_array = [
-        "ffmpeg",
+        FFMPEG_BIN_PATH,
         "-y",  # overwrite output file if it exists
         "-i",
         source,
@@ -146,9 +166,10 @@ def images_to_vid(
     Returns:
         None
     """
+    global FFMPEG_BIN_PATH  # pylint: disable=global-variable-not-assigned
 
     cli_command_array = [
-        "ffmpeg",
+        FFMPEG_BIN_PATH,
         "-y",  # overwrite output file if it exists
         "-framerate",
         str(frame_rate),
@@ -180,8 +201,9 @@ def convert_audio(
     Returns:
         None
     """
+    global FFMPEG_BIN_PATH  # pylint: disable=global-variable-not-assigned
     cli_command_array = [
-        "ffmpeg",
+        FFMPEG_BIN_PATH,
         "-y",  # overwrite output file if it exists
         "-i",
         str(source),
