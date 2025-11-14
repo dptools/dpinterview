@@ -70,8 +70,6 @@ def qc_audio_file(
     max_clipping_proportion: float = 0.01,
     # DC offset
     max_dc_offset: float = 0.01,
-    # SNR
-    min_snr_db: float = 20.0,
     # Voice activity
     vad_mode: int = 2,  # 0–3 more aggressive
     min_voice_proportion: float = 0.1,
@@ -129,7 +127,7 @@ def qc_audio_file(
     floor_count = max(1, int(0.2 * len(sorted_rms)))
     noise_floor = float(np.median(sorted_rms[:floor_count]))
     noise_floor = max(noise_floor, 1e-9)  # avoid divide‐by‐zero
-    snr_db = 20.0 * np.log10(overall_rms / noise_floor)
+    # snr_db = 20.0 * np.log10(overall_rms / noise_floor)
 
     # 6) Voice Activity via WebRTC VAD
     # pick a VAD‐friendly sampling rate
@@ -173,7 +171,6 @@ def qc_audio_file(
         "dc_offset": dc_offset,
         "silence_proportion": silence_proportion,
         "clipping_proportion": clipping_proportion,
-        "snr_db": snr_db,
         "voice_proportion": voice_proportion,
     }
 
@@ -184,7 +181,6 @@ def qc_audio_file(
         "all_zero_peak": peak_amplitude <= 0.0,
         "too_much_clipping": clipping_proportion > max_clipping_proportion,
         "high_dc_offset": dc_offset > max_dc_offset,
-        "low_snr": snr_db < min_snr_db,
         "low_voice_activity": voice_proportion < min_voice_proportion,
     }
 
@@ -196,7 +192,7 @@ def qc_audio_file(
 
 
 def get_file_to_process(
-    config_file: Path, study_id: str
+    config_file: Path, study_id: str, skipped_files: List[Path]
 ) -> Optional[Tuple[Path, str, str, str, str]]:
     """
     Get the next file to process from the database.
@@ -207,6 +203,7 @@ def get_file_to_process(
     Args:
         config_file (Path): Path to the config file.
         study_id (str): Study ID to filter the interviews.
+        skipped_files (List[Path]): List of files to skip.
 
     Returns:
         Optional[Tuple[Path, str, str, str, str]]: A tuple containing the audio path,
@@ -267,6 +264,10 @@ def get_file_to_process(
         available_audio_files.audio_file NOT IN (
             SELECT wc_source_path
             FROM transcribeme.wav_conversion
+        ) AND
+        available_audio_files.audio_file NOT IN (
+            -- exclude skipped files
+            {",".join([f"'{db.santize_string(str(f))}'" for f in skipped_files]) if skipped_files else "''"}
         )
     ORDER BY available_audio_files.interview_name
     LIMIT 1
@@ -440,25 +441,18 @@ if __name__ == "__main__":
 
     # studies = orchestrator.get_studies(config_file=config_file)
     studies = [
-        "PronetGA",
-        # "PronetYA",
-    ]
-    held_studies = [
         "PronetBI",
         "PronetCA",
         "PronetCM",
         "PronetGA",
-        "PronetHA",
         "PronetIR",
         "PronetKC",
         "PronetLA",
         "PronetMA",
         "PronetMT",
-        "PronetMU",
         "PronetNC",
         "PronetNL",
         "PronetNN",
-        "PronetOR",
         "PronetPA",
         "PronetPI",
         "PronetPV",
@@ -470,6 +464,12 @@ if __name__ == "__main__":
         "PronetTE",
         "PronetUR",
         "PronetWU",
+        "PronetYA",
+    ]
+    held_studies = [
+        "PronetHA",
+        "PronetMU",
+        "PronetOR",
     ]
 
     COUNTER = 0
@@ -478,9 +478,11 @@ if __name__ == "__main__":
     study_id = studies[0]
     logger.info(f"Using study: {study_id}")
 
+    skipped_files: List[Path] = []
+
     while True:
         file_to_process = get_file_to_process(
-            config_file=config_file, study_id=study_id
+            config_file=config_file, study_id=study_id, skipped_files=skipped_files
         )
 
         if file_to_process is None:
@@ -506,7 +508,15 @@ if __name__ == "__main__":
                 continue
 
         COUNTER += 1
-        audio_path, interview_name, interview_type, subject_id, study_id = file_to_process
+        audio_path, interview_name, interview_type, subject_id, study_id = (
+            file_to_process
+        )
+
+        if not audio_path.exists():
+            skipped_files.append(audio_path)
+            logger.warning(f"Skipped missing audio file: {audio_path}")
+            continue
+
         logger.info(
             f"Handling Audio: {audio_path}",
             extra={"markup": True},
@@ -520,7 +530,7 @@ if __name__ == "__main__":
         pending_wav_file_path = construct_temp_wav_file_path(
             subject_interviews_root=subject_interviews_root,
             interview_name=interview_name,
-            interview_type=interview_type
+            interview_type=interview_type,
         )
 
         logger.info(
