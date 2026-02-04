@@ -146,7 +146,7 @@ if __name__ == "__main__":
 
         streams = split_streams.split_streams(
             video_path=video_path,
-            has_black_bars=has_black_bars,
+            has_black_bars=True,
             black_bar_height=black_bar_height,
             config_file=config_file,
         )

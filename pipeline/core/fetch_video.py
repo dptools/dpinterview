@@ -80,10 +80,10 @@ def construct_dest_dir(
         data_root,
         "PROTECTED",
         study_id,
-        "processed",
         participant_id,
+        f"{interview_type}_interview",
+        "processed",
         "interviews",
-        interview_type,
         "decrypted",
     )
 
