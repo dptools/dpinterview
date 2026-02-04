@@ -31,14 +31,17 @@ import argparse
 import logging
 import multiprocessing
 from datetime import datetime
-from typing import List
+from typing import List, Tuple
 
 from rich.logging import RichHandler
+from rich.progress import Progress
 
-from pipeline import core
+
+from pipeline import core, orchestrator
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.models.files import File
+from pipeline.models.interview_parts import InterviewParts
 from pipeline.models.interview_files import InterviewFile
 from pipeline.models.interviews import Interview, InterviewType
 
@@ -57,14 +60,12 @@ logging.basicConfig(**logargs)
 console = utils.get_console()
 
 
-def fetch_interview_files(
-    config_file: Path, interview: Interview
-) -> List[InterviewFile]:
+def fetch_interview_files(interview_part: InterviewParts) -> List[InterviewFile]:
     """
     Fetches the interview files for a given interview.
 
     Args:
-        interview (Interview): The interview object.
+        interview_part (InterviewParts): The interview part object.
 
     Returns:
         List[InterviewFile]: A list of InterviewFile objects.
@@ -72,7 +73,7 @@ def fetch_interview_files(
 
     interview_files: List[InterviewFile] = []
 
-    interview_path = interview.interview_path
+    interview_path = interview_part.interview_path
     # list all files in the directory
     files = [f for f in interview_path.iterdir() if f.is_file()]
 
@@ -92,7 +93,48 @@ def fetch_interview_files(
     return interview_files
 
 
-def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
+def handle_multi_part_interviews(
+    interview_parts: List[InterviewParts],
+) -> List[InterviewParts]:
+    """
+    Sorts and groups the interviews by day, fixing part numbers chronologically.
+
+    Args:
+        interview_parts (List[InterviewParts]): A list of InterviewParts objects, with arbitrary part numbers.
+
+    Returns:
+        List[InterviewParts]: A list of InterviewParts objects, with part numbers fixed.
+    """
+    # sort the interviews by datetime
+    interview_parts.sort(key=lambda x: x.interview_datetime)
+
+    for idx, interview in enumerate(interview_parts):
+        if idx == 0:
+            prev_interview = None
+            # interview_name_w_session = f"{interview.interview_name}-part{1:03d}"
+            # interview.interview_name = interview_name_w_session
+            interview.interview_part = 1
+        else:
+            prev_interview = interview_parts[idx - 1]
+
+            current_interview_date = interview.interview_datetime.date()
+            prev_interview_date = prev_interview.interview_datetime.date()
+
+            if prev_interview_date == current_interview_date:
+                prev_interview_session_number = prev_interview.interview_part
+                interview.interview_part = prev_interview_session_number + 1
+                # interview_name_w_session = f"{interview.interview_name}-part{interview.interview_part:03d}"
+                # interview.interview_name = interview_name_w_session
+            else:
+                prev_interview = None
+                interview.interview_part = 1
+                # interview_name_w_session = f"{interview.interview_name}-part{1:03d}"
+                # interview.interview_name = interview_name_w_session
+
+    return interview_parts
+
+
+def fetch_interviews(config_file: Path, subject_id: str) -> List[InterviewParts]:
     """
     Fetches the interviews for a given subject ID.
 
@@ -101,7 +143,7 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
         subject_id (str): The subject ID.
 
     Returns:
-        List[Interview]: A list of Interview objects.
+        List[InterviewParts]: A list of InterviewParts objects.
     """
     config_params = config(path=config_file, section="general")
     data_root = Path(config_params["data_root"])
@@ -114,7 +156,7 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
         logger.warning(f"Could not find offsite interview path for {subject_id}")
         return []
 
-    interviews: List[Interview] = []
+    interview_type_parts: List[InterviewParts] = []
     interview_dirs = [d for d in offsite_interview_path.iterdir() if d.is_dir()]
 
     for interview_dir in interview_dirs:
@@ -131,7 +173,9 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
                 raise
 
         try:
-            time_dt = datetime.strptime(f"{parts[2]}:{parts[3]}:{parts[4]}", "%H:%M:%S").time()
+            time_dt = datetime.strptime(
+                f"{parts[2]}:{parts[3]}:{parts[4]}", "%H:%M:%S"
+            ).time()
         except ValueError:
             logger.error(f"Could not parse time for {base_name}")
             raise
@@ -153,53 +197,72 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
             consent_date=consent_date,
             event_date=interview_datetime,
         )
+        interview_day = dpdash.get_days_between_dates(
+            consent_date=consent_date, event_date=interview_datetime
+        )
 
-        interview = Interview(
+        interview_part = InterviewParts(
             interview_name=interview_name,
             interview_path=interview_dir,
             interview_datetime=interview_datetime,
-            interview_type=InterviewType.ONSITE,
-            subject_id=subject_id,
-            study_id=study_id,
+            interview_day=interview_day,
+            interview_part=1,
         )
 
-        interviews.append(interview)
+        interview_type_parts.append(interview_part)
 
-    return interviews
+    interview_type_parts = handle_multi_part_interviews(interview_type_parts)
+    return interview_type_parts
 
 
-def hash_file_worker(interview_file: InterviewFile) -> File:
+def hash_file_worker(params: Tuple[InterviewFile, Path]) -> File:
     """
     Hashes the file and returns a File object.
 
     Args:
-        interview_file (InterviewFile): The interview file to hash.
+        params (Tuple[InterviewFile, Path]): A tuple containing the InterviewFile
+            and the path to the config file.
     """
-    file = File(file_path=interview_file.interview_file)
+    interview_file, config_file = params
+    with_hash = orchestrator.is_crawler_hashing_required(config_file=config_file)
+
+    file = File(file_path=interview_file.interview_file, with_hash=with_hash)
     return file
 
 
-def generate_queries(interviews: List[Interview], interview_files: List[InterviewFile]):
+def generate_queries(
+    interview_parts: List[InterviewParts],
+    interview_files: List[InterviewFile],
+    config_file: Path,
+    progress: Progress,
+) -> List[str]:
     """
     Generates the SQL queries to insert the interview files into the database.
 
     Args:
         interviews (List[Interview]): A list of Interview objects.
         interview_files (List[InterviewFile]): A list of InterviewFile objects.
+        config_file (Path): The path to the configuration file.
+        progress (Progress): The progress bar.
     """
 
     files: List[File] = []
 
-    logger.info("Hashing files...")
+    if orchestrator.is_crawler_hashing_required(config_file=config_file):
+        logger.info("Hashing files...")
+    else:
+        logger.info("Skipping hashing files...")
 
-    num_processes = multiprocessing.cpu_count() / 4
+    params = [(interview_file, config_file) for interview_file in interview_files]
+
+    num_processes = multiprocessing.cpu_count() / 2
     logger.info(f"Using {num_processes} processes")
     with multiprocessing.Pool(processes=int(num_processes)) as pool:
-        with utils.get_progress_bar() as progress:
-            task = progress.add_task("Hashing files...", total=len(interview_files))
-            for result in pool.imap_unordered(hash_file_worker, interview_files):
-                files.append(result)
-                progress.update(task, advance=1)
+        task = progress.add_task("Hashing files...", total=len(interview_files))
+        for result in pool.imap_unordered(hash_file_worker, params):
+            files.append(result)
+            progress.update(task, advance=1)
+        progress.remove_task(task)
 
     sql_queries = []
     logger.info("Generating SQL queries...")
@@ -207,9 +270,26 @@ def generate_queries(interviews: List[Interview], interview_files: List[Intervie
     for file in files:
         sql_queries.append(file.to_sql())
 
-    # Insert the interviews
-    for interview in interviews:
+    # Create Interview Object from InterviewParts
+    for interview_part in interview_parts:
+        dp_dash_dict = dpdash.parse_dpdash_name(interview_part.interview_name)
+        subject_id = dp_dash_dict["subject"]
+        study_id = dp_dash_dict["study"]
+        data_type = dp_dash_dict["data_type"]
+
+        interview_type = InterviewType(utils.camel_case_split(data_type)[0])  # type: ignore
+        interview = Interview(
+            interview_name=interview_part.interview_name,
+            interview_type=interview_type,
+            subject_id=subject_id,  # type: ignore
+            study_id=study_id,  # type: ignore
+        )
+
         sql_queries.append(interview.to_sql())
+
+    # Insert the interviews parts
+    for interview_part in interview_parts:
+        sql_queries.append(interview_part.to_sql())
 
     # Insert the interview files
     for interview_file in interview_files:
@@ -233,7 +313,7 @@ def import_interviews(config_file: Path) -> None:
 
     # Get the interviews
     logger.info(f"Fetching interviews for {study_id}")
-    interviews: List[Interview] = []
+    interview_parts: List[InterviewParts] = []
 
     with utils.get_progress_bar() as progress:
         task = progress.add_task(
@@ -243,7 +323,7 @@ def import_interviews(config_file: Path) -> None:
             progress.update(
                 task, advance=1, description=f"Fetching {subject_id}'s interviews..."
             )
-            interviews.extend(
+            interview_parts.extend(
                 fetch_interviews(config_file=config_file, subject_id=subject_id)
             )
 
@@ -251,22 +331,61 @@ def import_interviews(config_file: Path) -> None:
         logger.info("Fetching interview files...")
         interview_files: List[InterviewFile] = []
 
-        task = progress.add_task("Fetching interview files...", total=len(interviews))
-        for interview in interviews:
+        task = progress.add_task(
+            "Fetching interview files...", total=len(interview_parts)
+        )
+        for interview_part in interview_parts:
             progress.update(task, advance=1)
-            interview_files.extend(
-                fetch_interview_files(interview=interview, config_file=config_file)
-            )
+            interview_files.extend(fetch_interview_files(interview_part=interview_part))
 
-    # Generate the SQL queries to import the interview files
-    sql_queries = generate_queries(
-        interviews=interviews, interview_files=interview_files
-    )
+        # Generate the SQL queries to import the interview files
+        sql_queries = generate_queries(
+            interview_parts=interview_parts,
+            interview_files=interview_files,
+            config_file=config_file,
+            progress=progress,
+        )
 
     # Execute the SQL queries
     db.execute_queries(
         config_file=config_file, queries=sql_queries, show_commands=False
     )
+
+
+def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
+    """
+    Each interview should have a unique name. If there are unique interviews,
+    mark them as primary. Duplicate interviews will need to be manually
+    resolved.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The study ID.
+
+    Returns:
+        None
+    """
+    query = f"""
+    WITH duplicate_groups AS (
+        SELECT ip.interview_name, ip.interview_day
+        FROM public.interview_parts ip
+        JOIN public.interviews i ON ip.interview_name = i.interview_name
+        WHERE i.study_id = '{study_id}'
+        GROUP BY ip.interview_name, ip.interview_day
+        HAVING COUNT(*) > 1
+    )
+    UPDATE public.interview_parts ip
+    SET is_primary = true
+    FROM public.interviews i
+    WHERE ip.interview_name = i.interview_name
+    AND i.study_id = '{study_id}'
+    AND (ip.interview_name, ip.interview_day) NOT IN (
+        SELECT dg.interview_name, dg.interview_day
+        FROM duplicate_groups dg
+    );
+    """
+
+    db.execute_queries(config_file=config_file, queries=[query])
 
 
 if __name__ == "__main__":
@@ -298,5 +417,8 @@ if __name__ == "__main__":
     logger.info(f"Using config file: {config_file}")
 
     import_interviews(config_file=config_file)
+
+    logger.info("Marking unique interviews as primary")
+    mark_unique_interviews_as_primary(config_file=config_file, study_id="CAMI")
 
     logger.info("[bold green]Done!", extra={"markup": True})
