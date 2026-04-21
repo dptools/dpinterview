@@ -31,6 +31,11 @@ from pipeline.models.interview_roles import InterviewRole
 logger = logging.getLogger(__name__)
 console = utils.get_console()
 
+def sql_num_or_null(v):
+    # ffprobe may return numbers or strings; allow both
+    if v is None or v == "" or str(v).lower() == "nan":
+        return "0"
+    return str(v)
 
 def aspect_ratio(width, height):
     """
@@ -150,7 +155,7 @@ class FfprobeMetadata:
 
         metadata_video_table = """
             CREATE TABLE ffprobe_metadata_video (
-            fmv_source_path TEXT NOT NULL PRIMARY KEY REFERENCES ffprobe_metadata (fm_source_path),
+            fmv_source_path TEXT NOT NULL REFERENCES ffprobe_metadata (fm_source_path),
                 fmv_requested_by TEXT NOT NULL,
                 ir_role VARCHAR(255),
                 fmv_index INTEGER NOT NULL,
@@ -181,13 +186,14 @@ class FfprobeMetadata:
                 fmv_start_pts INTEGER NOT NULL,
                 fmv_start_time VARCHAR(255) NOT NULL,
                 fmv_duration VARCHAR(255) NOT NULL,
-                fmv_extradata_size INTEGER NOT NULL
+                fmv_extradata_size INTEGER NOT NULL,
+                PRIMARY KEY (fmv_source_path, fmv_index)
         );
         """
 
         metadata_audio_table = """
             CREATE TABLE ffprobe_metadata_audio (
-                fma_source_path TEXT NOT NULL PRIMARY KEY REFERENCES ffprobe_metadata (fm_source_path),
+                fma_source_path TEXT NOT NULL REFERENCES ffprobe_metadata (fm_source_path),
                 fma_requested_by TEXT NOT NULL,
                 fma_index INTEGER NOT NULL,
                 fma_codec_name VARCHAR(255) NOT NULL,
@@ -207,7 +213,8 @@ class FfprobeMetadata:
                 fma_start_pts INTEGER NOT NULL,
                 fma_start_time VARCHAR(255) NOT NULL,
                 fma_duration VARCHAR(255) NOT NULL,
-                fma_extradata_size INTEGER NOT NULL
+                fma_extradata_size INTEGER NOT NULL,
+                PRIMARY KEY (fma_source_path, fma_index)
             );
         """
 
@@ -238,7 +245,7 @@ class FfprobeMetadata:
             drop_metadata_audio_table,
             drop_metadata_table,
         ]
-
+    
     @staticmethod
     def stream_to_sql(
         stream: Dict[str, Any],
@@ -337,11 +344,11 @@ class FfprobeMetadata:
                     '{stream['r_frame_rate']}',
                     '{stream['avg_frame_rate']}',
                     '{stream['time_base']}',
-                    {stream['start_pts']},
-                    '{stream['start_time']}',
+                    {sql_num_or_null(stream.get('start_pts'))},
+                    '{stream.get('start_time', '0')}',
                     '{duration}',
                     {stream['extradata_size']}
-                ) ON CONFLICT (fmv_source_path) DO NOTHING;
+                ) ON CONFLICT (fmv_source_path, fmv_index) DO NOTHING;
             """
         elif stream["codec_type"] == "audio":
             try:
@@ -386,11 +393,11 @@ class FfprobeMetadata:
                         '{stream['r_frame_rate']}',
                         '{stream['avg_frame_rate']}',
                         '{stream['time_base']}',
-                        {stream['start_pts']},
-                        '{stream['start_time']}',
+                        {sql_num_or_null(stream.get('start_pts'))},
+                        '{stream.get('start_time', '0')}',
                         '{duration}',
                         {stream['extradata_size']}
-                    ) ON CONFLICT (fma_source_path) DO NOTHING;
+                    ) ON CONFLICT (fma_source_path, fma_index) DO NOTHING;
                 """
             except KeyError as e:
                 logger.error(f"Key error: {e}")
@@ -449,6 +456,8 @@ class FfprobeMetadata:
         """
         try:
             streams = self.metadata["streams"]
+            logger.debug(f"Streams found in metadata for {self.source_path}: {len(streams)}")
+
         except KeyError as e:
             logger.error(f"Metadata does not have 'streams' key: {e}")
             logger.debug(f"Metadata: {self.metadata}")
@@ -540,6 +549,7 @@ class FfprobeMetadata:
                 )
             )
 
+        logger.debug(f"Generated {(sql_queries)} SQL queries for {self.source_path}")
         return sql_queries
 
 

@@ -39,10 +39,10 @@ def draw_sample_image(
     Returns:
         None
     """
-    sample_height = 86
-    sample_width = 152
-    # sample_height = 85.33
-    # sample_width = 48
+    # sample_height = 86
+    # sample_width = 152
+    sample_height = 85.33
+    sample_width = 48
     sample_left = 605
     pt_sample_bottom = 184.01
     int_sample_bottom = 444.46
@@ -58,7 +58,7 @@ def draw_sample_image(
     x = sample_left + 32
     y = y + 3
 
-    scale_factor = 0.6
+    scale_factor = 0.8
 
     pdf.draw_image(
         canvas,

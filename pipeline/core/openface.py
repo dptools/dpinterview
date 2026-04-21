@@ -132,7 +132,8 @@ def construct_output_path(config_file: Path, video_path: Path) -> Path:
         config_file (Path): Path to config file
         video_path (Path): Path to video
     """
-    data_root = orchestrator.get_data_root(config_file=config_file)
+    # data_root = orchestrator.get_data_root(config_file=config_file)
+    data_root = Path("/scratch/p/pd511/dpinterview_outputs")
 
     base_name = Path(video_path).name
     # Remove extension
