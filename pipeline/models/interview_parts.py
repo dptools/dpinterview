@@ -94,7 +94,13 @@ class InterviewParts:
             '{i_path}', '{i_name}', {self.interview_day},
             {self.interview_part}, '{i_date}',
             {self.is_primary}, {self.is_duplicate}
-        ) ON CONFLICT (interview_path) DO NOTHING;
+        ) ON CONFLICT (interview_path) DO UPDATE SET
+            interview_name = EXCLUDED.interview_name,
+            interview_day = EXCLUDED.interview_day,
+            interview_part = EXCLUDED.interview_part,
+            interview_datetime = EXCLUDED.interview_datetime,
+            is_primary = EXCLUDED.is_primary,
+            is_duplicate = EXCLUDED.is_duplicate;
         """
 
         return sql_query

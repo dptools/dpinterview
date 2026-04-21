@@ -5,6 +5,7 @@ Implements a simple file server that serves PDF and MP4 files.
 Allows POST requests to put QC results in a database.
 """
 
+from asyncio import subprocess
 import sys
 from pathlib import Path
 
@@ -245,8 +246,9 @@ def serve_file(file_path: str) -> flask.Response:
     if not file_p.is_absolute():
         file_p = data_root / file_p
     else:
-        # Check if the file path is within the data root
-        if str(data_root) not in str(file_p) and str(fake_data_root) not in str(file_p):
+        # Check if the file path is within the data root 
+        # hardcoded allowlist for now to allow access to outputs for development purposes, can be removed later
+        if str(data_root) not in str(file_p) and str(fake_data_root) not in str(file_p) and "/scratch/p/pd511/dpinterview_outputs" not in str(file_p):
             return flask.Response("Access denied.", status=403)
 
     if not file_p.exists():
@@ -259,6 +261,33 @@ def serve_file(file_path: str) -> flask.Response:
         return flask.send_file(file_path, mimetype="audio/wav")
     elif file_path.endswith(".mp4"):
         return flask.send_file(file_path, mimetype="video/mp4")
+    
+    # elif file_path.endswith(".mkv"):
+    #     return flask.send_file(file_path, mimetype="video/mkv")
+
+    # elif file_path.endswith(".mkv"):
+    #     ffmpeg_path = "/scratch/p/pd511/conda/envs/dpinterview/bin/ffmpeg"
+    #     def generate():
+    #         import subprocess as sp  # ← use alias to avoid asyncio.subprocess conflict
+    #         process = sp.Popen(
+    #             [
+    #                 ffmpeg_path, "-i", file_path,
+    #                 "-c:v", "copy", "-c:a", "aac",
+    #                 "-movflags", "frag_keyframe+empty_moov",
+    #                 "-f", "mp4", "pipe:1"
+    #             ],
+    #             stdout=sp.PIPE,
+    #             stderr=sp.DEVNULL
+    #         )
+    #         while True:
+    #             chunk = process.stdout.read(65536)
+    #             if not chunk:
+    #                 break
+    #             yield chunk
+    #     return flask.Response(generate(), mimetype="video/mp4")
+    
+    elif file_path.endswith(".mov"):
+        return flask.send_file(file_path, mimetype="video/mov")
     elif file_path.endswith(".m4a"):
         return flask.send_file(file_path, mimetype="audio/m4a")
     elif file_path.endswith(".avi"):

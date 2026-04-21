@@ -30,16 +30,19 @@ except ValueError:
 import argparse
 import logging
 import multiprocessing
-from datetime import datetime
-from typing import List
+import re
+from datetime import date, datetime, time
+from typing import Dict, List, Tuple
 
 from rich.logging import RichHandler
+from rich.progress import Progress
 
-from pipeline import core
+from pipeline import core, orchestrator
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
+from pipeline.models.interview_parts import InterviewParts
 from pipeline.models.interviews import Interview, InterviewType
 
 MODULE_NAME = "import_interview_files"
@@ -58,7 +61,7 @@ console = utils.get_console()
 
 
 def fetch_interview_files(
-    config_file: Path, interview: Interview
+    config_file: Path, interview_part: InterviewParts
 ) -> List[InterviewFile]:
     """
     Fetches the interview files for a given interview.
@@ -72,7 +75,7 @@ def fetch_interview_files(
 
     interview_files: List[InterviewFile] = []
 
-    interview_path = interview.interview_path
+    interview_path = interview_part.interview_path
     # list all files in the directory
     files = [f for f in interview_path.iterdir() if f.is_file()]
 
@@ -92,7 +95,48 @@ def fetch_interview_files(
     return interview_files
 
 
-def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
+def handle_multi_part_interviews(
+    interview_parts: List[InterviewParts]
+) -> List[InterviewParts]:
+    """
+    Sorts and groups the interviews by day, fixing part numbers chronologically.
+
+    Args:
+        interview_parts (List[InterviewParts]): A list of InterviewParts objects, with arbitrary part numbers.
+
+    Returns:
+        List[InterviewParts]: A list of InterviewParts objects, with part numbers fixed.
+    """
+    # sort the interviews by datetime
+    interview_parts.sort(key=lambda x: x.interview_datetime)
+
+    for idx, interview in enumerate(interview_parts):
+        if idx == 0:
+            prev_interview = None
+            # interview_name_w_session = f"{interview.interview_name}-part{1:03d}"
+            # interview.interview_name = interview_name_w_session
+            interview.interview_part = 1
+        else:
+            prev_interview = interview_parts[idx - 1]
+
+            current_interview_date = interview.interview_datetime.date()
+            prev_interview_date = prev_interview.interview_datetime.date()
+
+            if prev_interview_date == current_interview_date:
+                prev_interview_session_number = prev_interview.interview_part
+                interview.interview_part = prev_interview_session_number + 1
+                # interview_name_w_session = f"{interview.interview_name}-part{interview.interview_part:03d}"
+                # interview.interview_name = interview_name_w_session
+            else:
+                prev_interview = None
+                interview.interview_part = 1
+                # interview_name_w_session = f"{interview.interview_name}-part{1:03d}"
+                # interview.interview_name = interview_name_w_session
+
+    return interview_parts
+
+
+def fetch_interviews(config_file: Path, subject_id: str) -> List[InterviewParts]:
     """
     Fetches the interviews for a given subject ID.
 
@@ -108,14 +152,14 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
     study_id = config_params["study"]
 
     study_path: Path = data_root / "PROTECTED" / study_id
-    offsite_interview_path: Path = study_path / subject_id / "onsite_interview" / "raw"
+    onsite_interview_path: Path = study_path / subject_id / "onsite_interview" / "raw"
 
-    if not offsite_interview_path.exists():
-        logger.warning(f"Could not find offsite interview path for {subject_id}")
+    if not onsite_interview_path.exists():
+        logger.warning(f"Could not find onsite interview path for {subject_id}")
         return []
 
-    interviews: List[Interview] = []
-    interview_dirs = [d for d in offsite_interview_path.iterdir() if d.is_dir()]
+    interview_parts: List[InterviewParts] = []
+    interview_dirs = [d for d in onsite_interview_path.iterdir() if d.is_dir()]
 
     for interview_dir in interview_dirs:
         base_name = interview_dir.name  # CAMI343_YYMMDD_HH_MM_SS
@@ -154,18 +198,41 @@ def fetch_interviews(config_file: Path, subject_id: str) -> List[Interview]:
             event_date=interview_datetime,
         )
 
-        interview = Interview(
+        # interview = Interview(
+        #     interview_name=interview_name,
+        #     interview_path=interview_dir,
+        #     interview_datetime=interview_datetime,
+        #     interview_type=InterviewType.ONSITE,
+        #     subject_id=subject_id,
+        #     study_id=study_id,
+        # )
+
+        # interviews.append(interview)
+
+        # truncate time for day calculation (same as for ampscz logic)
+        interview_datetime_for_day = interview_datetime.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        
+        interview_day = dpdash.get_days_between_dates(
+                consent_date=consent_date, event_date=interview_datetime
+            )
+
+        interview_part = InterviewParts(
             interview_name=interview_name,
             interview_path=interview_dir,
+            interview_day=interview_day,          # CAMI appears single-part; or parse if needed
+            interview_part=1,
             interview_datetime=interview_datetime,
-            interview_type=InterviewType.ONSITE,
-            subject_id=subject_id,
-            study_id=study_id,
+            is_primary=True,
+            is_duplicate=False,
         )
 
-        interviews.append(interview)
+        interview_parts.append(interview_part)
 
-    return interviews
+    interview_parts = handle_multi_part_interviews(interview_parts)
+
+    return interview_parts
 
 
 def hash_file_worker(interview_file: InterviewFile) -> File:
@@ -179,12 +246,12 @@ def hash_file_worker(interview_file: InterviewFile) -> File:
     return file
 
 
-def generate_queries(interviews: List[Interview], interview_files: List[InterviewFile]):
+def generate_queries(interview_parts: List[InterviewParts], interview_files: List[InterviewFile]):
     """
     Generates the SQL queries to insert the interview files into the database.
 
     Args:
-        interviews (List[Interview]): A list of Interview objects.
+        interview_parts (List[InterviewParts]): A list of InterviewParts objects.
         interview_files (List[InterviewFile]): A list of InterviewFile objects.
     """
 
@@ -207,9 +274,40 @@ def generate_queries(interviews: List[Interview], interview_files: List[Intervie
     for file in files:
         sql_queries.append(file.to_sql())
 
+    # --- CHANGE START: interviews list was not defined; derive Interview rows from interview_parts (AMPSCZ pattern)
+    interviews: List[Interview] = []
+    seen_names = set()
+
+    for part in interview_parts:
+        name = part.interview_name
+        
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+
+        dp = dpdash.parse_dpdash_name(name)
+        interview_type = InterviewType(utils.camel_case_split(dp["data_type"])[0])
+
+        interviews.append(
+            Interview(
+                interview_name=name,
+                # interview_path=part.interview_path,
+                # interview_datetime=part.interview_datetime,
+                interview_type=interview_type,
+                subject_id=dp["subject"],
+                study_id=dp["study"],
+            )
+        )
+    # --- CHANGE END
+    
     # Insert the interviews
     for interview in interviews:
         sql_queries.append(interview.to_sql())
+
+    # --- CHANGE START: insert interview_parts before interview_files (FK dependency on interview_path)
+    for part in interview_parts:
+        sql_queries.append(part.to_sql())
+    # --- CHANGE END
 
     # Insert the interview files
     for interview_file in interview_files:
@@ -233,34 +331,61 @@ def import_interviews(config_file: Path) -> None:
 
     # Get the interviews
     logger.info(f"Fetching interviews for {study_id}")
-    interviews: List[Interview] = []
+    
+    # interviews: List[Interview] = []
+    # all_files: list[File] = []
+    all_interview_parts: list[InterviewParts] = []
+    all_interview_files: list[InterviewFile] = []
 
     with utils.get_progress_bar() as progress:
         task = progress.add_task(
             "Fetching interviews for subjects", total=len(subjects)
         )
+        
         for subject_id in subjects:
             progress.update(
                 task, advance=1, description=f"Fetching {subject_id}'s interviews..."
             )
-            interviews.extend(
-                fetch_interviews(config_file=config_file, subject_id=subject_id)
-            )
+            
+            # 1) Fetch interviews for the subject
+            interview_parts = fetch_interviews(config_file=config_file, subject_id=subject_id)
+            all_interview_parts.extend(interview_parts)
+            
+            # 2) Fetch interview files for each interview
+            for interview_part in interview_parts:
+                interview_files = fetch_interview_files(config_file=config_file, interview_part=interview_part)
+                all_interview_files.extend(interview_files)
 
-        # Get the interview files
-        logger.info("Fetching interview files...")
-        interview_files: List[InterviewFile] = []
+            # interviews.extend(
+            #     fetch_interviews(config_file=config_file, subject_id=subject_id)
+            # )
 
-        task = progress.add_task("Fetching interview files...", total=len(interviews))
-        for interview in interviews:
-            progress.update(task, advance=1)
-            interview_files.extend(
-                fetch_interview_files(interview=interview, config_file=config_file)
-            )
+        # # Get the interview files
+        # logger.info("Fetching interview files...")
+        # interview_files: List[InterviewFile] = []
 
+        # task = progress.add_task("Fetching interview files...", total=len(interview_parts))
+        # for interview_part in interview_parts:
+        #     progress.update(task, advance=1)
+        #     interview_files.extend(
+        #         fetch_interview_files(interview_part=interview_part, config_file=config_file)
+        #     )
+
+    # DEBUG: confirm computed values BEFORE SQL
+    for p in all_interview_parts[:20]:
+        logger.info(
+            f"DEBUG InterviewParts: name={p.interview_name} "
+            f"day={p.interview_day} part={p.interview_part} dt={p.interview_datetime}"
+        )
+
+    # DEBUG: show the SQL that will be executed for interview_parts
+    logger.info("DEBUG: first 5 interview_parts SQL statements:")
+    for p in all_interview_parts[:5]:
+        logger.info(p.to_sql())
+    
     # Generate the SQL queries to import the interview files
     sql_queries = generate_queries(
-        interviews=interviews, interview_files=interview_files
+        interview_parts=all_interview_parts, interview_files=all_interview_files
     )
 
     # Execute the SQL queries
