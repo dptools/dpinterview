@@ -126,10 +126,17 @@ def parse_transcript_to_df(transcript: Path) -> pd.DataFrame:
                 pd.to_datetime(time, format="%H:%M:%S.%f")
             except ValueError:
                 # add text to the previous line
-                print(line)
+                logger.debug(
+                    f"Line does not start with a timestamp in {transcript}, "
+                    f"treating as a continuation of the previous line: {line!r}"
+                )
                 data[-1]["transcript"] += " " + line.strip()
                 continue
         except ValueError:
+            logger.debug(
+                f"Could not split line into speaker/time/text in {transcript}, "
+                f"skipping line: {line!r}"
+            )
             continue
 
         text = text.strip()
@@ -242,7 +249,7 @@ def process_transcript(
                     template=template,
                 )
             except ValueError as e:
-                logger.error(f"Error: {e}")
+                logger.error(f"Error building LLM prompt for {transcript_path}: {e}")
                 return LlmLanguageIdentification(
                     llm_source_transcript=transcript_path,
                     ollama_model_identifier="default",
@@ -402,7 +409,10 @@ if __name__ == "__main__":
                     transcript_path=file_to_process,
                     config_file=config_file,
                 )
-            except ValueError:
+            except ValueError as e:
+                logger.error(
+                    f"Skipping language identification for {file_to_process}: {e}"
+                )
                 continue
         language_identification_duration = timer.duration
 

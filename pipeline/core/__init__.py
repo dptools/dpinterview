@@ -176,6 +176,10 @@ subject {subject_id}, study {study_id}: Probably not loaded into the database ye
     try:
         of_path = Path(openface_path)
     except TypeError:
+        logger.warning(
+            f"openface path is not set (got {openface_path!r}) for interview "
+            f"{interview_name}, subject {subject_id}, study {study_id}, role {role}"
+        )
         return None
 
     if not of_path.exists() and redirect_to_exported_assets:

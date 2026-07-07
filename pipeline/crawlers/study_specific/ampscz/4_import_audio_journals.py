@@ -373,8 +373,13 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
         queries=sql_queries,
         config_file=config_file,
         show_commands=False,
-        on_failure=lambda: (logger.error("Error executing queries")),
-        # This will hide which queries failed/why; consider updated logging here?
+        on_failure=lambda: logger.error(
+            f"Failed to import audio journals for study {study_id}: "
+            f"none of the {len(sql_queries)} pending journal-insert query(ies) for "
+            f"this study were persisted. See the query/error logged above for detail; "
+            f"per-journal failure detail is not yet available (batch is not isolated "
+            f"per-record)."
+        ),
     )
 
 

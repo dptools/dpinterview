@@ -154,6 +154,11 @@ def get_interview_session_number(
         session_number = result_df["interview_name"].tolist().index(interview_name) + 1
         return session_number
     except ValueError:
+        logger.warning(
+            f"Interview {interview_name} (subject {subject_id}, type "
+            f"{interview_type}) not found among its own study's interviews "
+            f"list; cannot compute a session number."
+        )
         return None
 
 

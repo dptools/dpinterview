@@ -96,6 +96,16 @@ def sftp_move_file(
             logger.info(
                 f"Destination directory does not exist, creating: {remote_destination_path.parent}"
             )
+        else:
+            # Any other OSError (permissions, disk full, etc.) still falls through
+            # to the mkdir+retry below, which is unlikely to be the right recovery
+            # for a non-"missing directory" error. Log the real error so a
+            # follow-up failure at the retried rename isn't a total mystery.
+            logger.warning(
+                f"Unexpected error (errno={e.errno}) renaming [remote] "
+                f"{remote_source_path} to [remote] {remote_destination_path}: {e}. "
+                f"Attempting the missing-directory recovery anyway."
+            )
         sftp.mkdir(str(remote_destination_path.parent))
         # Retry the rename operation after creating the directory
         sftp.rename(str(remote_source_path), str(remote_destination_path))

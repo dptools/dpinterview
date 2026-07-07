@@ -153,6 +153,7 @@ def execute_queries(
     """
     command = None
     output = []
+    executed_count = 0
 
     if backup:
         repo_root = cli.get_repo_root_from_config(config_file=config_file)
@@ -183,6 +184,7 @@ def execute_queries(
         cur = conn.cursor()
 
         def execute_query(query: str):
+            nonlocal executed_count
             if show_commands:
                 logger.debug("Executing query:")
                 logger.debug(f"[bold blue]{query}", extra={"markup": True})
@@ -191,6 +193,7 @@ def execute_queries(
                 output.append(cur.fetchall())
             except psycopg2.ProgrammingError:
                 pass
+            executed_count += 1
 
         if show_progress:
             try:
@@ -233,6 +236,23 @@ def execute_queries(
         if command is not None:
             logger.error(f"[red]For query: {command}", extra={"markup": True})
         logger.error(e)
+        if len(queries) > 1:
+            # execute_queries() commits once, after every query in the batch has
+            # run - the connection is closed without ever calling commit() here,
+            # so Postgres rolls back the whole transaction. That means none of
+            # this batch's queries were persisted, including the ones that ran
+            # fine before the failure above, not just the ones after it. We
+            # can't say here which individual files/records those queries
+            # belonged to (that requires the caller to isolate per-record), so
+            # surface the blast radius as a count instead of silently dropping
+            # them.
+            logger.warning(
+                f"[yellow]Batch aborted: {executed_count}/{len(queries)} queries in "
+                f"this call ran before the failure above, but since this batch "
+                f"never reached commit(), none of the {len(queries)} query(ies) "
+                f"were persisted.",
+                extra={"markup": True},
+            )
         if on_failure is not None:
             on_failure()
         else:

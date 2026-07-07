@@ -202,7 +202,10 @@ if __name__ == "__main__":
                         show_commands=True,
                     )
                 except Exception as e:
-                    logger.error(f"Error: {e}")
+                    logger.error(
+                        f"Error dropping DB rows for interview "
+                        f"{interview_to_wipe}: {e}"
+                    )
                     logger.error("Continuing...")
             logger.info(
                 f"Wiped interview: [bold blue]{interview_to_wipe} in {timer.duration} seconds.",

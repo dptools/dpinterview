@@ -134,10 +134,17 @@ def parse_transcript_to_df(transcript: Path) -> pd.DataFrame:
                 pd.to_datetime(time, format="%H:%M:%S.%f")
             except ValueError:
                 # add text to the previous line
-                print(line)
+                logger.debug(
+                    f"Line does not start with a timestamp in {transcript}, "
+                    f"treating as a continuation of the previous line: {line!r}"
+                )
                 data[-1]["transcript"] += " " + line.strip()
                 continue
         except ValueError:
+            logger.debug(
+                f"Could not split line into speaker/time/text in {transcript}, "
+                f"skipping line: {line!r}"
+            )
             continue
 
         text = text.strip()
@@ -261,7 +268,10 @@ def process_transcript(
                             template=template,
                         )
                     except ValueError as e:
-                        logger.error(f"Error: {e}")
+                        logger.error(
+                            f"Error building LLM prompt for {transcript_path} "
+                            f"(role {role}): {e}"
+                        )
                         subject_result = LlmSpeakerIdentification(
                             llm_source_transcript=transcript_path,
                             ollama_model_identifier="default",
