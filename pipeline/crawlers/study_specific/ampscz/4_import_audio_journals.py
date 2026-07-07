@@ -366,12 +366,15 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
     )
 
     # Execute the queries
+    # Note: no show_progress here - this runs inside the outer per-study progress
+    # bar started in __main__, and rich only allows one active progress display
+    # at a time.
     db.execute_queries(
         queries=sql_queries,
         config_file=config_file,
         show_commands=False,
-        show_progress=True,
         on_failure=lambda: (logger.error("Error executing queries")),
+        # This will hide which queries failed/why; consider updated logging here?
     )
 
 

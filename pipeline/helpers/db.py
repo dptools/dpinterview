@@ -12,6 +12,7 @@ from typing import Callable, Dict, Literal, Optional
 import pandas as pd
 import psycopg2
 import sqlalchemy
+from rich.errors import LiveError
 
 from pipeline import orchestrator
 from pipeline.helpers import cli, utils
@@ -192,11 +193,27 @@ def execute_queries(
                 pass
 
         if show_progress:
-            with utils.get_progress_bar() as progress:
-                task = progress.add_task("Executing SQL queries...", total=len(queries))
+            try:
+                with utils.get_progress_bar() as progress:
+                    task = progress.add_task(
+                        "Executing SQL queries...", total=len(queries)
+                    )
 
+                    for command in queries:
+                        progress.update(task, advance=1)
+                        execute_query(command)
+            except LiveError:
+                # A progress bar (rich.live.Live) is already active elsewhere in the
+                # call stack - rich only allows one at a time. Fall back to running
+                # the queries without a progress bar instead of letting this bubble
+                # up into the except below, which would abort the whole batch before
+                # a single query has run.
+                logger.warning(
+                    "[yellow]show_progress=True requested but a progress display is "
+                    "already active; running without a progress bar.",
+                    extra={"markup": True},
+                )
                 for command in queries:
-                    progress.update(task, advance=1)
                     execute_query(command)
 
         else:
