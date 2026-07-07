@@ -85,13 +85,14 @@ def get_diary_name_from_transcript(transcript_filename: str) -> str:
 
 
 def transcripts_to_models(
-    transcripts: List[Path]
+    transcripts: List[Path], config_file: Path
 ) -> Tuple[List[File], List[TranscriptFile]]:
     """
     Converts the transcripts into File and InterviewFile models.
 
     Args:
         transcripts (List[Path]): The list of transcripts.
+        config_file (Path): The path to the config file.
 
     Returns:
         Tuple[List[File], List[TranscriptFile]]: The list of File and InterviewFile models.
@@ -111,6 +112,13 @@ def transcripts_to_models(
             except IndexError as e:
                 logger.error(f"Error processing transcript {filename}: {e}")
                 logger.error("Skipping.")
+                db.record_failure(
+                    config_file=config_file,
+                    stage=MODULE_NAME,
+                    identifier=str(transcript),
+                    error=e,
+                    identifier_type="file_path",
+                )
                 continue
 
             file = File(file_path=transcript)
@@ -180,7 +188,7 @@ def import_transcripts(data_root: Path, study: str, config_file: Path) -> None:
     logger.info(f"Found {len(transcripts)} transcripts.")
 
     files, transcript_files = transcripts_to_models(
-        transcripts=transcripts
+        transcripts=transcripts, config_file=config_file
     )
 
     logger.info(

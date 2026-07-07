@@ -98,6 +98,13 @@ def transcripts_to_models(
         except IndexError as e:
             logger.error(f"Error processing transcript {filename}: {e}")
             logger.error("Skipping.")
+            db.record_failure(
+                config_file=config_file,
+                stage=MODULE_NAME,
+                identifier=str(transcript),
+                error=e,
+                identifier_type="file_path",
+            )
             continue
 
         # interview_path = core.get_interview_path(

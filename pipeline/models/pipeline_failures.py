@@ -33,7 +33,9 @@ from pipeline.helpers import cli, db, utils
 
 console = utils.get_console()
 
-IdentifierType = Literal["file_path", "study", "batch", "other"]
+IdentifierType = Literal[
+    "file_path", "study", "interview_name", "subject", "batch", "other"
+]
 
 
 class PipelineFailure:

@@ -531,7 +531,14 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     )
 
     # Execute the SQL queries
-    db.execute_queries(config_file=config_file, queries=sql_queries, show_commands=False)
+    db.execute_queries(
+        config_file=config_file,
+        queries=sql_queries,
+        show_commands=False,
+        failure_stage="import_interview_files:ampscz",
+        failure_identifier=study_id,
+        failure_identifier_type="study",
+    )
 
 
 def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:

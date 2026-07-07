@@ -287,7 +287,9 @@ def record_failure(
     stage: str,
     identifier: str,
     error: Union[str, Exception],
-    identifier_type: Literal["file_path", "study", "batch", "other"] = "file_path",
+    identifier_type: Literal[
+        "file_path", "study", "interview_name", "subject", "batch", "other"
+    ] = "file_path",
     db: str = "postgresql",
 ) -> None:
     """

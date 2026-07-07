@@ -272,6 +272,13 @@ def process_transcript(
                             f"Error building LLM prompt for {transcript_path} "
                             f"(role {role}): {e}"
                         )
+                        db.record_failure(
+                            config_file=config_file,
+                            stage=MODULE_NAME,
+                            identifier=str(transcript_path),
+                            error=e,
+                            identifier_type="file_path",
+                        )
                         subject_result = LlmSpeakerIdentification(
                             llm_source_transcript=transcript_path,
                             ollama_model_identifier="default",

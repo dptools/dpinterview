@@ -159,6 +159,14 @@ def get_interview_session_number(
             f"{interview_type}) not found among its own study's interviews "
             f"list; cannot compute a session number."
         )
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            identifier=interview_name,
+            error="Interview not found in its own study's interview list; "
+            "cannot compute a session number",
+            identifier_type="interview_name",
+        )
         return None
 
 

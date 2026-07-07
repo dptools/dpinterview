@@ -380,6 +380,9 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
             f"per-journal failure detail is not yet available (batch is not isolated "
             f"per-record)."
         ),
+        failure_stage=MODULE_NAME,
+        failure_identifier=study_id,
+        failure_identifier_type="study",
     )
 
 

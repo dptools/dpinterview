@@ -250,6 +250,13 @@ def process_transcript(
                 )
             except ValueError as e:
                 logger.error(f"Error building LLM prompt for {transcript_path}: {e}")
+                db.record_failure(
+                    config_file=config_file,
+                    stage=MODULE_NAME,
+                    identifier=str(transcript_path),
+                    error=e,
+                    identifier_type="file_path",
+                )
                 return LlmLanguageIdentification(
                     llm_source_transcript=transcript_path,
                     ollama_model_identifier="default",
@@ -412,6 +419,13 @@ if __name__ == "__main__":
             except ValueError as e:
                 logger.error(
                     f"Skipping language identification for {file_to_process}: {e}"
+                )
+                db.record_failure(
+                    config_file=config_file,
+                    stage=MODULE_NAME,
+                    identifier=str(file_to_process),
+                    error=e,
+                    identifier_type="file_path",
                 )
                 continue
         language_identification_duration = timer.duration

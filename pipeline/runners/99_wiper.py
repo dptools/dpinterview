@@ -200,6 +200,9 @@ if __name__ == "__main__":
                         config_file=config_file,
                         queries=drop_queries,
                         show_commands=True,
+                        failure_stage=MODULE_NAME,
+                        failure_identifier=interview_to_wipe,
+                        failure_identifier_type="interview_name",
                     )
                 except Exception as e:
                     logger.error(
