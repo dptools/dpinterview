@@ -67,6 +67,7 @@ def get_interview_name_from_transcript(transcript_filename: str) -> str:
     # make all day as positive
     if day < 0:
         day = -day
+        # Could this cause name clashes? eg day -5 and day 5 end up the same
 
     interview_name = f"{study_id}-{subject_id}-{data_type}Interview-day{day:04d}"
 

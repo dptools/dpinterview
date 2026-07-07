@@ -78,6 +78,7 @@ def get_diary_name_from_transcript(transcript_filename: str) -> str:
     # make all session as positive
     if session < 0:
         session = -session
+    # the same concern from import_transcripts; possible name collisions?
 
     journal_name = f"{study_id}-{subject_id}-{data_type}-day{day:04d}-session{session:04d}"
 
