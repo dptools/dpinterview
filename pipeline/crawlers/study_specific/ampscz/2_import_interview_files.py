@@ -297,6 +297,29 @@ def fetch_interviews(
         logger.debug(f"{subject_id}: subject is not active, skipping interview fetch.")
         return []
 
+    # Fetched once per subject rather than once per interview file - it's the
+    # same value for every file below, and each call previously opened its own
+    # fresh DB connection (db.get_db_connection() creates a new SQLAlchemy
+    # engine per call), which was the dominant cost for subjects with many
+    # interview files.
+    consent_date_s = core.get_consent_date_from_subject_id(
+        config_file=config_file, subject_id=subject_id, study_id=study_id
+    )
+    if consent_date_s is None:
+        error = ValueError(f"Could not find consent date for {subject_id}")
+        logger.error(str(error))
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code="consent_date_missing",
+            identifier=subject_id,
+            error=error,
+            identifier_type="subject",
+            study_id=study_id,
+        )
+        return []
+    consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
+
     config_params = config(path=config_file, section="general")
     data_root = Path(config_params["data_root"])
 
@@ -352,24 +375,6 @@ def fetch_interviews(
                 )
                 continue
 
-            consent_date_s = core.get_consent_date_from_subject_id(
-                config_file=config_file, subject_id=subject_id, study_id=study_id
-            )
-            if consent_date_s is None:
-                error = ValueError(f"Could not find consent date for {subject_id}")
-                logger.error(str(error))
-                db.record_failure(
-                    config_file=config_file,
-                    stage=MODULE_NAME,
-                    error_code="consent_date_missing",
-                    identifier=subject_id,
-                    error=error,
-                    identifier_type="subject",
-                    study_id=study_id,
-                )
-                continue
-            consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
-
             interview_name = dpdash.get_dpdash_name(
                 study=study_id,
                 subject=subject_id,
@@ -421,25 +426,6 @@ def fetch_interviews(
                     subject_id=subject_id,
                 )
                 continue
-
-            consent_date_s = core.get_consent_date_from_subject_id(
-                config_file=config_file, subject_id=subject_id, study_id=study_id
-            )
-
-            if consent_date_s is None:
-                error = ValueError(f"Could not find consent date for {subject_id}")
-                logger.error(str(error))
-                db.record_failure(
-                    config_file=config_file,
-                    stage=MODULE_NAME,
-                    error_code="consent_date_missing",
-                    identifier=subject_id,
-                    error=error,
-                    identifier_type="subject",
-                    study_id=study_id,
-                )
-                continue
-            consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
 
             interview_name = dpdash.get_dpdash_name(
                 study=study_id,

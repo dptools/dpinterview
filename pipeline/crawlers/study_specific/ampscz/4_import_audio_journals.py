@@ -162,16 +162,6 @@ def fetch_journals(
     audio_journal_path = list(audio_journal_root_path.glob("*_sound_*.mp3"))
     audio_journals: List[AudioJournal] = []
 
-    subject_consent_date = Subject.get_consent_date(
-        study_id=study_id, subject_id=subject_id, config_file=config_file
-    )
-    subject_consent_date = pytz.timezone(study_timezone).localize(
-        subject_consent_date  # type: ignore
-    )  # convert to timezone aware datetime
-    if subject_consent_date is None:
-        logger.error(f"No consent date found for {subject_id} - skipping...")
-        return []
-
     if len(audio_journal_path) == 0:
         logger.debug(
             f"No audio journal found for {subject_id} at {audio_journal_root_path}"
@@ -179,6 +169,21 @@ def fetch_journals(
         return []
     else:
         logger.info(f"Found {len(audio_journal_path)} audio journals for {subject_id}")
+
+    # Fetched only once we know there's actually work to do - this call opens
+    # its own fresh DB connection (db.get_db_connection() creates a new
+    # SQLAlchemy engine per call), and most subjects in a study have no audio
+    # journals at all, so checking audio_journal_path first avoids paying for
+    # a connection on every subject that has nothing to process.
+    subject_consent_date = Subject.get_consent_date(
+        study_id=study_id, subject_id=subject_id, config_file=config_file
+    )
+    if subject_consent_date is None:
+        logger.error(f"No consent date found for {subject_id} - skipping...")
+        return []
+    subject_consent_date = pytz.timezone(study_timezone).localize(
+        subject_consent_date  # type: ignore
+    )  # convert to timezone aware datetime
 
     for audio_journal in audio_journal_path:
         audio_journal_basename = (
