@@ -73,17 +73,28 @@ if __name__ == "__main__":
 
     logger.info(f"Reading updated data dictionary from {updated_data_dictionary_path}")
 
-    data_dictionary = pd.read_csv(updated_data_dictionary_path)
+    try:
+        data_dictionary = pd.read_csv(updated_data_dictionary_path)
 
-    # Remove HTML tags from all columns
-    for col in data_dictionary.columns:
-        data_dictionary[col] = data_dictionary[col].apply(remove_html_tags)
+        # Remove HTML tags from all columns
+        for col in data_dictionary.columns:
+            data_dictionary[col] = data_dictionary[col].apply(remove_html_tags)
 
-    db.df_to_table(
-        config_file=config_file,
-        df=data_dictionary,
-        table_name="data_dictionary",
-        if_exists="replace",
-    )
+        db.df_to_table(
+            config_file=config_file,
+            df=data_dictionary,
+            table_name="data_dictionary",
+            if_exists="replace",
+        )
+    except Exception as e:
+        logger.error(f"Error importing data dictionary: {e}")
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            identifier=str(updated_data_dictionary_path),
+            error=e,
+            identifier_type="file_path",
+        )
+        sys.exit(1)
 
     logger.info("Data dictionary imported successfully")

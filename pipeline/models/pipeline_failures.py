@@ -37,10 +37,15 @@ IdentifierType = Literal[
     "file_path", "study", "interview_name", "subject", "batch", "other"
 ]
 
+# Kept out of 'public' so a ledger row can never collide with (or be mistaken
+# for) an application table, and so it can be permissioned/retained separately.
+SCHEMA_NAME = "pipeline_ledger"
+TABLE_NAME = f"{SCHEMA_NAME}.pipeline_failures"
+
 
 class PipelineFailure:
     """
-    Represents a row in the 'pipeline_failures' table.
+    Represents a row in the 'pipeline_ledger.pipeline_failures' table.
 
     Attributes:
         stage (str): The pipeline stage/module the failure occurred in
@@ -75,10 +80,13 @@ class PipelineFailure:
     @staticmethod
     def init_table_query() -> str:
         """
-        Return the SQL query to create the 'pipeline_failures' table.
+        Return the SQL query to create the 'pipeline_ledger' schema and, within
+        it, the 'pipeline_failures' table.
         """
-        sql_query = """
-        CREATE TABLE IF NOT EXISTS pipeline_failures (
+        sql_query = f"""
+        CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME};
+
+        CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
             pf_id SERIAL PRIMARY KEY,
             pf_stage TEXT NOT NULL,
             pf_identifier_type TEXT NOT NULL,
@@ -100,10 +108,12 @@ class PipelineFailure:
     @staticmethod
     def drop_table_query() -> str:
         """
-        Return the SQL query to drop the 'pipeline_failures' table.
+        Return the SQL query to drop the 'pipeline_failures' table. Leaves the
+        'pipeline_ledger' schema itself in place (idempotent CREATE SCHEMA IF
+        NOT EXISTS on re-init doesn't need it gone first).
         """
-        sql_query = """
-        DROP TABLE IF EXISTS pipeline_failures;
+        sql_query = f"""
+        DROP TABLE IF EXISTS {TABLE_NAME};
         """
 
         return sql_query
@@ -129,7 +139,7 @@ class PipelineFailure:
         )
 
         sql_query = f"""
-        INSERT INTO pipeline_failures (
+        INSERT INTO {TABLE_NAME} (
             pf_stage, pf_identifier_type, pf_identifier, pf_error, pf_error_type
         ) VALUES (
             '{stage}', '{identifier_type}', '{identifier}', '{error}', {error_type_sql}
@@ -137,7 +147,7 @@ class PipelineFailure:
             pf_identifier_type = EXCLUDED.pf_identifier_type,
             pf_error = EXCLUDED.pf_error,
             pf_error_type = EXCLUDED.pf_error_type,
-            pf_occurrence_count = pipeline_failures.pf_occurrence_count + 1,
+            pf_occurrence_count = {TABLE_NAME}.pf_occurrence_count + 1,
             pf_last_seen_at = CURRENT_TIMESTAMP,
             pf_resolved = FALSE,
             pf_resolved_at = NULL;

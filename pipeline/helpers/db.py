@@ -372,7 +372,7 @@ def resolve_failure(
         )
 
         query = f"""
-            UPDATE pipeline_failures
+            UPDATE pipeline_ledger.pipeline_failures
             SET pf_resolved = TRUE,
                 pf_resolved_at = CURRENT_TIMESTAMP
                 {note_clause}
