@@ -106,6 +106,7 @@ def get_study_metadata(config_file: Path, study_id: str) -> pd.DataFrame:
         db.record_failure(
             config_file=config_file,
             stage=MODULE_NAME,
+            error_code="missing_file",
             identifier=study_id,
             error=error,
             identifier_type="study",

@@ -142,7 +142,7 @@ def catogorize_audio_files(
 
 
 def fetch_interview_files(
-    interview_part: InterviewParts, config_file: Path
+    interview_part: InterviewParts, config_file: Path, study_id: str
 ) -> List[InterviewFile]:
     """
     Fetches the interview files for a given interview.
@@ -150,6 +150,7 @@ def fetch_interview_files(
     Args:
         interview (Interview): The interview object.
         config_file (Path): The path to the configuration file.
+        study_id (str): The study ID, for ledger context if parsing fails.
 
     Returns:
         List[InterviewFile]: A list of InterviewFile objects.
@@ -171,9 +172,11 @@ def fetch_interview_files(
         db.record_failure(
             config_file=config_file,
             stage=MODULE_NAME,
+            error_code="subject_id_parse",
             identifier=interview_part.interview_name,
             error=error,
             identifier_type="interview_name",
+            study_id=study_id,
         )
         raise error
     interview_path = interview_part.interview_path
@@ -340,9 +343,12 @@ def fetch_interviews(
                 db.record_failure(
                     config_file=config_file,
                     stage=MODULE_NAME,
+                    error_code="datetime_parse",
                     identifier=str(interview_dir),
                     error=e,
                     identifier_type="file_path",
+                    study_id=study_id,
+                    subject_id=subject_id,
                 )
                 continue
 
@@ -355,9 +361,11 @@ def fetch_interviews(
                 db.record_failure(
                     config_file=config_file,
                     stage=MODULE_NAME,
+                    error_code="consent_date_missing",
                     identifier=subject_id,
                     error=error,
                     identifier_type="subject",
+                    study_id=study_id,
                 )
                 continue
             consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
@@ -405,9 +413,12 @@ def fetch_interviews(
                 db.record_failure(
                     config_file=config_file,
                     stage=MODULE_NAME,
+                    error_code="datetime_parse",
                     identifier=str(wav_file),
                     error=e,
                     identifier_type="file_path",
+                    study_id=study_id,
+                    subject_id=subject_id,
                 )
                 continue
 
@@ -421,9 +432,11 @@ def fetch_interviews(
                 db.record_failure(
                     config_file=config_file,
                     stage=MODULE_NAME,
+                    error_code="consent_date_missing",
                     identifier=subject_id,
                     error=error,
                     identifier_type="subject",
+                    study_id=study_id,
                 )
                 continue
             consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
@@ -581,7 +594,9 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
         interview_counter += 1
         progress.update(task, advance=1)
         interview_files.extend(
-            fetch_interview_files(interview_part=interview_part, config_file=config_file)
+            fetch_interview_files(
+                interview_part=interview_part, config_file=config_file, study_id=study_id
+            )
         )
     progress.remove_task(task)
 

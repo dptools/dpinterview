@@ -91,6 +91,7 @@ if __name__ == "__main__":
         db.record_failure(
             config_file=config_file,
             stage=MODULE_NAME,
+            error_code="data_dictionary_import_failed",
             identifier=str(updated_data_dictionary_path),
             error=e,
             identifier_type="file_path",

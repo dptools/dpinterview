@@ -133,8 +133,11 @@ def execute_queries(
     backup: bool = False,
     on_failure: Optional[Callable] = on_failure,
     failure_stage: Optional[str] = None,
+    failure_error_code: str = "db_write_failure",
     failure_identifier: Optional[str] = None,
     failure_identifier_type: str = "batch",
+    failure_study_id: Optional[str] = None,
+    failure_subject_id: Optional[str] = None,
 ) -> list:
     """
     Executes a list of SQL queries on a PostgreSQL database.
@@ -153,9 +156,19 @@ def execute_queries(
         failure_stage (str, optional): If set (together with failure_identifier),
             a failure will also be recorded in the pipeline_failures ledger via
             record_failure(). Defaults to None (no ledger entry).
+        failure_error_code (str, optional): A short, stable code for why this
+            batch failed - see PipelineFailure's ErrorCode. Defaults to
+            "db_write_failure", the right default for the common case of "this
+            SQL batch raised an exception".
         failure_identifier (str, optional): What failed - see failure_stage.
         failure_identifier_type (str, optional): The kind of thing
             failure_identifier is (e.g. "study", "file_path"). Defaults to "batch".
+        failure_study_id (str, optional): The study this batch was for, if
+            known, for ledger filtering/reporting. Auto-filled from
+            failure_identifier when failure_identifier_type == "study".
+        failure_subject_id (str, optional): The subject this batch was for, if
+            known, for ledger filtering/reporting. Auto-filled from
+            failure_identifier when failure_identifier_type == "subject".
 
     Returns:
         list: A list of tuples containing the results of the executed queries.
@@ -266,8 +279,11 @@ def execute_queries(
             record_failure(
                 config_file=config_file,
                 stage=failure_stage,
+                error_code=failure_error_code,
                 identifier=failure_identifier,
                 identifier_type=failure_identifier_type,
+                study_id=failure_study_id,
+                subject_id=failure_subject_id,
                 error=e,
                 db=db,
             )
@@ -285,11 +301,14 @@ def execute_queries(
 def record_failure(
     config_file: Path,
     stage: str,
+    error_code: str,
     identifier: str,
     error: Union[str, Exception],
     identifier_type: Literal[
         "file_path", "study", "interview_name", "subject", "batch", "other"
     ] = "file_path",
+    study_id: Optional[str] = None,
+    subject_id: Optional[str] = None,
     db: str = "postgresql",
 ) -> None:
     """
@@ -303,12 +322,23 @@ def record_failure(
     Args:
         config_file (Path): The path to the configuration file.
         stage (str): The pipeline stage/module the failure occurred in.
+        error_code (str): A short, stable code for *why* this failed (e.g.
+            "datetime_parse"), shared across every occurrence of the same kind
+            of failure regardless of identifier or exact message - see
+            pipeline.models.pipeline_failures.ErrorCode for the known set.
         identifier (str): What failed - a file path when known, otherwise the
             most specific thing available (study_id, a batch description, etc).
         error (Union[str, Exception]): The error. If an Exception is passed,
             its class name is recorded as the error type.
         identifier_type (str, optional): The kind of thing `identifier` is.
             Defaults to "file_path".
+        study_id (str, optional): The study this failure occurred in, if known,
+            for ledger filtering/reporting. Auto-filled from `identifier` when
+            identifier_type == "study" and this isn't passed explicitly.
+        subject_id (str, optional): The subject this failure relates to, if
+            known, for ledger filtering/reporting. Auto-filled from
+            `identifier` when identifier_type == "subject" and this isn't
+            passed explicitly.
         db (str, optional): The section of the configuration file to use.
             Defaults to "postgresql".
     """
@@ -318,11 +348,19 @@ def record_failure(
         # be circular.
         from pipeline.models.pipeline_failures import PipelineFailure
 
+        if study_id is None and identifier_type == "study":
+            study_id = identifier
+        if subject_id is None and identifier_type == "subject":
+            subject_id = identifier
+
         error_type = type(error).__name__ if isinstance(error, Exception) else None
         failure = PipelineFailure(
             stage=stage,
+            error_code=error_code,
             identifier=identifier,
             identifier_type=identifier_type,
+            study_id=study_id,
+            subject_id=subject_id,
             error=str(error),
             error_type=error_type,
         )

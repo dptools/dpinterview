@@ -38,6 +38,31 @@ IdentifierType = Literal[
     "file_path", "study", "interview_name", "subject", "batch", "other"
 ]
 
+# A short, stable code for *why* something failed, independent of the specific
+# file/subject/message involved - e.g. every unparseable date string becomes
+# "datetime_parse" instead of a one-off "invalid isoformat string: 'XYZ'" that
+# can't be grouped with any other row. This is what reports/dashboards should
+# group and filter by. Add new codes here as new failure sites get wired up,
+# so call sites stay consistent instead of inventing near-duplicate strings.
+ErrorCode = Literal[
+    "datetime_parse",
+    "subject_id_parse",
+    "filename_parse",
+    "consent_date_missing",
+    "missing_file",
+    "db_write_failure",
+    "data_dictionary_import_failed",
+    "ffprobe_streams_missing",
+    "openface_datatype_cast_failed",
+    "openface_load_failed",
+    "decryption_failed",
+    "llm_prompt_build_failed",
+    "llm_language_identification_failed",
+    "transcribeme_pull_failed",
+    "interview_not_in_study_list",
+    "other",
+]
+
 # Kept out of 'public' so a ledger row can never collide with (or be mistaken
 # for) an application table, and so it can be permissioned/retained separately.
 SCHEMA_NAME = "pipeline_ledger"
@@ -51,29 +76,43 @@ class PipelineFailure:
     Attributes:
         stage (str): The pipeline stage/module the failure occurred in
             (e.g. matches the module_name used for [logging] config sections).
+        error_code (ErrorCode): A short, stable code identifying *why* this
+            failed (e.g. "datetime_parse"), for grouping/reporting across
+            occurrences that have different identifiers or error messages.
         identifier (str): What failed - a file path when known, otherwise the
             most specific thing available (study_id, a batch description, etc).
         error (str): The error message.
         identifier_type (IdentifierType): What kind of thing `identifier` is.
+        study_id (Optional[str]): The study the failure occurred in, if known.
+        subject_id (Optional[str]): The subject the failure relates to, if known.
         error_type (Optional[str]): The exception class name, if known.
     """
 
     def __init__(
         self,
         stage: str,
+        error_code: ErrorCode,
         identifier: str,
         error: str,
         identifier_type: IdentifierType = "file_path",
+        study_id: Optional[str] = None,
+        subject_id: Optional[str] = None,
         error_type: Optional[str] = None,
     ) -> None:
         self.stage = stage
+        self.error_code = error_code
         self.identifier = identifier
         self.identifier_type = identifier_type
+        self.study_id = study_id
+        self.subject_id = subject_id
         self.error = error
         self.error_type = error_type
 
     def __str__(self) -> str:
-        return f"PipelineFailure({self.stage}, {self.identifier}, {self.error})"
+        return (
+            f"PipelineFailure({self.stage}, {self.error_code}, "
+            f"{self.identifier}, {self.error})"
+        )
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -81,8 +120,12 @@ class PipelineFailure:
     @staticmethod
     def init_table_query() -> str:
         """
-        Return the SQL query to create the 'pipeline_ledger' schema and, within
-        it, the 'pipeline_failures' table.
+        Return the SQL to create the 'pipeline_ledger' schema and, within it,
+        the 'pipeline_failures' table - and to bring an already-existing table
+        (from before pf_error_code/pf_study_id/pf_subject_id existed) up to
+        the current shape via ADD COLUMN IF NOT EXISTS, so re-running this
+        against an already-initialized deployment upgrades it in place instead
+        of requiring a destructive drop/recreate.
         """
         sql_query = f"""
         CREATE SCHEMA IF NOT EXISTS {SCHEMA_NAME};
@@ -90,8 +133,11 @@ class PipelineFailure:
         CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
             pf_id SERIAL PRIMARY KEY,
             pf_stage TEXT NOT NULL,
+            pf_error_code TEXT NOT NULL DEFAULT 'unknown',
             pf_identifier_type TEXT NOT NULL,
             pf_identifier TEXT NOT NULL,
+            pf_study_id TEXT,
+            pf_subject_id TEXT,
             pf_error TEXT NOT NULL,
             pf_error_type TEXT,
             pf_occurrence_count INTEGER NOT NULL DEFAULT 1,
@@ -102,6 +148,18 @@ class PipelineFailure:
             pf_resolved_note TEXT,
             UNIQUE (pf_stage, pf_identifier)
         );
+
+        ALTER TABLE {TABLE_NAME}
+            ADD COLUMN IF NOT EXISTS pf_error_code TEXT NOT NULL DEFAULT 'unknown';
+        ALTER TABLE {TABLE_NAME} ADD COLUMN IF NOT EXISTS pf_study_id TEXT;
+        ALTER TABLE {TABLE_NAME} ADD COLUMN IF NOT EXISTS pf_subject_id TEXT;
+
+        CREATE INDEX IF NOT EXISTS pipeline_failures_study_id_idx
+            ON {TABLE_NAME} (pf_study_id);
+        CREATE INDEX IF NOT EXISTS pipeline_failures_subject_id_idx
+            ON {TABLE_NAME} (pf_subject_id);
+        CREATE INDEX IF NOT EXISTS pipeline_failures_error_code_idx
+            ON {TABLE_NAME} (pf_error_code);
         """
 
         return sql_query
@@ -130,6 +188,7 @@ class PipelineFailure:
         resolved and then happens again is not resolved anymore.
         """
         stage = db.santize_string(self.stage)
+        error_code = db.santize_string(self.error_code)
         identifier_type = db.santize_string(self.identifier_type)
         identifier = db.santize_string(self.identifier)
         error = db.santize_string(self.error)
@@ -138,14 +197,29 @@ class PipelineFailure:
             if self.error_type is not None
             else "NULL"
         )
+        study_id_sql = (
+            f"'{db.santize_string(self.study_id)}'"
+            if self.study_id is not None
+            else "NULL"
+        )
+        subject_id_sql = (
+            f"'{db.santize_string(self.subject_id)}'"
+            if self.subject_id is not None
+            else "NULL"
+        )
 
         sql_query = f"""
         INSERT INTO {TABLE_NAME} (
-            pf_stage, pf_identifier_type, pf_identifier, pf_error, pf_error_type
+            pf_stage, pf_error_code, pf_identifier_type, pf_identifier,
+            pf_study_id, pf_subject_id, pf_error, pf_error_type
         ) VALUES (
-            '{stage}', '{identifier_type}', '{identifier}', '{error}', {error_type_sql}
+            '{stage}', '{error_code}', '{identifier_type}', '{identifier}',
+            {study_id_sql}, {subject_id_sql}, '{error}', {error_type_sql}
         ) ON CONFLICT (pf_stage, pf_identifier) DO UPDATE SET
+            pf_error_code = EXCLUDED.pf_error_code,
             pf_identifier_type = EXCLUDED.pf_identifier_type,
+            pf_study_id = EXCLUDED.pf_study_id,
+            pf_subject_id = EXCLUDED.pf_subject_id,
             pf_error = EXCLUDED.pf_error,
             pf_error_type = EXCLUDED.pf_error_type,
             pf_occurrence_count = {TABLE_NAME}.pf_occurrence_count + 1,
