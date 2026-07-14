@@ -60,6 +60,7 @@ ErrorCode = Literal[
     "llm_language_identification_failed",
     "transcribeme_pull_failed",
     "interview_not_in_study_list",
+    "crawler_stage_failed",
     "other",
 ]
 
