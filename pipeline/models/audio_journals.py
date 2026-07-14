@@ -106,12 +106,27 @@ class AudioJournal:
         """
 
         sanitized_path = db.santize_string(str(self.aj_path))
+        sanitized_subject_id = db.santize_string(self.subject_id)
+        sanitized_study_id = db.santize_string(self.study_id)
 
+        # audio_journals also has UNIQUE (aj_day, aj_session, subject_id, study_id),
+        # separate from the aj_path primary key. Session numbers are recomputed
+        # from scratch on every crawl (see fetch_journals), so a newly-discovered
+        # file can "steal" the (day, session) slot a different, already-persisted
+        # file used to hold. Since a single INSERT...ON CONFLICT can only name one
+        # arbiter index, clear any other file's stale claim on this slot first;
+        # that stale file gets its own correct slot re-inserted later in the same
+        # batch, since every on-disk file is re-upserted every run.
         sql_query = f"""
+        DELETE FROM audio_journals
+        WHERE aj_day = {self.aj_day} AND aj_session = {self.aj_session}
+            AND subject_id = '{sanitized_subject_id}' AND study_id = '{sanitized_study_id}'
+            AND aj_path <> '{sanitized_path}';
+
         INSERT INTO audio_journals (aj_path, aj_name, aj_datetime, aj_day,
             aj_session, subject_id, study_id)
         VALUES ('{sanitized_path}', '{self.aj_name}', '{self.aj_datetime}', {self.aj_day},
-            {self.aj_session}, '{self.subject_id}', '{self.study_id}')
+            {self.aj_session}, '{sanitized_subject_id}', '{sanitized_study_id}')
         ON CONFLICT (aj_path) DO UPDATE SET
             aj_name = excluded.aj_name,
             aj_datetime = excluded.aj_datetime,
