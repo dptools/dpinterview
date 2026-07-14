@@ -27,6 +27,7 @@ except ValueError:
     pass
 
 
+import argparse
 from typing import Literal, Optional
 
 from pipeline.helpers import cli, db, utils
@@ -157,7 +158,23 @@ class PipelineFailure:
 
 
 if __name__ == "__main__":
-    config_file = utils.get_config_file_path()
+    parser = argparse.ArgumentParser(
+        prog="pipeline_failures",
+        description="Initialize the 'pipeline_ledger.pipeline_failures' table.",
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, help="Path to the config file.", required=False
+    )
+
+    args = parser.parse_args()
+
+    if args.config:
+        config_file = Path(args.config).resolve()
+        if not config_file.exists():
+            console.log(f"[red]Error: Config file '{config_file}' does not exist.")
+            sys.exit(1)
+    else:
+        config_file = utils.get_config_file_path()
 
     console.log("Initializing 'pipeline_failures' table...")
 
