@@ -70,6 +70,7 @@ study_timezones: Dict[str, str] = {
     "PronetNL": "America/New_York",
     "PronetNN": "America/Chicago",
     "PronetOR": "America/Los_Angeles",
+    "PronetOH": "America/New_York",
     "PronetPA": "America/New_York",
     "PronetPI": "America/New_York",
     "PronetPV": "Europe/Rome",
@@ -131,7 +132,7 @@ def get_journal_timestamp_from_mindlamp_json(
 
 
 def fetch_journals(
-    config_file: Path, subject_id: str, study_id: str
+    config_file: Path, subject_id: str, study_id: str, study_timezone: str
 ) -> List[AudioJournal]:
     """
     Fetches the AudioJournals for a given subject ID.
@@ -139,6 +140,9 @@ def fetch_journals(
     Args:
         config_file (Path): The path to the config file.
         subject_id (str): The subject ID.
+        study_timezone (str): The IANA timezone for the study (see
+            study_timezones) - resolved once per study by the caller so a
+            missing entry is only recorded/skipped once, not once per subject.
 
     Returns:
         List[AudioJournal]: A list of AudioJournal objects.
@@ -157,11 +161,6 @@ def fetch_journals(
 
     audio_journal_path = list(audio_journal_root_path.glob("*_sound_*.mp3"))
     audio_journals: List[AudioJournal] = []
-
-    study_timezone = study_timezones.get(study_id, None)
-    if study_timezone is None:
-        logger.error(f"No timezone found for {study_id}")
-        sys.exit(1)
 
     subject_consent_date = Subject.get_consent_date(
         study_id=study_id, subject_id=subject_id, config_file=config_file
@@ -339,6 +338,19 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
         config_file (Path): The path to the configuration file.
     """
 
+    study_timezone = study_timezones.get(study_id, None)
+    if study_timezone is None:
+        logger.error(f"No timezone found for {study_id} - skipping study")
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code="crawler_stage_failed",
+            identifier=study_id,
+            identifier_type="study",
+            error=f"No timezone configured for study {study_id} in study_timezones",
+        )
+        return
+
     # Get the subjects
     subjects = core.get_subject_ids(config_file=config_file, study_id=study_id)
 
@@ -353,7 +365,10 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
         )
         journals.extend(
             fetch_journals(
-                config_file=config_file, subject_id=subject_id, study_id=study_id
+                config_file=config_file,
+                subject_id=subject_id,
+                study_id=study_id,
+                study_timezone=study_timezone,
             )
         )
     progress.remove_task(task)
