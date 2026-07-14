@@ -71,6 +71,32 @@ def get_subject_ids(config_file: Path, study_id: str) -> List[str]:
     return subject_ids
 
 
+def get_subject_active_status(config_file: Path, study_id: str) -> Dict[str, bool]:
+    """
+    Gets the is_active flag for every subject in a study, in a single query.
+
+    Each DB call opens (and disposes of) its own connection, so callers that
+    need this per-subject should fetch the whole study's status map once
+    up front and look up subject_id in it, rather than querying per subject.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The study ID.
+
+    Returns:
+        Dict[str, bool]: Mapping of subject_id to is_active.
+    """
+    query = f"""
+        SELECT subject_id, is_active
+        FROM subjects
+        WHERE study_id = '{study_id}';
+    """
+
+    results = db.execute_sql(config_file=config_file, query=query)
+
+    return dict(zip(results["subject_id"], results["is_active"]))
+
+
 def get_all_cols(csv_file: Path) -> List[str]:
     """
     Returns a list of all column names in a CSV file.
