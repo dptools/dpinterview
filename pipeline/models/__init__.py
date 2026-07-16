@@ -16,6 +16,7 @@ from pipeline.models.interview_files import InterviewFile
 from pipeline.models.key_store import KeyStore
 from pipeline.models.logs import Log
 from pipeline.models.pipeline_failures import PipelineFailure
+from pipeline.models.datetime_overrides import DatetimeOverride
 from pipeline.models.decrypted_files import DecryptedFile
 from pipeline.models.video_qqc import VideoQuickQc
 from pipeline.models.interview_roles import InterviewRole
@@ -90,6 +91,7 @@ def init_db(config_file: Path):
         KeyStore.drop_table_query(),
         Log.drop_table_query(),
         PipelineFailure.drop_table_query(),
+        DatetimeOverride.drop_table_query(),
         FfprobeMetadata.drop_table_query(),
     ]
 
@@ -97,6 +99,7 @@ def init_db(config_file: Path):
         KeyStore.init_table_query(),
         Log.init_table_query(),
         PipelineFailure.init_table_query(),
+        DatetimeOverride.init_table_query(),
         Study.init_table_query(),
         Subject.init_table_query(),
         FormData.init_table_query(),
