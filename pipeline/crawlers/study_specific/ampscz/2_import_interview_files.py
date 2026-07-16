@@ -40,6 +40,7 @@ from rich.progress import Progress
 from pipeline import core, orchestrator
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
+from pipeline.models import datetime_overrides
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
 from pipeline.models.interview_parts import InterviewParts
@@ -360,20 +361,34 @@ def fetch_interviews(
                 interview_datetime = datetime.combine(date_dt, time_dt)
                 actual_interview_datetime = datetime.combine(date_dt, actual_time_dt)
             except (ValueError, IndexError) as e:
-                logger.error(
-                    f"{subject_id}: Could not parse date and time from {base_name}. Skipping..."
+                override_datetime = datetime_overrides.get_override_datetime(
+                    config_file=config_file, identifier=str(interview_dir)
                 )
-                db.record_failure(
-                    config_file=config_file,
-                    stage=MODULE_NAME,
-                    error_code="datetime_parse",
-                    identifier=str(interview_dir),
-                    error=e,
-                    identifier_type="file_path",
-                    study_id=study_id,
-                    subject_id=subject_id,
+                if override_datetime is None:
+                    logger.error(
+                        f"{subject_id}: Could not parse date and time from {base_name}. Skipping..."
+                    )
+                    db.record_failure(
+                        config_file=config_file,
+                        stage=MODULE_NAME,
+                        error_code="datetime_parse",
+                        identifier=str(interview_dir),
+                        error=e,
+                        identifier_type="file_path",
+                        study_id=study_id,
+                        subject_id=subject_id,
+                    )
+                    continue
+
+                logger.info(
+                    f"{subject_id}: Using staff-confirmed datetime override for {base_name}"
                 )
-                continue
+                actual_interview_datetime = override_datetime
+                # Ignore time information, to get accurate day - mirrors the
+                # normal-parse path above.
+                interview_datetime = override_datetime.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
 
             interview_name = dpdash.get_dpdash_name(
                 study=study_id,
@@ -412,20 +427,33 @@ def fetch_interviews(
                     hour=0, minute=0, second=0, microsecond=0
                 )
             except ValueError as e:
-                logger.error(
-                    f"Could not parse date and time from {wav_file}. Skipping..."
+                override_datetime = datetime_overrides.get_override_datetime(
+                    config_file=config_file, identifier=str(wav_file)
                 )
-                db.record_failure(
-                    config_file=config_file,
-                    stage=MODULE_NAME,
-                    error_code="datetime_parse",
-                    identifier=str(wav_file),
-                    error=e,
-                    identifier_type="file_path",
-                    study_id=study_id,
-                    subject_id=subject_id,
+                if override_datetime is None:
+                    logger.error(
+                        f"Could not parse date and time from {wav_file}. Skipping..."
+                    )
+                    db.record_failure(
+                        config_file=config_file,
+                        stage=MODULE_NAME,
+                        error_code="datetime_parse",
+                        identifier=str(wav_file),
+                        error=e,
+                        identifier_type="file_path",
+                        study_id=study_id,
+                        subject_id=subject_id,
+                    )
+                    continue
+
+                logger.info(
+                    f"{subject_id}: Using staff-confirmed datetime override for {wav_file}"
                 )
-                continue
+                actual_interview_datetime = override_datetime
+                # truncate time, mirrors the normal-parse path above
+                interview_datetime = override_datetime.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
 
             interview_name = dpdash.get_dpdash_name(
                 study=study_id,
@@ -603,6 +631,18 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
         failure_identifier=study_id,
         failure_identifier_type="study",
     )
+
+    # Successfully-imported parts may have previously failed to date-parse
+    # (recorded in pipeline_failures, then matched to a runsheet entry via a
+    # staff-confirmed datetime_overrides row) - close the loop on both now
+    # that the import actually succeeded. No-ops for normally-parsed files:
+    # there's no matching pipeline_failures/datetime_overrides row to update.
+    for interview_part in interview_parts:
+        identifier = str(interview_part.interview_path)
+        db.resolve_failure(
+            config_file=config_file, stage=MODULE_NAME, identifier=identifier
+        )
+        datetime_overrides.mark_consumed(config_file=config_file, identifier=identifier)
 
 
 def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
