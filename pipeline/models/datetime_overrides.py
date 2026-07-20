@@ -115,9 +115,11 @@ class DatetimeOverride:
     def to_sql(self) -> str:
         """
         Return the SQL query to insert (or replace) this override. Re-linking
-        an identifier to a new datetime clears do_consumed_at, so a
-        previously-consumed override that gets corrected is picked up again
-        on the next crawler pass.
+        an identifier to a new datetime clears do_consumed_at - it no longer
+        gates whether the override applies (see get_override_datetime()), but
+        clearing it keeps the field meaningful as "first picked up under the
+        current value" rather than carrying a stale timestamp from a
+        since-corrected date.
         """
         identifier = db.santize_string(self.identifier)
         override_datetime = self.override_datetime.strftime("%Y-%m-%d %H:%M:%S")
@@ -150,8 +152,17 @@ class DatetimeOverride:
 def get_override_datetime(config_file: Path, identifier: str) -> Optional[datetime]:
     """
     Looks up a staff-confirmed datetime override for a raw file/directory
-    path that failed to date-parse, if one has been recorded and not yet
-    consumed by a prior crawler pass.
+    path that failed to date-parse, if one has been recorded.
+
+    Deliberately does NOT filter on do_consumed_at: the crawler has no
+    "already imported, skip" check and re-parses every raw file/directory
+    from scratch on every pass, so a one-shot override would stop matching
+    after its first successful use - silently un-resolving the same
+    datetime_parse pipeline_failures row (and re-erroring instead of
+    re-logging the override) on every subsequent run. The override must
+    keep applying on every pass for as long as the raw name still fails to
+    parse. do_consumed_at is retained purely as a record of when the
+    override was first successfully picked up - see mark_consumed().
 
     Args:
         config_file (Path): The path to the configuration file.
@@ -160,14 +171,14 @@ def get_override_datetime(config_file: Path, identifier: str) -> Optional[dateti
             failure).
 
     Returns:
-        Optional[datetime]: The overridden datetime, or None if no
-        (unconsumed) override has been recorded for this identifier.
+        Optional[datetime]: The overridden datetime, or None if no override
+        has been recorded for this identifier.
     """
     identifier_sql = db.santize_string(identifier)
     query = f"""
         SELECT do_override_datetime
         FROM {TABLE_NAME}
-        WHERE do_identifier = '{identifier_sql}' AND do_consumed_at IS NULL;
+        WHERE do_identifier = '{identifier_sql}';
     """
     result = db.fetch_record(config_file=config_file, query=query)
     if result is None:
@@ -177,10 +188,11 @@ def get_override_datetime(config_file: Path, identifier: str) -> Optional[dateti
 
 def mark_consumed(config_file: Path, identifier: str) -> None:
     """
-    Marks a datetime override as consumed, once a crawler pass has
-    successfully used it to import the file. Best-effort and a no-op if no
-    matching (unconsumed) override row exists, mirroring
-    db.resolve_failure()'s call-on-every-successful-import semantics.
+    Records the first time a crawler pass successfully used this override to
+    import the file - informational only, does not gate get_override_datetime().
+    Best-effort and a no-op if no matching (not-yet-stamped) override row
+    exists, mirroring db.resolve_failure()'s call-on-every-successful-import
+    semantics.
     """
     identifier_sql = db.santize_string(identifier)
     query = f"""
