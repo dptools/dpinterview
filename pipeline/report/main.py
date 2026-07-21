@@ -2,6 +2,7 @@
 Generates a report for the Interview.
 """
 
+import logging
 import tempfile
 from datetime import timedelta
 from pathlib import Path
@@ -20,6 +21,8 @@ from pipeline.helpers.plot import corr_matrix, heatmaps
 from pipeline.models.interview_roles import InterviewRole
 from pipeline.models.lite.interview_metadata import InterviewMetadata
 from pipeline.report import common, header, video
+
+logger = logging.getLogger(__name__)
 
 
 def generate_report(
@@ -88,8 +91,11 @@ def generate_report(
             of_pt_session["timestamp"] = of_pt_session["timestamp"].apply(
                 utils.datetime_time_to_float
             )
-        except AttributeError:
-            pass
+        except AttributeError as e:
+            logger.debug(
+                f"Could not convert subject timestamp column to float for "
+                f"{interview_name}, leaving as-is: {e}"
+            )
 
         if interview_metadata.has_interviewer_stream:
             status.update("Fetching OpenFace features for interviewer...")
@@ -105,8 +111,11 @@ def generate_report(
                 of_int_session["timestamp"] = of_int_session["timestamp"].apply(
                     utils.datetime_time_to_float
                 )
-            except AttributeError:
-                pass
+            except AttributeError as e:
+                logger.debug(
+                    f"Could not convert interviewer timestamp column to float for "
+                    f"{interview_name}, leaving as-is: {e}"
+                )
 
         temp_files_common: List[tempfile.NamedTemporaryFile] = []  # type: ignore
 

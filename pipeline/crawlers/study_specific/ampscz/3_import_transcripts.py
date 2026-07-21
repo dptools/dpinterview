@@ -67,6 +67,7 @@ def get_interview_name_from_transcript(transcript_filename: str) -> str:
     # make all day as positive
     if day < 0:
         day = -day
+        # Could this cause name clashes? eg day -5 and day 5 end up the same
 
     interview_name = f"{study_id}-{subject_id}-{data_type}Interview-day{day:04d}"
 
@@ -74,13 +75,14 @@ def get_interview_name_from_transcript(transcript_filename: str) -> str:
 
 
 def transcripts_to_models(
-    transcripts: List[Path], config_file: Path
+    transcripts: List[Path], config_file: Path, study_id: str
 ) -> Tuple[List[File], List[TranscriptFile]]:
     """
     Converts the transcripts into File and InterviewFile models.
 
     Args:
         transcripts (List[Path]): The list of transcripts.
+        study_id (str): The study ID, for ledger context if parsing fails.
 
     Returns:
         Tuple[List[File], List[TranscriptFile]]: The list of File and InterviewFile models.
@@ -98,6 +100,15 @@ def transcripts_to_models(
         except IndexError as e:
             logger.error(f"Error processing transcript {filename}: {e}")
             logger.error("Skipping.")
+            db.record_failure(
+                config_file=config_file,
+                stage=MODULE_NAME,
+                error_code="filename_parse",
+                identifier=str(transcript),
+                error=e,
+                identifier_type="file_path",
+                study_id=study_id,
+            )
             continue
 
         # interview_path = core.get_interview_path(
@@ -177,7 +188,7 @@ def import_transcripts(data_root: Path, study: str, config_file: Path) -> None:
     logger.info(f"Found {len(transcripts)} transcripts.")
 
     files, transcript_files = transcripts_to_models(
-        transcripts=transcripts, config_file=config_file
+        transcripts=transcripts, config_file=config_file, study_id=study
     )
 
     logger.info(

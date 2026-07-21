@@ -149,9 +149,10 @@ def get_interview_files(
                 interview_name=interview_name,
                 role=role,
             )
-        except FileNotFoundError:
-            stream = None
-        except ValueError:
+        except (FileNotFoundError, ValueError) as e:
+            logger.debug(
+                f"No stream found for interview {interview_name}, role {role}: {e}"
+            )
             stream = None
 
         if stream is not None:
@@ -163,9 +164,11 @@ def get_interview_files(
                 interview_name=interview_name,
                 role=role,
             )
-        except FileNotFoundError:
-            of_path = None
-        except ValueError:
+        except (FileNotFoundError, ValueError) as e:
+            logger.debug(
+                f"No OpenFace path found for interview {interview_name}, "
+                f"role {role}: {e}"
+            )
             of_path = None
 
         if of_path is not None:
@@ -177,7 +180,11 @@ def get_interview_files(
             interview_name=interview_name,
             report_version=version,
         )
-    except FileNotFoundError:
+    except FileNotFoundError as e:
+        logger.debug(
+            f"No PDF report found for interview {interview_name}, "
+            f"version {version}: {e}"
+        )
         report_path = None
 
     related_files.extend(decrypted_files)

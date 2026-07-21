@@ -289,7 +289,11 @@ def check_match(transcript_qqc: Dict[str, Any], fau_data: Dict[str, Any]) -> boo
         try:
             if transcript_qqc[speaker]["role"] != stats["role"]:
                 return False
-        except KeyError:
+        except KeyError as e:
+            logger.debug(
+                f"Missing 'role' key while comparing speaker {speaker!r} "
+                f"(transcript_qqc vs FAU-derived stats): {e}. Treating as a mismatch."
+            )
             return False
 
     return True

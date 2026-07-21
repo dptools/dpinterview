@@ -200,9 +200,15 @@ if __name__ == "__main__":
                         config_file=config_file,
                         queries=drop_queries,
                         show_commands=True,
+                        failure_stage=MODULE_NAME,
+                        failure_identifier=interview_to_wipe,
+                        failure_identifier_type="interview_name",
                     )
                 except Exception as e:
-                    logger.error(f"Error: {e}")
+                    logger.error(
+                        f"Error dropping DB rows for interview "
+                        f"{interview_to_wipe}: {e}"
+                    )
                     logger.error("Continuing...")
             logger.info(
                 f"Wiped interview: [bold blue]{interview_to_wipe} in {timer.duration} seconds.",

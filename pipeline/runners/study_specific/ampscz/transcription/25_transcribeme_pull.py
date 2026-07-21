@@ -338,7 +338,17 @@ if __name__ == "__main__":
                                 logger.info(f"[remote] Deleting {sftp_upload_path}")
                                 sftp.sftp_delete_file(sftp_client, sftp_upload_path)
                 except paramiko.SSHException as e:
-                    logger.error(f"SSH connection error: {e}")
+                    logger.error(
+                        f"SSH connection error while pulling transcript "
+                        f"{transcript_path}: {e}"
+                    )
+                    db.record_failure(
+                        config_file=config_file,
+                        stage=MODULE_NAME,
+                        identifier=str(transcript_path),
+                        error=e,
+                        identifier_type="file_path",
+                    )
                     logger.info(f"Retrying in {retry_timeout} seconds...")
 
                     time.sleep(retry_timeout)

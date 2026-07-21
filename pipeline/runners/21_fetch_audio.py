@@ -149,7 +149,17 @@ if __name__ == "__main__":
                     global COUNTER  # pylint: disable=global-statement
                     COUNTER -= 1
 
-                    logger.info("Decryption request failed. Ignoring file.")
+                    logger.info(
+                        f"Decryption request failed. Ignoring file: "
+                        f"{file_to_decrypt_path}"
+                    )
+                    db.record_failure(
+                        config_file=config_file,
+                        stage=MODULE_NAME,
+                        identifier=str(file_to_decrypt_path),
+                        error="Decryption request failed; file marked ignored",
+                        identifier_type="file_path",
+                    )
                     sql_query = InterviewFile.ignore_file(file_to_decrypt_path)
                     db.execute_queries(config_file=config_file, queries=[sql_query])
 

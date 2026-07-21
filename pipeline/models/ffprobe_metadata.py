@@ -393,7 +393,7 @@ class FfprobeMetadata:
                     ) ON CONFLICT (fma_source_path) DO NOTHING;
                 """
             except KeyError as e:
-                logger.error(f"Key error: {e}")
+                logger.error(f"Key error building ffprobe stream row for {source_path}: {e}")
                 logger.debug(f"Stream: {stream}")
                 raise e
         else:
@@ -450,7 +450,9 @@ class FfprobeMetadata:
         try:
             streams = self.metadata["streams"]
         except KeyError as e:
-            logger.error(f"Metadata does not have 'streams' key: {e}")
+            logger.error(
+                f"Metadata does not have 'streams' key for {self.source_path}: {e}"
+            )
             logger.debug(f"Metadata: {self.metadata}")
             return [
                 f"""
