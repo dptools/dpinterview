@@ -70,6 +70,7 @@ study_timezones: Dict[str, str] = {
     "PronetNL": "America/New_York",
     "PronetNN": "America/Chicago",
     "PronetOR": "America/Los_Angeles",
+    "PronetOH": "America/New_York",
     "PronetPA": "America/New_York",
     "PronetPI": "America/New_York",
     "PronetPV": "Europe/Rome",
@@ -131,7 +132,7 @@ def get_journal_timestamp_from_mindlamp_json(
 
 
 def fetch_journals(
-    config_file: Path, subject_id: str, study_id: str
+    config_file: Path, subject_id: str, study_id: str, study_timezone: str
 ) -> List[AudioJournal]:
     """
     Fetches the AudioJournals for a given subject ID.
@@ -139,6 +140,9 @@ def fetch_journals(
     Args:
         config_file (Path): The path to the config file.
         subject_id (str): The subject ID.
+        study_timezone (str): The IANA timezone for the study (see
+            study_timezones) - resolved once per study by the caller so a
+            missing entry is only recorded/skipped once, not once per subject.
 
     Returns:
         List[AudioJournal]: A list of AudioJournal objects.
@@ -158,21 +162,6 @@ def fetch_journals(
     audio_journal_path = list(audio_journal_root_path.glob("*_sound_*.mp3"))
     audio_journals: List[AudioJournal] = []
 
-    study_timezone = study_timezones.get(study_id, None)
-    if study_timezone is None:
-        logger.error(f"No timezone found for {study_id}")
-        sys.exit(1)
-
-    subject_consent_date = Subject.get_consent_date(
-        study_id=study_id, subject_id=subject_id, config_file=config_file
-    )
-    subject_consent_date = pytz.timezone(study_timezone).localize(
-        subject_consent_date  # type: ignore
-    )  # convert to timezone aware datetime
-    if subject_consent_date is None:
-        logger.error(f"No consent date found for {subject_id} - skipping...")
-        return []
-
     if len(audio_journal_path) == 0:
         logger.debug(
             f"No audio journal found for {subject_id} at {audio_journal_root_path}"
@@ -180,6 +169,21 @@ def fetch_journals(
         return []
     else:
         logger.info(f"Found {len(audio_journal_path)} audio journals for {subject_id}")
+
+    # Fetched only once we know there's actually work to do - this call opens
+    # its own fresh DB connection (db.get_db_connection() creates a new
+    # SQLAlchemy engine per call), and most subjects in a study have no audio
+    # journals at all, so checking audio_journal_path first avoids paying for
+    # a connection on every subject that has nothing to process.
+    subject_consent_date = Subject.get_consent_date(
+        study_id=study_id, subject_id=subject_id, config_file=config_file
+    )
+    if subject_consent_date is None:
+        logger.error(f"No consent date found for {subject_id} - skipping...")
+        return []
+    subject_consent_date = pytz.timezone(study_timezone).localize(
+        subject_consent_date  # type: ignore
+    )  # convert to timezone aware datetime
 
     for audio_journal in audio_journal_path:
         audio_journal_basename = (
@@ -339,6 +343,19 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
         config_file (Path): The path to the configuration file.
     """
 
+    study_timezone = study_timezones.get(study_id, None)
+    if study_timezone is None:
+        logger.error(f"No timezone found for {study_id} - skipping study")
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code="crawler_stage_failed",
+            identifier=study_id,
+            identifier_type="study",
+            error=f"No timezone configured for study {study_id} in study_timezones",
+        )
+        return
+
     # Get the subjects
     subjects = core.get_subject_ids(config_file=config_file, study_id=study_id)
 
@@ -353,7 +370,10 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
         )
         journals.extend(
             fetch_journals(
-                config_file=config_file, subject_id=subject_id, study_id=study_id
+                config_file=config_file,
+                subject_id=subject_id,
+                study_id=study_id,
+                study_timezone=study_timezone,
             )
         )
     progress.remove_task(task)
@@ -366,12 +386,23 @@ def import_journals(config_file: Path, study_id: str, progress: Progress) -> Non
     )
 
     # Execute the queries
+    # Note: no show_progress here - this runs inside the outer per-study progress
+    # bar started in __main__, and rich only allows one active progress display
+    # at a time.
     db.execute_queries(
         queries=sql_queries,
         config_file=config_file,
         show_commands=False,
-        show_progress=True,
-        on_failure=lambda: (logger.error("Error executing queries")),
+        on_failure=lambda: logger.error(
+            f"Failed to import audio journals for study {study_id}: "
+            f"none of the {len(sql_queries)} pending journal-insert query(ies) for "
+            f"this study were persisted. See the query/error logged above for detail; "
+            f"per-journal failure detail is not yet available (batch is not isolated "
+            f"per-record)."
+        ),
+        failure_stage=MODULE_NAME,
+        failure_identifier=study_id,
+        failure_identifier_type="study",
     )
 
 

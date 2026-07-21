@@ -124,6 +124,7 @@ if __name__ == "__main__":
                 cli.remove(item)
                 COUNTER += 1
             except FileNotFoundError:
+                logger.debug(f"Item already removed, skipping: {item}")
                 SKIP_COUNTER += 1
                 continue
 

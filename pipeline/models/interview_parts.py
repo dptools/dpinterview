@@ -96,6 +96,8 @@ class InterviewParts:
             {self.is_primary}, {self.is_duplicate}
         ) ON CONFLICT (interview_path) DO NOTHING;
         """
+        # On conflict, we do not override (does not match pattern for subjects)
+        # Could result in stale interview parts data in db?
 
         return sql_query
 

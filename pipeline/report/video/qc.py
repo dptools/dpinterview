@@ -2,6 +2,7 @@
 Quality Control Section for Apperance and Behavior Section
 """
 
+import logging
 import sys
 import tempfile
 from datetime import timedelta
@@ -18,6 +19,7 @@ from pipeline.models.lite.openface_qc_metrics import OpenFaceQcMetrics
 from pipeline.models.lite.video_metadata import VideoMetadata
 
 console = utils.get_console()
+logger = logging.getLogger(__name__)
 
 
 def draw_sample_image(
@@ -361,7 +363,11 @@ def draw_qc_metrics_by_role(
             frames_color = orange_color
         else:
             frames_color = red_color
-    except TypeError:
+    except TypeError as e:
+        logger.debug(
+            f"successful_frames_percentage missing/invalid for {interview_name} "
+            f"role {role}, defaulting QC color to red: {e}"
+        )
         frames_color = red_color
 
     try:
@@ -371,7 +377,11 @@ def draw_qc_metrics_by_role(
             confidence_color = orange_color
         else:
             confidence_color = red_color
-    except TypeError:
+    except TypeError as e:
+        logger.debug(
+            f"successful_frames_confidence_mean missing/invalid for "
+            f"{interview_name} role {role}, defaulting QC color to red: {e}"
+        )
         confidence_color = red_color
 
     match role:
@@ -388,7 +398,11 @@ def draw_qc_metrics_by_role(
 
     try:
         confidence_qc_text = f"{qc_metrics.successful_frames_confidence_mean * 100:.2f}% OF confidence mean"
-    except TypeError:
+    except TypeError as e:
+        logger.debug(
+            f"successful_frames_confidence_mean missing/invalid for "
+            f"{interview_name} role {role}, defaulting QC text to 0%: {e}"
+        )
         confidence_qc_text = "0% OF confidence mean"
 
     pdf.draw_text(

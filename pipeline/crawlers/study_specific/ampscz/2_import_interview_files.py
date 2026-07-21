@@ -32,7 +32,7 @@ import logging
 import multiprocessing
 import re
 from datetime import date, datetime, time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from rich.logging import RichHandler
 from rich.progress import Progress
@@ -40,6 +40,7 @@ from rich.progress import Progress
 from pipeline import core, orchestrator
 from pipeline.helpers import cli, db, dpdash, utils
 from pipeline.helpers.config import config
+from pipeline.models import datetime_overrides
 from pipeline.models.files import File
 from pipeline.models.interview_files import InterviewFile
 from pipeline.models.interview_parts import InterviewParts
@@ -141,12 +142,16 @@ def catogorize_audio_files(
     return files
 
 
-def fetch_interview_files(interview_part: InterviewParts) -> List[InterviewFile]:
+def fetch_interview_files(
+    interview_part: InterviewParts, config_file: Path, study_id: str
+) -> List[InterviewFile]:
     """
     Fetches the interview files for a given interview.
 
     Args:
         interview (Interview): The interview object.
+        config_file (Path): The path to the configuration file.
+        study_id (str): The study ID, for ledger context if parsing fails.
 
     Returns:
         List[InterviewFile]: A list of InterviewFile objects.
@@ -159,10 +164,22 @@ def fetch_interview_files(interview_part: InterviewParts) -> List[InterviewFile]
     )
     subject_id = dp_dash_dict["subject"]
     if not isinstance(subject_id, str):
+        error = ValueError(
+            f"Could not parse subject ID from {interview_part.interview_name}"
+        )
         logger.error(f"Could not parse subject ID from {interview_part.interview_name}")
         logger.error(f"dp_dash_dict: {dp_dash_dict}")
         logger.error(f"subject_id: {subject_id} - {type(subject_id)}")
-        raise ValueError(f"Could not parse subject ID from {interview_part.interview_name}")
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code="subject_id_parse",
+            identifier=interview_part.interview_name,
+            error=error,
+            identifier_type="interview_name",
+            study_id=study_id,
+        )
+        raise error
     interview_path = interview_part.interview_path
 
     if interview_path.is_file():
@@ -262,7 +279,7 @@ def handle_multi_part_interviews(
 
 
 def fetch_interviews(
-    config_file: Path, subject_id: str, study_id: str
+    config_file: Path, subject_id: str, study_id: str, is_active: Optional[bool]
 ) -> List[InterviewParts]:
     """
     Fetches the interviews for a given subject ID.
@@ -270,10 +287,40 @@ def fetch_interviews(
     Args:
         config_file (Path): The path to the config file.
         subject_id (str): The subject ID.
+        is_active (Optional[bool]): Whether the subject is active, from
+            core.get_subject_active_status() - fetched once per study by the
+            caller rather than queried per subject here.
 
     Returns:
         List[Interview]: A list of Interview objects.
     """
+    if is_active is not None and not is_active:
+        logger.debug(f"{subject_id}: subject is not active, skipping interview fetch.")
+        return []
+
+    # Fetched once per subject rather than once per interview file - it's the
+    # same value for every file below, and each call previously opened its own
+    # fresh DB connection (db.get_db_connection() creates a new SQLAlchemy
+    # engine per call), which was the dominant cost for subjects with many
+    # interview files.
+    consent_date_s = core.get_consent_date_from_subject_id(
+        config_file=config_file, subject_id=subject_id, study_id=study_id
+    )
+    if consent_date_s is None:
+        error = ValueError(f"Could not find consent date for {subject_id}")
+        logger.error(str(error))
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code="consent_date_missing",
+            identifier=subject_id,
+            error=error,
+            identifier_type="subject",
+            study_id=study_id,
+        )
+        return []
+    consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
+
     config_params = config(path=config_file, section="general")
     data_root = Path(config_params["data_root"])
 
@@ -287,7 +334,12 @@ def fetch_interviews(
         )
 
         if not interview_type_path.exists():
-            logger.warning(
+            # Routine: an active subject just hasn't had this interview type
+            # yet. Not warning-worthy - the genuinely actionable version of
+            # this ("runsheet says it happened, we don't have it") is already
+            # surfaced by dpinterview-web's Missing issues dashboard, which
+            # compares expected_interviews against what actually got imported.
+            logger.debug(
                 f"{subject_id}: Could not find {interview_type.value} interviews: \
 {interview_type_path} does not exist."
             )
@@ -308,19 +360,35 @@ def fetch_interviews(
                 time_dt = time.fromisoformat("00:00:00")
                 interview_datetime = datetime.combine(date_dt, time_dt)
                 actual_interview_datetime = datetime.combine(date_dt, actual_time_dt)
-            except (ValueError, IndexError):
-                logger.warning(
-                    f"{subject_id}: Could not parse date and time from {base_name}. Skipping..."
+            except (ValueError, IndexError) as e:
+                override_datetime = datetime_overrides.get_override_datetime(
+                    config_file=config_file, identifier=str(interview_dir)
                 )
-                continue
+                if override_datetime is None:
+                    logger.error(
+                        f"{subject_id}: Could not parse date and time from {base_name}. Skipping..."
+                    )
+                    db.record_failure(
+                        config_file=config_file,
+                        stage=MODULE_NAME,
+                        error_code="datetime_parse",
+                        identifier=str(interview_dir),
+                        error=e,
+                        identifier_type="file_path",
+                        study_id=study_id,
+                        subject_id=subject_id,
+                    )
+                    continue
 
-            consent_date_s = core.get_consent_date_from_subject_id(
-                config_file=config_file, subject_id=subject_id, study_id=study_id
-            )
-            if consent_date_s is None:
-                logger.warning(f"Could not find consent date for {subject_id}")
-                continue
-            consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
+                logger.info(
+                    f"{subject_id}: Using staff-confirmed datetime override for {base_name}"
+                )
+                actual_interview_datetime = override_datetime
+                # Ignore time information, to get accurate day - mirrors the
+                # normal-parse path above.
+                interview_datetime = override_datetime.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
 
             interview_name = dpdash.get_dpdash_name(
                 study=study_id,
@@ -358,20 +426,34 @@ def fetch_interviews(
                 interview_datetime = actual_interview_datetime.replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
-            except ValueError:
-                logger.warning(
-                    f"Could not parse date and time from {wav_file}. Skipping..."
+            except ValueError as e:
+                override_datetime = datetime_overrides.get_override_datetime(
+                    config_file=config_file, identifier=str(wav_file)
                 )
-                continue
+                if override_datetime is None:
+                    logger.error(
+                        f"Could not parse date and time from {wav_file}. Skipping..."
+                    )
+                    db.record_failure(
+                        config_file=config_file,
+                        stage=MODULE_NAME,
+                        error_code="datetime_parse",
+                        identifier=str(wav_file),
+                        error=e,
+                        identifier_type="file_path",
+                        study_id=study_id,
+                        subject_id=subject_id,
+                    )
+                    continue
 
-            consent_date_s = core.get_consent_date_from_subject_id(
-                config_file=config_file, subject_id=subject_id, study_id=study_id
-            )
-
-            if consent_date_s is None:
-                logger.warning(f"Could not find consent date for {subject_id}")
-                continue
-            consent_date = datetime.strptime(consent_date_s, "%Y-%m-%d")
+                logger.info(
+                    f"{subject_id}: Using staff-confirmed datetime override for {wav_file}"
+                )
+                actual_interview_datetime = override_datetime
+                # truncate time, mirrors the normal-parse path above
+                interview_datetime = override_datetime.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
 
             interview_name = dpdash.get_dpdash_name(
                 study=study_id,
@@ -493,6 +575,9 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
 
     # Get the subjects
     subjects = core.get_subject_ids(config_file=config_file, study_id=study_id)
+    subject_active_status = core.get_subject_active_status(
+        config_file=config_file, study_id=study_id
+    )
 
     # Get the interviews
     logger.info(f"Fetching interviews for {study_id}")
@@ -505,7 +590,10 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
         )
         interview_parts.extend(
             fetch_interviews(
-                config_file=config_file, subject_id=subject_id, study_id=study_id
+                config_file=config_file,
+                subject_id=subject_id,
+                study_id=study_id,
+                is_active=subject_active_status.get(subject_id),
             )
         )
     progress.remove_task(task)
@@ -519,7 +607,11 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     for interview_part in interview_parts:
         interview_counter += 1
         progress.update(task, advance=1)
-        interview_files.extend(fetch_interview_files(interview_part=interview_part))
+        interview_files.extend(
+            fetch_interview_files(
+                interview_part=interview_part, config_file=config_file, study_id=study_id
+            )
+        )
     progress.remove_task(task)
 
     # Generate the SQL queries to import the interview files
@@ -531,7 +623,26 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     )
 
     # Execute the SQL queries
-    db.execute_queries(config_file=config_file, queries=sql_queries, show_commands=False)
+    db.execute_queries(
+        config_file=config_file,
+        queries=sql_queries,
+        show_commands=False,
+        failure_stage="import_interview_files:ampscz",
+        failure_identifier=study_id,
+        failure_identifier_type="study",
+    )
+
+    # Successfully-imported parts may have previously failed to date-parse
+    # (recorded in pipeline_failures, then matched to a runsheet entry via a
+    # staff-confirmed datetime_overrides row) - close the loop on both now
+    # that the import actually succeeded. No-ops for normally-parsed files:
+    # there's no matching pipeline_failures/datetime_overrides row to update.
+    for interview_part in interview_parts:
+        identifier = str(interview_part.interview_path)
+        db.resolve_failure(
+            config_file=config_file, stage=MODULE_NAME, identifier=identifier
+        )
+        datetime_overrides.mark_consumed(config_file=config_file, identifier=identifier)
 
 
 def mark_unique_interviews_as_primary(config_file: Path, study_id: str) -> None:
