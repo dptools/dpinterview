@@ -29,6 +29,7 @@ import paramiko
 from rich.logging import RichHandler
 
 from pipeline import orchestrator
+from pipeline.core.audio_qc_override import relocate_if_overridden
 from pipeline.helpers import cli, db, sftp, utils, dpdash
 from pipeline.helpers.timer import Timer
 from pipeline.models.transcribeme.transcribeme_push import TranscribemePush
@@ -91,7 +92,7 @@ def get_file_to_process(
     LEFT JOIN transcribeme.audio_qc ON
         transcribeme.wav_conversion.wc_destination_path = transcribeme.audio_qc.aqc_source_path
     WHERE public.interview_files.interview_file IS NOT NULL AND
-        transcribeme.audio_qc.aqc_passed IS TRUE AND
+        (transcribeme.audio_qc.aqc_passed IS TRUE OR transcribeme.audio_qc.aqc_override IS TRUE) AND
         transcribeme.audio_qc.aqc_source_path NOT IN (
             SELECT transcription_source_path
             FROM transcribeme.transcribeme_push
@@ -333,6 +334,9 @@ if __name__ == "__main__":
         COUNTER += 1
         audio_path, interview_name, interview_type, subject_id, study_id = (
             file_to_process
+        )
+        audio_path = relocate_if_overridden(
+            wav_path=audio_path, config_file=config_file
         )
         source_language = study_language_map.get(study_id, "ENGLISH")
         logger.info(
