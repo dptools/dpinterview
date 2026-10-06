@@ -29,7 +29,7 @@ from rich.logging import RichHandler
 
 from pipeline import orchestrator
 from pipeline.core import load_openface
-from pipeline.helpers import cli, utils, notifications
+from pipeline.helpers import cli, db, utils, notifications
 
 MODULE_NAME = "load_openface"
 
@@ -83,6 +83,7 @@ if __name__ == "__main__":
     study_id = studies[0]
     logger.info(f"Starting with study: {study_id}")
 
+    interview_name = None
     try:
         while True:
             interview_name = load_openface.get_interview_to_process(
@@ -127,7 +128,17 @@ if __name__ == "__main__":
 
             load_openface.log_load_openface(config_file=config_file, lof=lof)
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error(
+            f"Error loading OpenFace features (last interview attempted: "
+            f"{interview_name}): {e}"
+        )
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            identifier=interview_name or "unknown",
+            error=e,
+            identifier_type="interview_name",
+        )
         notifications.send_notification(
             notify_type="failure",
             title=f"{MODULE_NAME} failed",

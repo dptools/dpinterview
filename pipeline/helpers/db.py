@@ -7,11 +7,12 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, Literal, Optional
+from typing import Callable, Dict, Literal, Optional, Union
 
 import pandas as pd
 import psycopg2
 import sqlalchemy
+from rich.errors import LiveError
 
 from pipeline import orchestrator
 from pipeline.helpers import cli, utils
@@ -131,6 +132,12 @@ def execute_queries(
     db: str = "postgresql",
     backup: bool = False,
     on_failure: Optional[Callable] = on_failure,
+    failure_stage: Optional[str] = None,
+    failure_error_code: str = "db_write_failure",
+    failure_identifier: Optional[str] = None,
+    failure_identifier_type: str = "batch",
+    failure_study_id: Optional[str] = None,
+    failure_subject_id: Optional[str] = None,
 ) -> list:
     """
     Executes a list of SQL queries on a PostgreSQL database.
@@ -146,12 +153,29 @@ def execute_queries(
         db (str, optional): The section of the configuration file to use.
             Defaults to "postgresql".
         backup (bool, optional): Whether to sace all executed queries to a file.
+        failure_stage (str, optional): If set (together with failure_identifier),
+            a failure will also be recorded in the pipeline_failures ledger via
+            record_failure(). Defaults to None (no ledger entry).
+        failure_error_code (str, optional): A short, stable code for why this
+            batch failed - see PipelineFailure's ErrorCode. Defaults to
+            "db_write_failure", the right default for the common case of "this
+            SQL batch raised an exception".
+        failure_identifier (str, optional): What failed - see failure_stage.
+        failure_identifier_type (str, optional): The kind of thing
+            failure_identifier is (e.g. "study", "file_path"). Defaults to "batch".
+        failure_study_id (str, optional): The study this batch was for, if
+            known, for ledger filtering/reporting. Auto-filled from
+            failure_identifier when failure_identifier_type == "study".
+        failure_subject_id (str, optional): The subject this batch was for, if
+            known, for ledger filtering/reporting. Auto-filled from
+            failure_identifier when failure_identifier_type == "subject".
 
     Returns:
         list: A list of tuples containing the results of the executed queries.
     """
     command = None
     output = []
+    executed_count = 0
 
     if backup:
         repo_root = cli.get_repo_root_from_config(config_file=config_file)
@@ -182,6 +206,7 @@ def execute_queries(
         cur = conn.cursor()
 
         def execute_query(query: str):
+            nonlocal executed_count
             if show_commands:
                 logger.debug("Executing query:")
                 logger.debug(f"[bold blue]{query}", extra={"markup": True})
@@ -190,13 +215,30 @@ def execute_queries(
                 output.append(cur.fetchall())
             except psycopg2.ProgrammingError:
                 pass
+            executed_count += 1
 
         if show_progress:
-            with utils.get_progress_bar() as progress:
-                task = progress.add_task("Executing SQL queries...", total=len(queries))
+            try:
+                with utils.get_progress_bar() as progress:
+                    task = progress.add_task(
+                        "Executing SQL queries...", total=len(queries)
+                    )
 
+                    for command in queries:
+                        progress.update(task, advance=1)
+                        execute_query(command)
+            except LiveError:
+                # A progress bar (rich.live.Live) is already active elsewhere in the
+                # call stack - rich only allows one at a time. Fall back to running
+                # the queries without a progress bar instead of letting this bubble
+                # up into the except below, which would abort the whole batch before
+                # a single query has run.
+                logger.warning(
+                    "[yellow]show_progress=True requested but a progress display is "
+                    "already active; running without a progress bar.",
+                    extra={"markup": True},
+                )
                 for command in queries:
-                    progress.update(task, advance=1)
                     execute_query(command)
 
         else:
@@ -216,6 +258,35 @@ def execute_queries(
         if command is not None:
             logger.error(f"[red]For query: {command}", extra={"markup": True})
         logger.error(e)
+        if len(queries) > 1:
+            # execute_queries() commits once, after every query in the batch has
+            # run - the connection is closed without ever calling commit() here,
+            # so Postgres rolls back the whole transaction. That means none of
+            # this batch's queries were persisted, including the ones that ran
+            # fine before the failure above, not just the ones after it. We
+            # can't say here which individual files/records those queries
+            # belonged to (that requires the caller to isolate per-record), so
+            # surface the blast radius as a count instead of silently dropping
+            # them.
+            logger.warning(
+                f"[yellow]Batch aborted: {executed_count}/{len(queries)} queries in "
+                f"this call ran before the failure above, but since this batch "
+                f"never reached commit(), none of the {len(queries)} query(ies) "
+                f"were persisted.",
+                extra={"markup": True},
+            )
+        if failure_stage is not None and failure_identifier is not None:
+            record_failure(
+                config_file=config_file,
+                stage=failure_stage,
+                error_code=failure_error_code,
+                identifier=failure_identifier,
+                identifier_type=failure_identifier_type,
+                study_id=failure_study_id,
+                subject_id=failure_subject_id,
+                error=e,
+                db=db,
+            )
         if on_failure is not None:
             on_failure()
         else:
@@ -225,6 +296,144 @@ def execute_queries(
             conn.close()
 
     return output
+
+
+def record_failure(
+    config_file: Path,
+    stage: str,
+    error_code: str,
+    identifier: str,
+    error: Union[str, Exception],
+    identifier_type: Literal[
+        "file_path", "study", "interview_name", "subject", "batch", "other"
+    ] = "file_path",
+    study_id: Optional[str] = None,
+    subject_id: Optional[str] = None,
+    db: str = "postgresql",
+) -> None:
+    """
+    Records (or bumps the occurrence count / last_seen_at of) a failure in the
+    durable pipeline_failures ledger, for turning "what's stuck and why" into a
+    query instead of grepping log files. Distinct from the generic 'logs' table.
+
+    Best-effort and never raises: a bug in this bookkeeping call must not crash
+    or mask the caller's real failure.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        stage (str): The pipeline stage/module the failure occurred in.
+        error_code (str): A short, stable code for *why* this failed (e.g.
+            "datetime_parse"), shared across every occurrence of the same kind
+            of failure regardless of identifier or exact message - see
+            pipeline.models.pipeline_failures.ErrorCode for the known set.
+        identifier (str): What failed - a file path when known, otherwise the
+            most specific thing available (study_id, a batch description, etc).
+        error (Union[str, Exception]): The error. If an Exception is passed,
+            its class name is recorded as the error type.
+        identifier_type (str, optional): The kind of thing `identifier` is.
+            Defaults to "file_path".
+        study_id (str, optional): The study this failure occurred in, if known,
+            for ledger filtering/reporting. Auto-filled from `identifier` when
+            identifier_type == "study" and this isn't passed explicitly.
+        subject_id (str, optional): The subject this failure relates to, if
+            known, for ledger filtering/reporting. Auto-filled from
+            `identifier` when identifier_type == "subject" and this isn't
+            passed explicitly.
+        db (str, optional): The section of the configuration file to use.
+            Defaults to "postgresql".
+    """
+    try:
+        # Local import: pipeline.models.pipeline_failures imports pipeline.helpers.db
+        # (like every model file), so importing it at module load time here would
+        # be circular.
+        from pipeline.models.pipeline_failures import PipelineFailure
+
+        if study_id is None and identifier_type == "study":
+            study_id = identifier
+        if subject_id is None and identifier_type == "subject":
+            subject_id = identifier
+
+        error_type = type(error).__name__ if isinstance(error, Exception) else None
+        failure = PipelineFailure(
+            stage=stage,
+            error_code=error_code,
+            identifier=identifier,
+            identifier_type=identifier_type,
+            study_id=study_id,
+            subject_id=subject_id,
+            error=str(error),
+            error_type=error_type,
+        )
+        execute_queries(
+            config_file=config_file,
+            queries=[failure.to_sql()],
+            show_commands=False,
+            silent=True,
+            db=db,
+            on_failure=lambda: logger.error(
+                f"[yellow]Could not record failure-ledger row for "
+                f"stage={stage!r} identifier={identifier!r} (see error logged above).",
+                extra={"markup": True},
+            ),
+        )
+    except Exception:
+        logger.exception(
+            f"Unexpected error recording pipeline failure ledger row for "
+            f"stage={stage!r} identifier={identifier!r}; continuing without it."
+        )
+
+
+def resolve_failure(
+    config_file: Path,
+    stage: str,
+    identifier: str,
+    note: Optional[str] = None,
+    db: str = "postgresql",
+) -> None:
+    """
+    Marks a pipeline_failures row as resolved. Companion to record_failure() -
+    not called automatically anywhere; call sites opt in explicitly.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        stage (str): The pipeline stage/module, matching a prior record_failure() call.
+        identifier (str): What was fixed, matching a prior record_failure() call.
+        note (str, optional): A note on how/why this was resolved.
+        db (str, optional): The section of the configuration file to use.
+            Defaults to "postgresql".
+    """
+    try:
+        stage_sql = santize_string(stage)
+        identifier_sql = santize_string(identifier)
+        note_clause = (
+            f", pf_resolved_note = '{santize_string(note)}'" if note is not None else ""
+        )
+
+        query = f"""
+            UPDATE pipeline_ledger.pipeline_failures
+            SET pf_resolved = TRUE,
+                pf_resolved_at = CURRENT_TIMESTAMP
+                {note_clause}
+            WHERE pf_stage = '{stage_sql}' AND pf_identifier = '{identifier_sql}';
+        """
+
+        execute_queries(
+            config_file=config_file,
+            queries=[query],
+            show_commands=False,
+            silent=True,
+            db=db,
+            on_failure=lambda: logger.error(
+                f"[yellow]Could not mark failure resolved for "
+                f"stage={stage!r} identifier={identifier!r}.",
+                extra={"markup": True},
+            ),
+        )
+    except Exception:
+        logger.exception(
+            f"Unexpected error resolving pipeline failure ledger row for "
+            f"stage={stage!r} identifier={identifier!r}."
+        )
 
 
 def get_db_connection(

@@ -67,7 +67,13 @@ def insert_study(config_file: Path, study_id: str) -> None:
     logger.info(f"Inserting study: {study_id}")
     query = study.to_sql()
 
-    db.execute_queries(config_file=config_file, queries=[query])
+    db.execute_queries(
+        config_file=config_file,
+        queries=[query],
+        failure_stage=MODULE_NAME,
+        failure_identifier=study_id,
+        failure_identifier_type="study",
+    )
 
 
 def get_study_metadata(config_file: Path, study_id: str) -> pd.DataFrame:
@@ -95,8 +101,17 @@ def get_study_metadata(config_file: Path, study_id: str) -> pd.DataFrame:
 
     # Check if study_metadata exists
     if not study_metadata.exists():
+        error = FileNotFoundError(f"could not read file: {study_metadata}")
         logger.error(f'Study metadata file "{study_metadata}" not found.')
-        raise FileNotFoundError(f"could not read file: {study_metadata}")
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code="missing_file",
+            identifier=study_id,
+            error=error,
+            identifier_type="study",
+        )
+        raise error
     else:
         insert_study(config_file=config_file, study_id=study_id)
 
@@ -162,18 +177,26 @@ def fetch_subjects(config_file: Path, study_id: str) -> List[Subject]:
     return subjects
 
 
-def insert_subjects(config_file: Path, subjects: List[Subject]):
+def insert_subjects(config_file: Path, subjects: List[Subject], study_id: str):
     """
     Inserts the subjects into the database.
 
     Args:
         config_file (Path): The path to the configuration file.
         subjects (List[Subject]): The list of subjects to insert.
+        study_id (str): The ID of the study the subjects belong to.
     """
 
     queries = [subject.to_sql() for subject in subjects]
 
-    db.execute_queries(config_file=config_file, queries=queries, show_commands=False)
+    db.execute_queries(
+        config_file=config_file,
+        queries=queries,
+        show_commands=False,
+        failure_stage=MODULE_NAME,
+        failure_identifier=study_id,
+        failure_identifier_type="study",
+    )
 
 
 if __name__ == "__main__":
@@ -210,6 +233,6 @@ if __name__ == "__main__":
     for study_id in studies:
         logger.info(f"Study ID: {study_id}")
         subjects = fetch_subjects(config_file=config_file, study_id=study_id)
-        insert_subjects(config_file=config_file, subjects=subjects)
+        insert_subjects(config_file=config_file, subjects=subjects, study_id=study_id)
 
     logger.info("[bold green]Done!", extra={"markup": True})

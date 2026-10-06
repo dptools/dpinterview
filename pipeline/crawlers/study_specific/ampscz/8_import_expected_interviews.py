@@ -246,6 +246,9 @@ def models_to_db(
         queries=sql_queries,
         config_file=config_file,
         show_commands=False,
+        failure_stage="import_expected_interviews",
+        failure_identifier=study_id,
+        failure_identifier_type="study",
     )
 
 

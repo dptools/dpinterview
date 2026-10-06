@@ -19,13 +19,14 @@ try:
 except ValueError:
     pass
 
+import argparse
 import logging
 import re
 
 import pandas as pd
 from rich.logging import RichHandler
 
-from pipeline.helpers import db, utils
+from pipeline.helpers import cli, db, utils
 
 MODULE_NAME = "crawlers.import_data_dictionary"
 
@@ -59,9 +60,27 @@ def remove_html_tags(input_string: str) -> str:
 
 
 if __name__ == "__main__":
-    console.rule(f"[bold red]{MODULE_NAME}")
+    parser = argparse.ArgumentParser(
+        prog=MODULE_NAME, description="Import the data dictionary into the database."
+    )
+    parser.add_argument(
+        "-c", "--config", type=str, help="Path to the config file.", required=False
+    )
 
-    config_file = utils.get_config_file_path()
+    args = parser.parse_args()
+
+    if args.config:
+        config_file = Path(args.config).resolve()
+        if not config_file.exists():
+            console.log(f"[red]Error: Config file '{config_file}' does not exist.")
+            sys.exit(1)
+    else:
+        if cli.confirm_action("Using default config file."):
+            config_file = utils.get_config_file_path()
+        else:
+            sys.exit(1)
+
+    console.rule(f"[bold red]{MODULE_NAME}")
     console.print(f"Using config file: {config_file}")
 
     utils.configure_logging(
@@ -73,17 +92,29 @@ if __name__ == "__main__":
 
     logger.info(f"Reading updated data dictionary from {updated_data_dictionary_path}")
 
-    data_dictionary = pd.read_csv(updated_data_dictionary_path)
+    try:
+        data_dictionary = pd.read_csv(updated_data_dictionary_path)
 
-    # Remove HTML tags from all columns
-    for col in data_dictionary.columns:
-        data_dictionary[col] = data_dictionary[col].apply(remove_html_tags)
+        # Remove HTML tags from all columns
+        for col in data_dictionary.columns:
+            data_dictionary[col] = data_dictionary[col].apply(remove_html_tags)
 
-    db.df_to_table(
-        config_file=config_file,
-        df=data_dictionary,
-        table_name="data_dictionary",
-        if_exists="replace",
-    )
+        db.df_to_table(
+            config_file=config_file,
+            df=data_dictionary,
+            table_name="data_dictionary",
+            if_exists="replace",
+        )
+    except Exception as e:
+        logger.error(f"Error importing data dictionary: {e}")
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code="data_dictionary_import_failed",
+            identifier=str(updated_data_dictionary_path),
+            error=e,
+            identifier_type="file_path",
+        )
+        sys.exit(1)
 
     logger.info("Data dictionary imported successfully")

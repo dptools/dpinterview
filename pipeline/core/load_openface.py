@@ -292,7 +292,18 @@ def construct_insert_queries(
                 case _:
                     pass
         except ValueError as e:
-            print(f"Error casting {col} with value {df[col]} to {datatype}: {e}")
+            logger.error(
+                f"Error casting column {col} to {datatype} while building "
+                f"openface_features insert queries for interview {interview_name}, "
+                f"role {role}, csv_file {csv_file}: {e}"
+            )
+            db.record_failure(
+                config_file=config_file,
+                stage="load_openface",
+                identifier=interview_name,
+                error=e,
+                identifier_type="interview_name",
+            )
 
     queries: List[str] = []
 

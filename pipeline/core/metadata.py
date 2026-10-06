@@ -81,6 +81,21 @@ def log_metadata(
         source_path=source, metadata=metadata, requested_by=requested_by
     )
 
+    if "streams" not in metadata:
+        # FfprobeMetadata.to_sql() falls back to inserting a placeholder row
+        # (source_path/requested_by only, no stream data) when this happens -
+        # that placeholder permanently satisfies get_file_to_process()'s
+        # "not already in ffprobe_metadata" check above, so this file is never
+        # retried. Record it so it's queryable instead of silently stuck.
+        db.record_failure(
+            config_file=config_file,
+            stage="metadata",
+            identifier=str(source),
+            error="ffprobe metadata has no 'streams' key; inserting placeholder "
+            "row only - this file will not be retried",
+            identifier_type="file_path",
+        )
+
     sql_queries = ffprobe_metadata.to_sql()
 
     logger.info("Logging metadata...", extra={"markup": True})

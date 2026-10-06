@@ -133,7 +133,7 @@ def parse_form_json(subject_form_json: Path) -> List[FormData]:
 
 
 def models_to_db(
-    form_data_list: List[FormData], config_file: Path
+    form_data_list: List[FormData], config_file: Path, study_id: str
 ) -> None:
     """
     Imports the FormData models into the database.
@@ -141,6 +141,7 @@ def models_to_db(
     Args:
         form_data_list (List[FormData]): The list of FormData models.
         config_file (Path): The path to the config file.
+        study_id (str): The study the form data belongs to.
 
     Returns:
         None
@@ -154,6 +155,9 @@ def models_to_db(
         queries=sql_queries,
         config_file=config_file,
         show_commands=False,
+        failure_stage="import_form_data:pronet",
+        failure_identifier=study_id,
+        failure_identifier_type="study",
     )
 
 
@@ -199,6 +203,7 @@ def import_form_data(
     models_to_db(
         form_data_list=form_data_list,
         config_file=config_file,
+        study_id=study,
     )
 
 

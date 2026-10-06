@@ -93,6 +93,8 @@ def configure_logging(config_file: Path, module_name: str, logger: logging.Logge
         archive_file.parent.mkdir(parents=True, exist_ok=True)
         log_file.rename(archive_file)
 
+    if not log_file.parent.exists():
+        log_file.parent.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(log_file, mode="a")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(

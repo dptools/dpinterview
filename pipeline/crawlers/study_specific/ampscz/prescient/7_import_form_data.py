@@ -225,13 +225,18 @@ def parse_form_csv(
     return form_data_list
 
 
-def models_to_db(form_data_list: List[FormData], config_file: Path) -> None:
+def models_to_db(
+    form_data_list: List[FormData], config_file: Path, batch_identifier: str
+) -> None:
     """
     Imports the FormData models into the database.
 
     Args:
         form_data_list (List[FormData]): The list of FormData models.
         config_file (Path): The path to the config file.
+        batch_identifier (str): Identifies this batch (spans multiple studies -
+            unlike the pronet variant, prescient form data isn't imported
+            per-study, so there's no single study_id to key the failure on).
 
     Returns:
         None
@@ -245,6 +250,9 @@ def models_to_db(form_data_list: List[FormData], config_file: Path) -> None:
         queries=sql_queries,
         config_file=config_file,
         show_commands=False,
+        failure_stage="import_form_data:prescient",
+        failure_identifier=batch_identifier,
+        failure_identifier_type="batch",
     )
 
 
@@ -287,6 +295,7 @@ def import_form_data(
     models_to_db(
         form_data_list=form_data_list,
         config_file=config_file,
+        batch_identifier=str(data_root),
     )
 
 
