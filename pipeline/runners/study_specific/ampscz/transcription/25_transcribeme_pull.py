@@ -226,6 +226,7 @@ if __name__ == "__main__":
         else:
             sys.exit(1)
 
+    config_params = utils.config(config_file, section="general")
     utils.configure_logging(
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )
@@ -270,7 +271,7 @@ if __name__ == "__main__":
             transcript_file_name = (  # pylint: disable=invalid-name
                 f"{sftp_upload_path.stem}.txt"
             )
-            transcribeme_output_root = Path("/output")
+            transcribeme_output_root = Path(f"/{config_params['study_root_name']}/output")
             transcript_path = transcribeme_output_root / transcript_file_name
 
             study_name = transcript_file_name.split("_", maxsplit=1)[0]

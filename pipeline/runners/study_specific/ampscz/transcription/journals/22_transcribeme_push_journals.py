@@ -155,7 +155,7 @@ def construct_transcript_destination_path(
     return transcription_destination_path
 
 
-def construct_sftp_upload_path(journal_path: Path, source_language: str) -> str:
+def construct_sftp_upload_path(journal_path: Path, source_language: str, study_name: str) -> str:
     """
     Returns the SFTP upload path for the journal.
 
@@ -175,7 +175,7 @@ def construct_sftp_upload_path(journal_path: Path, source_language: str) -> str:
 
     file_name = file_name.replace("-", "_")
 
-    sftp_upload_path = f"/audio/{file_name}"
+    sftp_upload_path = f"/{study_name}/audio/{file_name}"
     return sftp_upload_path
 
 
@@ -272,6 +272,7 @@ if __name__ == "__main__":
         sftp_upload_path = construct_sftp_upload_path(
             journal_path=journal_path,
             source_language=source_language,
+            study_name=config_params['study_root_name']
         )
 
         sftp_credentials = sftp.get_sftp_credentials(
