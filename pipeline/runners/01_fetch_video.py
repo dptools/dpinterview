@@ -5,6 +5,7 @@ Decryption Requester for Video Files
 
 import sys
 from pathlib import Path
+import configparser
 
 file = Path(__file__).resolve()
 parent = file.parent
@@ -148,12 +149,29 @@ if __name__ == "__main__":
                 interview_type = file_to_decrypt_t[1]
                 interview_name = file_to_decrypt_t[2]
 
+                cfg = configparser.ConfigParser()
+                cfg.read(config_file)
+                data_root = cfg.get("general", "data_root")
+
+                output_root = cfg.get("general", "output_root")
+
+                output_root = cfg.get("general", "output_root", fallback="").strip()
+                print("DEBUG output_root from config:", repr(output_root))
+                
                 dest_dir = fetch_video.construct_dest_dir(
                     encrypted_file_path=file_to_decrypt_path,
                     interview_type=interview_type,
                     study_id=study_id,
                     data_root=data_root,
+                    output_root=output_root,   # NEW
                 )
+                
+                # dest_dir = fetch_video.construct_dest_dir(
+                #     encrypted_file_path=file_to_decrypt_path,
+                #     interview_type=interview_type,
+                #     study_id=study_id,
+                #     data_root=data_root,
+                # )
 
                 dest_file_name = fetch_video.construct_dest_file_name(
                     file_to_decrypt=file_to_decrypt_path,

@@ -120,6 +120,34 @@ if __name__ == "__main__":
                 file_path=source_path,
                 process_time=timer.duration,
             )
+
+            # Convert MKV to MP4 for browser playback
+            if destination_path.suffix.lower() == ".mkv":
+                mp4_path = destination_path.with_suffix(".mp4")
+                ffmpeg_path = Path(sys.executable).parent / "ffmpeg"
+                if not ffmpeg_path.exists():
+                    ffmpeg_path = Path("ffmpeg")  # fall back to system ffmpeg
+
+                logger.info(f"Converting to MP4: {destination_path} -> {mp4_path}")
+                import subprocess
+                result = subprocess.run(
+                    [
+                        str(ffmpeg_path),
+                        "-i", str(destination_path),
+                        "-c:v", "copy",
+                        "-c:a", "aac",
+                        "-movflags", "+faststart",
+                        str(mp4_path),
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    logger.info(f"MP4 conversion successful: {mp4_path}")
+                    orchestrator.fix_permissions(config_file=config_file, file_path=mp4_path)
+                else:
+                    logger.error(f"MP4 conversion failed: {result.stderr}")
+
             COUNTER += 1
 
         if COUNTER >= 10:

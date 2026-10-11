@@ -30,8 +30,13 @@ def get_file_to_decrypt(
         SELECT interview_file, interview_type, interview_name, interview_file_tags
         FROM interview_files
         INNER JOIN interviews ON interview_files.interview_path = interviews.interview_path
-        WHERE interviews.study_id = '{study_id}' AND
-            interview_files.interview_file_tags LIKE '%%audio%%' AND
+        WHERE interviews.study_id = '{study_id}' AND            
+            (
+            COALESCE(interview_files.interview_file_tags,'') ILIKE '%%audio%%'
+            OR interview_files.interview_file ILIKE '%%.m4a%%'
+            OR interview_files.interview_file ILIKE '%%.wav%%'
+            OR interview_files.interview_file ILIKE '%%.flac%%'
+            ) AND
             interview_files.interview_file NOT IN (
                 SELECT source_path FROM decrypted_files
             ) AND
