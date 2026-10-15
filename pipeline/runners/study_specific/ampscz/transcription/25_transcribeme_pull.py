@@ -130,6 +130,7 @@ def get_files_awaiting_download(config_file: Path) -> List[Path]:
     sftp_credentials = sftp.get_sftp_credentials(
         config_file=config_file, sftp_credentials_name="transcribeme_sftp"
     )
+    config_params = utils.config(config_file, section="general")
     # sftp_hostname = sftp_credentials["hostname"]
     # sftp_username = sftp_credentials["username"]
     # sftp_password = sftp_credentials["password"]
@@ -149,7 +150,7 @@ def get_files_awaiting_download(config_file: Path) -> List[Path]:
         )
 
         with ssh.open_sftp() as sftp_client:
-            sftp_client.chdir("output")
+            sftp_client.chdir(f"{config_params['study_root_name']}/output")
 
             # List all files in the directory
             files = sftp_client.listdir()
@@ -226,6 +227,7 @@ if __name__ == "__main__":
         else:
             sys.exit(1)
 
+    config_params = utils.config(config_file, section="general")
     utils.configure_logging(
         config_file=config_file, module_name=MODULE_NAME, logger=logger
     )
@@ -270,7 +272,7 @@ if __name__ == "__main__":
             transcript_file_name = (  # pylint: disable=invalid-name
                 f"{sftp_upload_path.stem}.txt"
             )
-            transcribeme_output_root = Path("/output")
+            transcribeme_output_root = Path(f"/{config_params['study_root_name']}/output")
             transcript_path = transcribeme_output_root / transcript_file_name
 
             study_name = transcript_file_name.split("_", maxsplit=1)[0]

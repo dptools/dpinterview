@@ -237,7 +237,7 @@ def construct_transcript_destination_path(
 
 
 def construct_sftp_upload_path(
-    interview_name: str, interview_type: str, source_language: str
+    interview_name: str, interview_type: str, source_language: str, study_name: str
 ) -> str:
     """
     Returns the SFTP upload path for the audio file.
@@ -261,7 +261,7 @@ def construct_sftp_upload_path(
 
     file_name = file_name.replace("-", "_")
 
-    sftp_upload_path = f"/audio/{file_name}"
+    sftp_upload_path = f"/{study_name}/audio/{file_name}"
     return sftp_upload_path
 
 
@@ -374,6 +374,7 @@ if __name__ == "__main__":
             interview_name=interview_name,
             interview_type=interview_type,
             source_language=source_language,
+            study_name=config_params['study_root_name']
         )
 
         sftp_credentials = sftp.get_sftp_credentials(
