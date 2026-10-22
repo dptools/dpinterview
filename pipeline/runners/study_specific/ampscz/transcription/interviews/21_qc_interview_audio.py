@@ -222,7 +222,7 @@ def get_file_to_process(
             public.interview_parts.is_duplicate IS FALSE AND
             public.interview_parts.is_primary IS TRUE AND
             public.interview_files.interview_file_tags LIKE '%%audio%%' AND
-            public.interview_files.interview_file_tags LIKE '%%combined%%' AND
+            public.interview_files.interview_file_tags LIKE '%%combined%%'
         GROUP BY interview_name
     ),
     available_audio_files AS (
