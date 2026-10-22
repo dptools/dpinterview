@@ -223,7 +223,6 @@ def get_file_to_process(
             public.interview_parts.is_primary IS TRUE AND
             public.interview_files.interview_file_tags LIKE '%%audio%%' AND
             public.interview_files.interview_file_tags LIKE '%%combined%%' AND
-            public.interviews.interview_type = 'open'
         GROUP BY interview_name
     ),
     available_audio_files AS (
@@ -242,7 +241,6 @@ def get_file_to_process(
             public.interview_parts.is_primary IS TRUE AND
             public.interview_files.interview_file_tags LIKE '%%audio%%' AND
             public.interview_files.interview_file_tags LIKE '%%combined%%' AND
-            public.interviews.interview_type = 'open' AND
             i.file_count = 1  -- Only include interviews with exactly one audio file
     ), available_transcript_files AS (
         SELECT public.transcript_files.transcript_file, public.transcript_files.identifier_name AS interview_name
