@@ -36,13 +36,19 @@ class AcousticRecording:
             _LLD_SMILE.process_file(str(audio_path)).droplevel(['file', 'end'])
         )
 
-    def save(self, output_dir: Path) -> None:
-        """Write `<stem>_lld.csv` into output_dir, indexed by frame start in seconds.
+    def save(self, output_dir: Path, name: str) -> Path:
+        """Write `<name>_lld.csv`, indexed by frame start in seconds.
 
         Args:
             output_dir: Directory to write into; created if absent.
+            name: Stem shared by this recording's output files.
+
+        Returns:
+            The CSV path written.
         """
         output_dir.mkdir(parents=True, exist_ok=True)
+        lld_path = output_dir / f'{name}_lld.csv'
         lld = self.lld.copy()
         lld.index = lld.index.total_seconds()
-        lld.to_csv(output_dir / f'{self.audio_path.stem}_lld.csv', index_label='start_s')
+        lld.to_csv(lld_path, index_label='start_s')
+        return lld_path
