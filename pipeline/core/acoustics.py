@@ -9,9 +9,15 @@ from pathlib import Path
 import opensmile
 import pandas as pd
 
+# Resampled to 16 kHz mono so every site's spectral features come from the same input rate;
+# channels=None selects all channels for the mixdown (opensmile defaults to the first only).
 _LLD_SMILE = opensmile.Smile(
     feature_set=opensmile.FeatureSet.eGeMAPSv02,
     feature_level=opensmile.FeatureLevel.LowLevelDescriptors,
+    sampling_rate=16000,
+    resample=True,
+    channels=None,
+    mixdown=True,
 )
 
 
