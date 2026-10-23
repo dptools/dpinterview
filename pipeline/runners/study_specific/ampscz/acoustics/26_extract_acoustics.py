@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 """
-Extract eGeMAPSv02 per-frame acoustic features from QC'd combined interview audio.
+Extract eGeMAPSv02 acoustic features from QC'd interview and audio journal recordings.
 
-Each recording gets a per-frame LLD CSV, recorded in `acoustics.lld_extraction`.
+Interviews (combined audio) get a per-frame LLD CSV; journals, being single-speaker, also
+get a functionals JSON. Each extraction is recorded in `acoustics.lld_extraction`.
 """
 
 import sys
@@ -30,10 +31,10 @@ import pandas as pd
 from rich.logging import RichHandler
 
 from pipeline import orchestrator
-from pipeline.core.acoustics import AcousticRecording
+from pipeline.core.acoustics import AcousticRecording, SingleSpeakerRecording
 from pipeline.helpers import cli, db, utils
 from pipeline.helpers.timer import Timer
-from pipeline.models.acoustics.lld_extraction import TABLE_NAME, LldExtraction
+from pipeline.models.acoustics.lld_extraction import TABLE_NAME, LldExtraction, SourceKind
 
 MODULE_NAME = 'pipeline.runners.ampscz.extract_acoustics'
 
@@ -54,12 +55,14 @@ class PendingRecording:
     Attributes:
         source_path: The original recording, the stable identity of the extraction.
         audio_path: Where its QC'd WAV currently is (`completed_audio/` once transcribed).
-        name: Interview name, used as the output file stem.
+        kind: Interview or audio journal.
+        name: Interview or journal name, used as the output file stem.
         output_dir: Directory the outputs are written into.
     """
 
     source_path: Path
     audio_path: Path
+    kind: SourceKind
     name: str
     output_dir: Path
 
@@ -75,11 +78,15 @@ class PendingRecording:
             The pending recording.
         """
         subject_root = data_root / 'PROTECTED' / row['study_id'] / 'processed' / row['subject_id']
-        output_dir = subject_root / 'interviews' / row['interview_type'] / 'acoustics'
+        if row['source_kind'] == 'journal':
+            output_dir = subject_root / 'phone' / 'audio_journals' / 'acoustics'
+        else:
+            output_dir = subject_root / 'interviews' / row['interview_type'] / 'acoustics'
 
         return cls(
             source_path=Path(row['source_path']),
             audio_path=Path(row['audio_path']),
+            kind=row['source_kind'],
             name=row['name'],
             output_dir=output_dir,
         )
@@ -90,7 +97,7 @@ def get_next_recording(
     data_root: Path,
     skipped: set[Path],
 ) -> PendingRecording | None:
-    """Fetch one QC'd combined interview recording not yet extracted or skipped.
+    """Fetch one QC'd interview or journal recording not yet extracted or skipped.
 
     Args:
         config_file: Path to the config file.
@@ -109,23 +116,27 @@ def get_next_recording(
         SELECT DISTINCT ON (wc.wc_source_path)
             wc.wc_source_path AS source_path,
             COALESCE(p.completed_audio_file_path, q.aqc_source_path) AS audio_path,
-            i.interview_name AS name,
-            i.study_id,
-            i.subject_id,
+            CASE WHEN aj.aj_path IS NULL THEN 'interview' ELSE 'journal' END AS source_kind,
+            COALESCE(i.interview_name, aj.aj_name) AS name,
+            COALESCE(i.study_id, aj.study_id) AS study_id,
+            COALESCE(i.subject_id, aj.subject_id) AS subject_id,
             i.interview_type
         FROM transcribeme.audio_qc AS q
         JOIN transcribeme.wav_conversion AS wc
             ON wc.wc_destination_path = q.aqc_source_path
-        JOIN public.interview_files AS f
+        LEFT JOIN public.interview_files AS f
             ON f.interview_file = wc.wc_source_path
             AND f.interview_file_tags LIKE '%%combined%%'
-        JOIN public.interview_parts AS ip
+        LEFT JOIN public.interview_parts AS ip
             ON ip.interview_path = f.interview_path
-        JOIN public.interviews AS i
+        LEFT JOIN public.interviews AS i
             ON i.interview_name = ip.interview_name
+        LEFT JOIN public.audio_journals AS aj
+            ON aj.aj_path = wc.wc_source_path
         LEFT JOIN transcribeme.transcribeme_pull AS p
             ON p.sftp_download_path = q.aqc_source_path
         WHERE (q.aqc_passed IS TRUE OR q.aqc_override IS TRUE)
+            AND (i.interview_name IS NOT NULL OR aj.aj_path IS NOT NULL)
             AND wc.wc_source_path NOT IN (SELECT lld_source_path FROM {TABLE_NAME})
             {skipped_clause}
         ORDER BY wc.wc_source_path, p.sftp_download_timestamp DESC NULLS LAST
@@ -146,14 +157,18 @@ def extract_recording(config_file: Path, pending: PendingRecording) -> None:
         config_file: Path to the config file.
         pending: The recording to extract.
     """
+    recording_class = SingleSpeakerRecording if pending.kind == 'journal' else AcousticRecording
+
     with Timer() as timer:
-        recording = AcousticRecording(audio_path=pending.audio_path)
+        recording = recording_class(audio_path=pending.audio_path)
         outputs = recording.save(output_dir=pending.output_dir, name=pending.name)
 
     extraction = LldExtraction(
         lld_source_path=pending.source_path,
+        lld_source_kind=pending.kind,
         lld_audio_path=pending.audio_path,
         lld_output_path=outputs.lld_path,
+        lld_summary_path=outputs.summary_path,
         lld_num_frames=len(recording.lld),
         lld_duration_s=timer.duration,  # type: ignore[arg-type]
     )
@@ -176,7 +191,7 @@ def get_config_file() -> Path:
     """
     parser = argparse.ArgumentParser(
         prog=MODULE_NAME,
-        description="Extract eGeMAPSv02 features from QC'd interview audio.",
+        description="Extract eGeMAPSv02 features from QC'd interview and journal audio.",
     )
     parser.add_argument('-c', '--config', type=str, help='Path to the config file.')
     args = parser.parse_args()
@@ -236,7 +251,7 @@ def main() -> None:
             skipped.add(pending.source_path)
             continue
 
-        logger.info(f'Extracting: {pending.audio_path}')
+        logger.info(f'Extracting ({pending.kind}): {pending.audio_path}')
         try:
             extract_recording(config_file=config_file, pending=pending)
         except Exception as error:  # pylint: disable=broad-except
