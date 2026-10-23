@@ -148,12 +148,12 @@ def extract_recording(config_file: Path, pending: PendingRecording) -> None:
     """
     with Timer() as timer:
         recording = AcousticRecording(audio_path=pending.audio_path)
-        lld_path = recording.save(output_dir=pending.output_dir, name=pending.name)
+        outputs = recording.save(output_dir=pending.output_dir, name=pending.name)
 
     extraction = LldExtraction(
         lld_source_path=pending.source_path,
         lld_audio_path=pending.audio_path,
-        lld_output_path=lld_path,
+        lld_output_path=outputs.lld_path,
         lld_num_frames=len(recording.lld),
         lld_duration_s=timer.duration,  # type: ignore[arg-type]
     )
@@ -165,7 +165,7 @@ def extract_recording(config_file: Path, pending: PendingRecording) -> None:
         failure_identifier=str(pending.source_path),
         failure_identifier_type='file_path',
     )
-    logger.info(f'Wrote {extraction.lld_num_frames} frames to {lld_path}')
+    logger.info(f'Wrote {extraction.lld_num_frames} frames to {outputs.lld_path}')
 
 
 def get_config_file() -> Path:
