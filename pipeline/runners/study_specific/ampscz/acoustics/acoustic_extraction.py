@@ -1,8 +1,7 @@
 """Acoustic features from .wav recordings via opensmile's eGeMAPSv02 set.
 
-For each recording, writes the 25 low-level descriptors as a per-frame CSV
-and the 88 functionals as a summary JSON, into a tree that mirrors the
-input tree. See <https://audeering.github.io/opensmile-python/>.
+For each recording, writes the 25 low-level descriptors as a per-frame CSV,
+into a tree that mirrors the input tree. See <https://audeering.github.io/opensmile-python/>.
 """
 
 import sys
