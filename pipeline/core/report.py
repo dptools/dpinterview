@@ -99,7 +99,9 @@ def construct_report_path(config_file: Path, interview_name: str) -> Path:
     Returns:
         Path: The path to the report.
     """
-    data_root = orchestrator.get_data_root(config_file=config_file)
+    # data_root = orchestrator.get_data_root(config_file=config_file)
+    config_params = utils.config(config_file, section="general")
+    output_root = Path(config_params["output_root"])
 
     dpdash_dict = dpdash.parse_dpdash_name(interview_name)
 
@@ -116,7 +118,7 @@ def construct_report_path(config_file: Path, interview_name: str) -> Path:
         data_dir = "PROTECTED"
 
     reports_dir_path = (
-        data_root
+        output_root
         / data_dir
         / study_id
         / subject_id

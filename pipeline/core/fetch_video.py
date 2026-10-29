@@ -11,7 +11,7 @@ from pipeline.models.decrypted_files import DecryptedFile
 
 logger = logging.getLogger(__name__)
 
-INTERVIEWS_TO_FETCH = "open"
+# INTERVIEWS_TO_FETCH = "open"
 
 
 def get_file_to_decrypt(
@@ -34,12 +34,19 @@ def get_file_to_decrypt(
     LEFT join interview_parts USING(interview_path)
     LEFT JOIN interviews USING(interview_name)
     WHERE interviews.study_id = '{study_id}' AND
-        interview_parts.is_primary IS TRUE AND
-        interview_files.interview_file_tags LIKE '%%video%%' AND
+        
+        interview_parts.is_primary IS TRUE AND        
+        
+        (
+        COALESCE(interview_files.interview_file_tags,'') ILIKE '%%video%%'
+        OR interview_files.interview_file ILIKE '%%.mkv%%'
+        OR interview_files.interview_file ILIKE '%%.mp4%%'
+        ) AND
+        
         interview_files.interview_file NOT IN (
             SELECT source_path FROM decrypted_files
         ) AND interview_files.ignored = FALSE AND
-        interviews.interview_type = '{INTERVIEWS_TO_FETCH}' AND
+        
         interview_parts.is_duplicate is FALSE
     ORDER BY RANDOM()
     LIMIT 1
@@ -59,7 +66,7 @@ def get_file_to_decrypt(
 
 # fetch_audio also points here
 def construct_dest_dir(
-    encrypted_file_path: Path, interview_type: str, study_id: str, data_root: Path
+    encrypted_file_path: Path, interview_type: str, study_id: str, data_root: Path, output_root: Path = None
 ) -> Path:
     """
     Constructs the destination directory for the decrypted file.
@@ -72,12 +79,17 @@ def construct_dest_dir(
     Returns:
         str: The destination directory for the decrypted file.
     """
+
+    # Prefer output_root if provided, otherwise fall back to data_root
+    base_root = Path(output_root) if output_root else Path(data_root)
+    print("DEBUG base_root used by construct_dest_dir:", base_root)
+    
     # Get PARTICIPANT_ID and INTERVIEW_NAME from osir_audio_video_file_path
     # INTERVIEW_NAME = encrypted_file_path.split("/")[-2]
     participant_id = str(encrypted_file_path).split("/")[-5]
 
     destination_dir = Path(
-        data_root,
+        base_root,
         "PROTECTED",
         study_id,
         "processed",
