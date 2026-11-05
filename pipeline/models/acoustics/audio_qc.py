@@ -74,9 +74,9 @@ class AudioQc:
     @staticmethod
     def drop_table_query() -> str:
         """
-        Return the SQL query to drop the table, leaving the schema in place.
+        Return the SQL query to drop the table, and `lld_extraction`'s foreign key to it.
         """
-        return f'DROP TABLE IF EXISTS {TABLE_NAME};'
+        return f'DROP TABLE IF EXISTS {TABLE_NAME} CASCADE;'
 
     def to_sql(self) -> str:
         """

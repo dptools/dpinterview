@@ -165,7 +165,6 @@ def extract_recording(config_file: Path, pending: PendingRecording) -> None:
     extraction = LldExtraction(
         lld_source_path=pending.source_path,
         lld_source_kind=pending.kind,
-        lld_audio_path=pending.audio_path,
         lld_output_path=outputs.lld_path,
         lld_summary_path=outputs.summary_path,
         lld_num_frames=len(features.lld),

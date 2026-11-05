@@ -25,6 +25,7 @@ from datetime import datetime
 from typing import List, Literal
 
 from pipeline.helpers import db, utils
+from pipeline.models.acoustics.audio_qc import TABLE_NAME as QC_TABLE_NAME
 
 console = utils.get_console()
 
@@ -39,11 +40,10 @@ class LldExtraction:
     """Acoustic features extracted from one source recording.
 
     Attributes:
-        lld_source_path: The original recording (`files.file_path`); stable across WAV moves.
+        lld_source_path: The original recording, as recorded in `acoustics.audio_qc`.
         lld_source_kind: Whether the recording is an interview or an audio journal.
-        lld_audio_path: Path the audio was actually read from.
         lld_output_path: Path of the per-frame LLD CSV.
-        lld_summary_path: Path of the functionals JSON, if one was written.
+        lld_summary_path: Path of the functionals JSON.
         lld_num_frames: Number of rows (10 ms frames) in the CSV.
         lld_duration_s: Wall-clock extraction time in seconds.
         lld_timestamp: When the extraction finished.
@@ -51,9 +51,8 @@ class LldExtraction:
 
     lld_source_path: Path
     lld_source_kind: SourceKind
-    lld_audio_path: Path
     lld_output_path: Path
-    lld_summary_path: Path | None
+    lld_summary_path: Path
     lld_num_frames: int
     lld_duration_s: float
     lld_timestamp: datetime = field(default_factory=datetime.now)
@@ -67,11 +66,11 @@ class LldExtraction:
 
         table_query = f"""
             CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
-                lld_source_path TEXT NOT NULL PRIMARY KEY REFERENCES files (file_path),
+                lld_source_path TEXT NOT NULL PRIMARY KEY
+                    REFERENCES {QC_TABLE_NAME} (qc_source_path),
                 lld_source_kind TEXT NOT NULL CHECK (lld_source_kind IN ('interview', 'journal')),
-                lld_audio_path TEXT NOT NULL,
                 lld_output_path TEXT NOT NULL UNIQUE,
-                lld_summary_path TEXT UNIQUE,
+                lld_summary_path TEXT NOT NULL UNIQUE,
                 lld_num_frames INTEGER NOT NULL,
                 lld_duration_s FLOAT NOT NULL,
                 lld_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -91,18 +90,13 @@ class LldExtraction:
         Return the SQL query to insert this record.
         """
         source_path = db.santize_string(self.lld_source_path)
-        audio_path = db.santize_string(self.lld_audio_path)
         output_path = db.santize_string(self.lld_output_path)
-        summary_path = (
-            'NULL' if self.lld_summary_path is None
-            else db.santize_string(self.lld_summary_path)
-        )
+        summary_path = db.santize_string(self.lld_summary_path)
 
         sql_query = f"""
             INSERT INTO {TABLE_NAME} (
                 lld_source_path,
                 lld_source_kind,
-                lld_audio_path,
                 lld_output_path,
                 lld_summary_path,
                 lld_num_frames,
@@ -111,7 +105,6 @@ class LldExtraction:
             ) VALUES (
                 '{source_path}',
                 '{self.lld_source_kind}',
-                '{audio_path}',
                 '{output_path}',
                 '{summary_path}',
                 {self.lld_num_frames},
@@ -119,7 +112,7 @@ class LldExtraction:
                 '{self.lld_timestamp}'
             );
         """
-        return db.handle_null(sql_query)
+        return sql_query
 
 
 if __name__ == '__main__':
