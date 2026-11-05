@@ -18,7 +18,7 @@ FailReason = Literal['unreadable', 'too_short', 'all_zero_peak']
 
 
 @dataclass(frozen=True)
-class AudioQc:
+class SignalQc:
     """Hard-failure verdict on one recording.
 
     Attributes:
@@ -37,7 +37,7 @@ class AudioQc:
         return not self.fail_reasons
 
     @classmethod
-    def from_signal(cls, signal: np.ndarray) -> 'AudioQc':
+    def from_signal(cls, signal: np.ndarray) -> 'SignalQc':
         """Check a decoded signal.
 
         Args:
@@ -62,7 +62,7 @@ class AudioQc:
         )
 
     @classmethod
-    def unreadable(cls) -> 'AudioQc':
+    def unreadable(cls) -> 'SignalQc':
         """Verdict for a file that could not be decoded.
 
         Returns:
