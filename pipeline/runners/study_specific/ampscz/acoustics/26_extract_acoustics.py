@@ -2,8 +2,8 @@
 """
 Extract eGeMAPSv02 acoustic features from QC'd interview and audio journal recordings.
 
-Interviews (combined audio) get a per-frame LLD CSV; journals, being single-speaker, also
-get a functionals JSON. Each extraction is recorded in `acoustics.lld_extraction`.
+Each recording gets a per-frame LLD CSV and a functionals JSON, recorded in
+`acoustics.lld_extraction`.
 """
 
 import sys
@@ -31,8 +31,8 @@ import pandas as pd
 from rich.logging import RichHandler
 
 from pipeline import orchestrator
-from pipeline.core.acoustics import AcousticRecording, SingleSpeakerRecording
-from pipeline.helpers import cli, db, utils
+from pipeline.core import acoustics
+from pipeline.helpers import cli, db, ffmpeg, utils
 from pipeline.helpers.timer import Timer
 from pipeline.models.acoustics.lld_extraction import TABLE_NAME, LldExtraction, SourceKind
 
@@ -157,11 +157,10 @@ def extract_recording(config_file: Path, pending: PendingRecording) -> None:
         config_file: Path to the config file.
         pending: The recording to extract.
     """
-    recording_class = SingleSpeakerRecording if pending.kind == 'journal' else AcousticRecording
-
     with Timer() as timer:
-        recording = recording_class(audio_path=pending.audio_path)
-        outputs = recording.save(output_dir=pending.output_dir, name=pending.name)
+        signal = acoustics.load_signal(source_path=pending.audio_path)
+        features = acoustics.AcousticFeatures(signal=signal)
+        outputs = features.save(output_dir=pending.output_dir, name=pending.name)
 
     extraction = LldExtraction(
         lld_source_path=pending.source_path,
@@ -169,7 +168,7 @@ def extract_recording(config_file: Path, pending: PendingRecording) -> None:
         lld_audio_path=pending.audio_path,
         lld_output_path=outputs.lld_path,
         lld_summary_path=outputs.summary_path,
-        lld_num_frames=len(recording.lld),
+        lld_num_frames=len(features.lld),
         lld_duration_s=timer.duration,  # type: ignore[arg-type]
     )
     db.execute_queries(
@@ -181,6 +180,23 @@ def extract_recording(config_file: Path, pending: PendingRecording) -> None:
         failure_identifier_type='file_path',
     )
     logger.info(f'Wrote {extraction.lld_num_frames} frames to {outputs.lld_path}')
+
+
+def prepare_extraction(config_file: Path) -> None:
+    """Point temp files and FFmpeg at their configured locations, then check opensmile.
+
+    Args:
+        config_file: Path to the config file.
+    """
+    orchestrator.redirect_temp_dir(config_file=config_file)
+    try:
+        ffmpeg_bin_path = utils.config(config_file, section='ffmpeg').get('ffmpeg_bin_path')
+    except ValueError:  # no [ffmpeg] section: use ffmpeg from PATH
+        ffmpeg_bin_path = None
+    if ffmpeg_bin_path:
+        ffmpeg.set_ffmpeg_bin_path(ffmpeg_bin_path)
+
+    acoustics.verify_single_pass()
 
 
 def get_config_file() -> Path:
@@ -216,6 +232,7 @@ def main() -> None:
     logger.info(f'Using config file: {config_file}')
 
     data_root = orchestrator.get_data_root(config_file=config_file, enforce_real=True)
+    prepare_extraction(config_file=config_file)
 
     # Failures are retried on restart, not every loop; the ledger keeps the record.
     skipped: set[Path] = set()
