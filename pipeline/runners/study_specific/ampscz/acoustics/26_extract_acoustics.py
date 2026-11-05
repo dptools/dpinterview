@@ -25,7 +25,6 @@ except ValueError:
     pass
 
 import argparse
-import hashlib
 import logging
 from dataclasses import dataclass
 
@@ -61,7 +60,7 @@ class PendingRecording:
     Attributes:
         source_path: The original recording, the identity of its QC verdict and extraction.
         kind: Interview or audio journal.
-        name: Output file stem.
+        name: Output file stem; `<interview_name>_subject[N]` for interviews.
         output_dir: Directory the outputs are written into.
     """
 
@@ -88,9 +87,9 @@ class PendingRecording:
             name = row['name']
         else:
             output_dir = subject_root / 'interviews' / row['interview_type'] / 'acoustics'
-            # Zoom file stems carry display names, so a path hash keeps names unique and stable.
-            path_hash = hashlib.sha1(str(source_path).encode()).hexdigest()[:8]
-            name = f"{row['name']}_subject_{path_hash}"
+            # DB fields only: Zoom file stems carry display names, which can be real names.
+            suffix = str(row['subject_file_index']) if row['subject_file_count'] > 1 else ''
+            name = f"{row['name']}_subject{suffix}"
 
         return cls(
             source_path=source_path,
@@ -130,7 +129,9 @@ def get_next_recording(
                 aj.aj_name AS name,
                 aj.study_id,
                 aj.subject_id,
-                NULL::TEXT AS interview_type
+                NULL::TEXT AS interview_type,
+                NULL::BIGINT AS subject_file_index,
+                NULL::BIGINT AS subject_file_count
             FROM public.audio_journals AS aj
             UNION ALL
             SELECT
@@ -139,7 +140,9 @@ def get_next_recording(
                 i.interview_name,
                 i.study_id,
                 i.subject_id,
-                i.interview_type
+                i.interview_type,
+                row_number() OVER (PARTITION BY f.interview_path ORDER BY f.interview_file),
+                count(*) OVER (PARTITION BY f.interview_path)
             FROM public.interview_files AS f
             JOIN public.interview_parts AS ip ON ip.interview_path = f.interview_path
             JOIN public.interviews AS i ON i.interview_name = ip.interview_name
