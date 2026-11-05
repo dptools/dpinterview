@@ -193,7 +193,7 @@ def get_match(
     ) in pending_downloads:
         transcript_name = sftp_upload_path.stem
         for awaiting_download in awaiting_downloads:
-            if transcript_name in awaiting_download.name:
+            if transcript_name.lower() in awaiting_download.name.lower():
                 matches.append(
                     (
                         transcription_source_path,
