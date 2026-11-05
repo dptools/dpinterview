@@ -443,15 +443,18 @@ if __name__ == "__main__":
         "PronetCA",
         "PronetCM",
         "PronetGA",
+        "PronetHA",
         "PronetIR",
         "PronetKC",
         "PronetLA",
         "PronetMA",
         "PronetMT",
+        "PronetMU",
         "PronetNC",
         "PronetNL",
         "PronetNN",
         "PronetOH",
+        "PronetOR",
         "PronetPA",
         "PronetPI",
         "PronetPV",
@@ -465,11 +468,7 @@ if __name__ == "__main__":
         "PronetWU",
         "PronetYA",
     ]
-    held_studies = [
-        "PronetHA",
-        "PronetMU",
-        "PronetOR",
-    ]
+    held_studies = []
 
     COUNTER = 0
 
