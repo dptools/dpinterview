@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """
-Extract eGeMAPSv02 acoustic features from QC'd interview and audio journal recordings.
+Extract eGeMAPSv02 acoustic features from single-speaker subject recordings.
 
-Each recording gets a per-frame LLD CSV and a functionals JSON, recorded in
-`acoustics.lld_extraction`.
+Covers audio journals and interview audio files of the subject alone. Each recording gets a
+hard-failure QC verdict in `acoustics.audio_qc`; those passing get a per-frame LLD CSV and a
+functionals JSON, recorded in `acoustics.lld_extraction`.
 """
 
 import sys
@@ -24,17 +25,22 @@ except ValueError:
     pass
 
 import argparse
+import hashlib
 import logging
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 from rich.logging import RichHandler
 
 from pipeline import orchestrator
 from pipeline.core import acoustics
+from pipeline.core.acoustic_qc import SignalQc
 from pipeline.helpers import cli, db, ffmpeg, utils
 from pipeline.helpers.timer import Timer
-from pipeline.models.acoustics.lld_extraction import TABLE_NAME, LldExtraction, SourceKind
+from pipeline.models.acoustics.audio_qc import TABLE_NAME as QC_TABLE_NAME
+from pipeline.models.acoustics.audio_qc import AudioQc
+from pipeline.models.acoustics.lld_extraction import LldExtraction, SourceKind
 
 MODULE_NAME = 'pipeline.runners.ampscz.extract_acoustics'
 
@@ -50,18 +56,16 @@ console = utils.get_console()
 
 @dataclass(frozen=True)
 class PendingRecording:
-    """A QC'd recording with no extraction recorded yet.
+    """A subject-only recording with no QC verdict yet.
 
     Attributes:
-        source_path: The original recording, the stable identity of the extraction.
-        audio_path: Where its QC'd WAV currently is (`completed_audio/` once transcribed).
+        source_path: The original recording, the identity of its QC verdict and extraction.
         kind: Interview or audio journal.
-        name: Interview or journal name, used as the output file stem.
+        name: Output file stem.
         output_dir: Directory the outputs are written into.
     """
 
     source_path: Path
-    audio_path: Path
     kind: SourceKind
     name: str
     output_dir: Path
@@ -77,17 +81,21 @@ class PendingRecording:
         Returns:
             The pending recording.
         """
+        source_path = Path(row['source_path'])
         subject_root = data_root / 'PROTECTED' / row['study_id'] / 'processed' / row['subject_id']
         if row['source_kind'] == 'journal':
             output_dir = subject_root / 'phone' / 'audio_journals' / 'acoustics'
+            name = row['name']
         else:
             output_dir = subject_root / 'interviews' / row['interview_type'] / 'acoustics'
+            # Zoom file stems carry display names, so a path hash keeps names unique and stable.
+            path_hash = hashlib.sha1(str(source_path).encode()).hexdigest()[:8]
+            name = f"{row['name']}_subject_{path_hash}"
 
         return cls(
-            source_path=Path(row['source_path']),
-            audio_path=Path(row['audio_path']),
+            source_path=source_path,
             kind=row['source_kind'],
-            name=row['name'],
+            name=name,
             output_dir=output_dir,
         )
 
@@ -97,7 +105,7 @@ def get_next_recording(
     data_root: Path,
     skipped: set[Path],
 ) -> PendingRecording | None:
-    """Fetch one QC'd interview or journal recording not yet extracted or skipped.
+    """Fetch one journal or subject interview file with no QC verdict, not skipped this run.
 
     Args:
         config_file: Path to the config file.
@@ -110,36 +118,43 @@ def get_next_recording(
     skipped_clause = ''
     if skipped:
         skipped_list = ', '.join(f"'{db.santize_string(path)}'" for path in skipped)
-        skipped_clause = f'AND wc.wc_source_path NOT IN ({skipped_list})'
+        skipped_clause = f'AND c.source_path NOT IN ({skipped_list})'
 
+    # Subject files are those the importer tagged `participant` by finding the subject ID in the
+    # name; its fallback tag (a lone unclassified file) is excluded.
     query = f"""
-        SELECT DISTINCT ON (wc.wc_source_path)
-            wc.wc_source_path AS source_path,
-            COALESCE(p.completed_audio_file_path, q.aqc_source_path) AS audio_path,
-            CASE WHEN aj.aj_path IS NULL THEN 'interview' ELSE 'journal' END AS source_kind,
-            COALESCE(i.interview_name, aj.aj_name) AS name,
-            COALESCE(i.study_id, aj.study_id) AS study_id,
-            COALESCE(i.subject_id, aj.subject_id) AS subject_id,
-            i.interview_type
-        FROM transcribeme.audio_qc AS q
-        JOIN transcribeme.wav_conversion AS wc
-            ON wc.wc_destination_path = q.aqc_source_path
-        LEFT JOIN public.interview_files AS f
-            ON f.interview_file = wc.wc_source_path
-            AND f.interview_file_tags LIKE '%%combined%%'
-        LEFT JOIN public.interview_parts AS ip
-            ON ip.interview_path = f.interview_path
-        LEFT JOIN public.interviews AS i
-            ON i.interview_name = ip.interview_name
-        LEFT JOIN public.audio_journals AS aj
-            ON aj.aj_path = wc.wc_source_path
-        LEFT JOIN transcribeme.transcribeme_pull AS p
-            ON p.sftp_download_path = q.aqc_source_path
-        WHERE (q.aqc_passed IS TRUE OR q.aqc_override IS TRUE)
-            AND (i.interview_name IS NOT NULL OR aj.aj_path IS NOT NULL)
-            AND wc.wc_source_path NOT IN (SELECT lld_source_path FROM {TABLE_NAME})
+        WITH candidates AS (
+            SELECT
+                aj.aj_path AS source_path,
+                'journal' AS source_kind,
+                aj.aj_name AS name,
+                aj.study_id,
+                aj.subject_id,
+                NULL::TEXT AS interview_type
+            FROM public.audio_journals AS aj
+            UNION ALL
+            SELECT
+                f.interview_file,
+                'interview',
+                i.interview_name,
+                i.study_id,
+                i.subject_id,
+                i.interview_type
+            FROM public.interview_files AS f
+            JOIN public.interview_parts AS ip ON ip.interview_path = f.interview_path
+            JOIN public.interviews AS i ON i.interview_name = ip.interview_name
+            WHERE f.interview_file_tags LIKE '%%participant%%'
+                AND f.interview_file LIKE '%%' || i.subject_id || '%%'
+                AND f.ignored IS NOT TRUE
+                AND ip.is_primary IS TRUE
+                AND ip.is_duplicate IS NOT TRUE
+        )
+        SELECT c.*
+        FROM candidates AS c
+        WHERE NOT EXISTS (
+            SELECT 1 FROM {QC_TABLE_NAME} AS q WHERE q.qc_source_path = c.source_path
+        )
             {skipped_clause}
-        ORDER BY wc.wc_source_path, p.sftp_download_timestamp DESC NULLS LAST
         LIMIT 1;
     """
 
@@ -150,19 +165,21 @@ def get_next_recording(
     return PendingRecording.from_row(row=result_df.iloc[0], data_root=data_root)
 
 
-def extract_recording(config_file: Path, pending: PendingRecording) -> None:
-    """Extract features for one recording, write its outputs, and record it in the database.
+def extract_features(signal: np.ndarray, pending: PendingRecording) -> LldExtraction:
+    """Extract and write one recording's features.
 
     Args:
-        config_file: Path to the config file.
-        pending: The recording to extract.
+        signal: The decoded signal, already through QC.
+        pending: The recording it came from.
+
+    Returns:
+        The extraction record, not yet written to the database.
     """
     with Timer() as timer:
-        signal = acoustics.load_signal(source_path=pending.audio_path)
         features = acoustics.AcousticFeatures(signal=signal)
         outputs = features.save(output_dir=pending.output_dir, name=pending.name)
 
-    extraction = LldExtraction(
+    return LldExtraction(
         lld_source_path=pending.source_path,
         lld_source_kind=pending.kind,
         lld_output_path=outputs.lld_path,
@@ -170,15 +187,49 @@ def extract_recording(config_file: Path, pending: PendingRecording) -> None:
         lld_num_frames=len(features.lld),
         lld_duration_s=timer.duration,  # type: ignore[arg-type]
     )
+
+
+def process_recording(config_file: Path, pending: PendingRecording) -> None:
+    """QC one recording, extract its features if it passes, and record both in one transaction.
+
+    Args:
+        config_file: Path to the config file.
+        pending: The recording to process.
+    """
+    try:
+        signal = acoustics.load_signal(source_path=pending.source_path)
+        qc = SignalQc.from_signal(signal)
+    except acoustics.UnreadableAudioError:
+        signal = None
+        qc = SignalQc.unreadable()
+
+    verdict = AudioQc(
+        qc_source_path=pending.source_path,
+        qc_passed=qc.passed,
+        qc_fail_reasons=qc.fail_reasons,
+        qc_audio_duration_s=qc.duration_s,
+        qc_peak_amplitude=qc.peak_amplitude,
+    )
+    queries = [verdict.to_sql()]
+
+    extraction = None
+    if signal is not None and qc.passed:
+        extraction = extract_features(signal=signal, pending=pending)
+        queries.append(extraction.to_sql())
+
     db.execute_queries(
         config_file=config_file,
-        queries=[extraction.to_sql()],
+        queries=queries,
         show_commands=False,
         failure_stage=MODULE_NAME,
         failure_identifier=str(pending.source_path),
         failure_identifier_type='file_path',
     )
-    logger.info(f'Wrote {extraction.lld_num_frames} frames to {outputs.lld_path}')
+
+    if extraction is not None:
+        logger.info(f'Wrote {extraction.lld_num_frames} frames to {extraction.lld_output_path}')
+    else:
+        logger.warning(f'Failed QC ({", ".join(qc.fail_reasons)}): {pending.source_path}')
 
 
 def prepare_extraction(config_file: Path) -> None:
@@ -206,7 +257,7 @@ def get_config_file() -> Path:
     """
     parser = argparse.ArgumentParser(
         prog=MODULE_NAME,
-        description="Extract eGeMAPSv02 features from QC'd interview and journal audio.",
+        description='Extract eGeMAPSv02 features from single-speaker subject recordings.',
     )
     parser.add_argument('-c', '--config', type=str, help='Path to the config file.')
     args = parser.parse_args()
@@ -249,14 +300,14 @@ def main() -> None:
                 orchestrator.log(
                     config_file=config_file,
                     module_name=MODULE_NAME,
-                    message=f'Extracted acoustic features for {counter} recordings.',
+                    message=f'Processed {counter} recordings for acoustic extraction.',
                 )
                 counter = 0
             orchestrator.snooze(config_file=config_file)
             continue
 
-        if not pending.audio_path.exists():
-            logger.warning(f'Skipping missing audio file: {pending.audio_path}')
+        if not pending.source_path.exists():
+            logger.warning(f'Skipping missing audio file: {pending.source_path}')
             db.record_failure(
                 config_file=config_file,
                 stage=MODULE_NAME,
@@ -267,12 +318,12 @@ def main() -> None:
             skipped.add(pending.source_path)
             continue
 
-        logger.info(f'Extracting ({pending.kind}): {pending.audio_path}')
+        logger.info(f'Processing ({pending.kind}): {pending.source_path}')
         try:
-            extract_recording(config_file=config_file, pending=pending)
+            process_recording(config_file=config_file, pending=pending)
         except Exception as error:  # pylint: disable=broad-except
-            # Contains opensmile/decoder errors to one file; a failed DB write still exits.
-            logger.exception(f'Acoustic extraction failed for {pending.audio_path}')
+            # Contains opensmile errors to one file; nothing is recorded, so it retries on restart.
+            logger.exception(f'Acoustic extraction failed for {pending.source_path}')
             db.record_failure(
                 config_file=config_file,
                 stage=MODULE_NAME,
