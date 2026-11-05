@@ -121,7 +121,7 @@ def get_next_recording(
         skipped_clause = f'AND c.source_path NOT IN ({skipped_list})'
 
     # Subject files are those the importer tagged `participant` by finding the subject ID in the
-    # name; its fallback tag (a lone unclassified file) is excluded.
+    # file name (not the path, which always contains it); its fallback tag is excluded.
     query = f"""
         WITH candidates AS (
             SELECT
@@ -144,7 +144,7 @@ def get_next_recording(
             JOIN public.interview_parts AS ip ON ip.interview_path = f.interview_path
             JOIN public.interviews AS i ON i.interview_name = ip.interview_name
             WHERE f.interview_file_tags LIKE '%%participant%%'
-                AND f.interview_file LIKE '%%' || i.subject_id || '%%'
+                AND substring(f.interview_file from '[^/]+$') LIKE '%%' || i.subject_id || '%%'
                 AND f.ignored IS NOT TRUE
                 AND ip.is_primary IS TRUE
                 AND ip.is_duplicate IS NOT TRUE
