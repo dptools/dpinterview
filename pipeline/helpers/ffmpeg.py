@@ -5,7 +5,7 @@ Helper functions for interacting with FFmpeg.
 import logging
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from rich.progress import Progress
 
@@ -190,6 +190,8 @@ def images_to_vid(
 def convert_audio(
     source: Path,
     target: Path,
+    output_args: Optional[List[str]] = None,
+    on_fail: Callable[[], None] = lambda: sys.exit(1),
 ) -> None:
     """
     Convert an audio file to a different format using FFmpeg.
@@ -197,6 +199,8 @@ def convert_audio(
     Args:
         source (Path): The path to the input audio file.
         target (Path): The path to the output audio file.
+        output_args (Optional[List[str]]): FFmpeg output options, e.g. ["-ar", "16000"].
+        on_fail (Callable[[], None]): Called if FFmpeg fails; exits the process by default.
 
     Returns:
         None
@@ -207,6 +211,7 @@ def convert_audio(
         "-y",  # overwrite output file if it exists
         "-i",
         str(source),
+        *(output_args or []),
         str(target),
     ]
 
@@ -225,7 +230,7 @@ def convert_audio(
             f"Converting audio ({source_extension} -> {target_extension})...",
             total=None,
         )
-        cli.execute_commands(command_array=cli_command_array)
+        cli.execute_commands(command_array=cli_command_array, on_fail=on_fail)
         progress.remove_task(task)
         logger.info(
             f"[green]Converted audio ({source_extension} -> {target_extension})",
