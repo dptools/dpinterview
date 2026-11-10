@@ -2,12 +2,12 @@
 """
 DatetimeOverride Model
 
-Staff-confirmed event datetime for a raw interview file/directory whose name
-could not be date-parsed by the crawler (recorded as a 'datetime_parse'
-pipeline_failures row). Written by dpinterview-web's "Runsheet Match"
-remediation page after a human matches the malformed file to a runsheet
-entry; consumed by 2_import_interview_files.py as a fallback when the
-on-disk name still fails to parse, so a manually-matched file gets imported
+Staff-confirmed event datetime for a raw interview file/directory the crawler
+could not date itself: a name that failed to parse ('datetime_parse') or a
+media file loose in a type folder ('loose_file'). Written by dpinterview-web's
+"Runsheet Match" remediation page after a human matches the file to a runsheet
+entry; consumed by 2_import_interview_files.py wherever it would otherwise
+record one of those failures, so a manually-matched file gets imported
 through the exact same downstream code path (categorization, hashing,
 Interview/InterviewParts/InterviewFile creation) as a normally-named one.
 """

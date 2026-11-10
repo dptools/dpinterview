@@ -49,6 +49,10 @@ from pipeline.models.interviews import Interview, InterviewType
 MODULE_NAME = "import_interview_files"
 INSTANCE_NAME = MODULE_NAME
 
+# Media that can be an interview's recording when left loose in a type folder
+# (uppercase .WAV is the timestamp-named format, crawled separately)
+LOOSE_MEDIA_SUFFIXES = (".mp4", ".m4a", ".wav")
+
 logger = logging.getLogger(MODULE_NAME)
 logargs = {
     "level": logging.DEBUG,
@@ -442,7 +446,8 @@ def fetch_interviews(
 {interview_type_path} does not exist."
             )
             continue
-        interview_dirs = [d for d in interview_type_path.iterdir() if d.is_dir()]
+        type_dir_entries = list(interview_type_path.iterdir())
+        interview_dirs = [d for d in type_dir_entries if d.is_dir()]
 
         interview_type_parts: List[InterviewParts] = []
         for interview_dir in interview_dirs:
@@ -506,6 +511,37 @@ def fetch_interviews(
                 build_interview_part(
                     interview_path=wav_file,
                     actual_interview_datetime=actual_interview_datetime,
+                    interview_type=interview_type,
+                    study_id=study_id,
+                    subject_id=subject_id,
+                    consent_date=consent_date,
+                )
+            )
+
+        # Loose media is only imported once staff match it to a runsheet entry
+        loose_files = [
+            f for f in type_dir_entries
+            if f.is_file()
+            and not f.name.startswith(".")
+            and f.suffix.lower() in LOOSE_MEDIA_SUFFIXES
+            and f.suffix != ".WAV"
+        ]
+        for loose_file in loose_files:
+            override_datetime = override_or_record_failure(
+                config_file=config_file,
+                raw_path=loose_file,
+                error_code="loose_file",
+                error=f"Not in a dated interview folder: {loose_file.name}",
+                study_id=study_id,
+                subject_id=subject_id,
+            )
+            if override_datetime is None:
+                continue
+
+            interview_type_parts.append(
+                build_interview_part(
+                    interview_path=loose_file,
+                    actual_interview_datetime=override_datetime,
                     interview_type=interview_type,
                     study_id=study_id,
                     subject_id=subject_id,
