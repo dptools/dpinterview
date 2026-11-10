@@ -183,11 +183,15 @@ def fetch_interview_files(
     interview_path = interview_part.interview_path
 
     if interview_path.is_file():
+        # A single-file part is the interview's combined recording; an mp4 also carries its video
+        tags = "audio,combined"
+        if interview_path.suffix.lower() == ".mp4":
+            tags += ",video"
         interview_files.append(
             InterviewFile(
                 interview_path=interview_path,
                 interview_file=interview_path,
-                tags="audio,combined",
+                tags=tags,
             )
         )
         return interview_files
