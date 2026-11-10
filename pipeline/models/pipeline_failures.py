@@ -47,6 +47,7 @@ IdentifierType = Literal[
 ErrorCode = Literal[
     "datetime_parse",
     "loose_file",
+    "no_media_files",
     "subject_id_parse",
     "filename_parse",
     "consent_date_missing",

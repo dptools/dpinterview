@@ -146,6 +146,56 @@ def catogorize_audio_files(
     return files
 
 
+def list_media_files(directory: Path) -> List[Path]:
+    """
+    Lists the recordings directly in a directory and in its 'Audio Record' subdirectory.
+
+    Args:
+        directory (Path): The directory to list.
+
+    Returns:
+        List[Path]: Non-hidden files with a MEDIA_SUFFIXES extension, in any case.
+    """
+    candidates = [f for f in directory.iterdir() if f.is_file()]
+    audio_record_dir = directory / "Audio Record"
+    if audio_record_dir.is_dir():
+        candidates.extend(f for f in audio_record_dir.iterdir() if f.is_file())
+
+    return [
+        f for f in candidates
+        if not f.name.startswith(".") and f.suffix.lower() in MEDIA_SUFFIXES
+    ]
+
+
+def find_media_dir(interview_path: Path) -> Union[Path, str]:
+    """
+    Finds the directory holding an interview folder's recordings: the folder
+    itself, or its only subfolder with recordings (e.g. a nested Zoom folder).
+
+    Args:
+        interview_path (Path): The raw interview directory.
+
+    Returns:
+        Union[Path, str]: The directory, or why none could be chosen.
+    """
+    if list_media_files(interview_path):
+        return interview_path
+
+    media_subdirs = sorted(
+        d for d in interview_path.iterdir()
+        if d.is_dir()
+        and d.name != "Audio Record"
+        and not d.name.startswith(".")
+        and list_media_files(d)
+    )
+    if len(media_subdirs) == 1:
+        return media_subdirs[0]
+    if not media_subdirs:
+        return "No .mp4/.m4a files in the folder or any subfolder"
+    names = ", ".join(d.name for d in media_subdirs)
+    return f"Recordings in {len(media_subdirs)} subfolders, cannot choose one: {names}"
+
+
 def fetch_interview_files(
     interview_part: InterviewParts, config_file: Path, study_id: str
 ) -> List[InterviewFile]:
@@ -200,24 +250,24 @@ def fetch_interview_files(
         )
         return interview_files
 
-    # list all files in the directory
-    files = [f for f in interview_path.iterdir() if f.is_file()]
-    # also add files from 'Audio Record' directory
-    audio_record_dir = interview_path / "Audio Record"
-    if audio_record_dir.exists():
-        files.extend([f for f in audio_record_dir.iterdir() if f.is_file()])
+    media_dir = find_media_dir(interview_path)
+    if not isinstance(media_dir, Path):
+        logger.warning(f"{subject_id}: {media_dir} ({interview_path.name})")
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code="no_media_files",
+            identifier=str(interview_path),
+            error=media_dir,
+            identifier_type="file_path",
+            study_id=study_id,
+            subject_id=subject_id,
+        )
+        return interview_files
 
-    audio_files: List[Path] = []
-    video_files: List[Path] = []
-    for file in files:
-        base_name = file.name
-        base_name_parts = base_name.split(".")
-        if base_name[0] == ".":
-            continue
-        if base_name_parts[-1].lower() == "mp4":
-            video_files.append(file)
-        elif base_name_parts[-1].lower() == "m4a":
-            audio_files.append(file)
+    files = list_media_files(media_dir)
+    audio_files = [f for f in files if f.suffix.lower() == ".m4a"]
+    video_files = [f for f in files if f.suffix.lower() == ".mp4"]
 
     categorized_audio_files = catogorize_audio_files(
         audio_files=audio_files, subject_id=subject_id
@@ -711,11 +761,14 @@ def import_interviews(config_file: Path, study_id: str, progress: Progress) -> N
     # staff-confirmed datetime_overrides row) - close the loop on both now
     # that the import actually succeeded. No-ops for normally-parsed files:
     # there's no matching pipeline_failures/datetime_overrides row to update.
+    paths_with_files = {f.interview_path for f in interview_files}
     for interview_part in interview_parts:
         identifier = str(interview_part.interview_path)
-        db.resolve_failure(
-            config_file=config_file, stage=MODULE_NAME, identifier=identifier
-        )
+        # A part without files keeps the no_media_files row just recorded for it
+        if interview_part.interview_path in paths_with_files:
+            db.resolve_failure(
+                config_file=config_file, stage=MODULE_NAME, identifier=identifier
+            )
         datetime_overrides.mark_consumed(config_file=config_file, identifier=identifier)
 
 
