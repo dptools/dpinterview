@@ -50,8 +50,8 @@ MODULE_NAME = "import_interview_files"
 INSTANCE_NAME = MODULE_NAME
 
 # Media that can be an interview's recording when left loose in a type folder
-# (uppercase .WAV is the timestamp-named format, crawled separately)
-LOOSE_MEDIA_SUFFIXES = (".mp4", ".m4a", ".wav")
+# (.wav is the timestamp-named recorder format, crawled separately)
+LOOSE_MEDIA_SUFFIXES = (".mp4", ".m4a")
 
 logger = logging.getLogger(MODULE_NAME)
 logargs = {
@@ -484,8 +484,10 @@ def fetch_interviews(
             )
 
         wav_files = [
-            f for f in interview_type_path.glob("*.WAV")
-            if not f.name.startswith(".check_sum_")
+            f for f in type_dir_entries
+            if f.is_file()
+            and f.suffix.lower() == ".wav"
+            and not f.name.startswith(".check_sum_")
         ]
 
         for wav_file in wav_files:
@@ -524,7 +526,6 @@ def fetch_interviews(
             if f.is_file()
             and not f.name.startswith(".")
             and f.suffix.lower() in LOOSE_MEDIA_SUFFIXES
-            and f.suffix != ".WAV"
         ]
         for loose_file in loose_files:
             override_datetime = override_or_record_failure(
