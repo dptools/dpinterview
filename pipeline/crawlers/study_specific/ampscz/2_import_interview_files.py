@@ -49,9 +49,9 @@ from pipeline.models.interviews import Interview, InterviewType
 MODULE_NAME = "import_interview_files"
 INSTANCE_NAME = MODULE_NAME
 
-# Media that can be an interview's recording when left loose in a type folder
+# Media that can be an interview's recording, loose in a type folder or in a folder
 # (.wav is the timestamp-named recorder format, crawled separately)
-LOOSE_MEDIA_SUFFIXES = (".mp4", ".m4a")
+MEDIA_SUFFIXES = (".mp4", ".m4a")
 
 logger = logging.getLogger(MODULE_NAME)
 logargs = {
@@ -525,7 +525,7 @@ def fetch_interviews(
             f for f in type_dir_entries
             if f.is_file()
             and not f.name.startswith(".")
-            and f.suffix.lower() in LOOSE_MEDIA_SUFFIXES
+            and f.suffix.lower() in MEDIA_SUFFIXES
         ]
         for loose_file in loose_files:
             override_datetime = override_or_record_failure(
