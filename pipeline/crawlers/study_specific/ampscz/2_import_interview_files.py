@@ -214,9 +214,9 @@ def fetch_interview_files(
         base_name_parts = base_name.split(".")
         if base_name[0] == ".":
             continue
-        if base_name_parts[-1] == "mp4":
+        if base_name_parts[-1].lower() == "mp4":
             video_files.append(file)
-        elif base_name_parts[-1] == "m4a":
+        elif base_name_parts[-1].lower() == "m4a":
             audio_files.append(file)
 
     categorized_audio_files = catogorize_audio_files(
