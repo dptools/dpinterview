@@ -54,21 +54,22 @@ def get_file_to_decrypt(
 
 
 def construct_dest_dir(
-    encrypted_file_path: Path, interview_type: str, study_id: str, data_root: Path
+    interview_name: str, interview_type: str, study_id: str, data_root: Path
 ) -> Path:
     """
     Constructs the destination directory for the decrypted file.
 
     Args:
-        encrypted_file_path (str): The path to the encrypted file.
+        interview_name (str): The name of the interview the file belongs to.
+        interview_type (str): The interview type.
         study_id (str): The ID of the study.
-        data_root (str): The root directory of the data.
+        data_root (Path): The root directory of the data.
 
     Returns:
-        str: The destination directory for the decrypted file.
+        Path: The destination directory for the decrypted file.
     """
     return fetch_video.construct_dest_dir(
-        encrypted_file_path, interview_type, study_id, data_root
+        interview_name, interview_type, study_id, data_root
     )
 
 

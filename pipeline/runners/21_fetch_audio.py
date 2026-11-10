@@ -128,7 +128,7 @@ if __name__ == "__main__":
                 logger.info(f"File to decrypt: {file_to_decrypt_t}")
 
                 dest_dir = fetch_audio.construct_dest_dir(
-                    encrypted_file_path=file_to_decrypt_path,
+                    interview_name=interview_name,
                     interview_type=interview_type,
                     study_id=study_id,
                     data_root=data_root,
