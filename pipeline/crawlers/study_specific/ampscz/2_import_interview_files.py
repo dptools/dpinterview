@@ -72,6 +72,7 @@ def catogorize_audio_files(
     - If the file name contains the interviewer's name, it is categorized as an
         interviewer audio file.
     - If the file name contains "audio_only", it is categorized as a combined audio file.
+    - A Zoom cloud recording's GMT<date>-<time>_Recording.m4a is a combined audio file.
 
     Defaults to uncategorized if the file name does not match any of the above criteria.
     """
@@ -87,7 +88,9 @@ def catogorize_audio_files(
         base_name = file.name
         base_name = base_name.split(".")[0]
 
-        if base_name == "audio_only":
+        if base_name == "audio_only" or re.fullmatch(
+            r"GMT\d{8}-\d{6}_Recording", base_name
+        ):
             files["combined"].append(file)
             continue
 
