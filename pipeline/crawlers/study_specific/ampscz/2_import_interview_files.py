@@ -32,7 +32,7 @@ import logging
 import multiprocessing
 import re
 from datetime import date, datetime, time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from rich.logging import RichHandler
 from rich.progress import Progress
@@ -48,6 +48,10 @@ from pipeline.models.interviews import Interview, InterviewType
 
 MODULE_NAME = "import_interview_files"
 INSTANCE_NAME = MODULE_NAME
+
+# Media that can be an interview's recording when left loose in a type folder
+# (.wav is the timestamp-named recorder format, crawled separately)
+LOOSE_MEDIA_SUFFIXES = (".mp4", ".m4a")
 
 logger = logging.getLogger(MODULE_NAME)
 logargs = {
@@ -186,11 +190,15 @@ def fetch_interview_files(
     interview_path = interview_part.interview_path
 
     if interview_path.is_file():
+        # A single-file part is the interview's combined recording; an mp4 also carries its video
+        tags = "audio,combined"
+        if interview_path.suffix.lower() == ".mp4":
+            tags += ",video"
         interview_files.append(
             InterviewFile(
                 interview_path=interview_path,
                 interview_file=interview_path,
-                tags="audio,combined",
+                tags=tags,
             )
         )
         return interview_files
@@ -281,6 +289,100 @@ def handle_multi_part_interviews(
     return interview_parts
 
 
+def override_or_record_failure(
+    config_file: Path,
+    raw_path: Path,
+    error_code: str,
+    error: Union[str, Exception],
+    study_id: str,
+    subject_id: str,
+) -> Optional[datetime]:
+    """
+    Returns the staff-confirmed datetime override for a raw path the crawler
+    could not date itself, or records a pipeline failure and returns None.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        raw_path (Path): The raw interview file or directory.
+        error_code (str): The pipeline_failures error code to record if there is no override.
+        error (Union[str, Exception]): The error to record if there is no override.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+
+    Returns:
+        Optional[datetime]: The override datetime, or None if none has been recorded.
+    """
+    override_datetime = datetime_overrides.get_override_datetime(
+        config_file=config_file, identifier=str(raw_path)
+    )
+    if override_datetime is None:
+        logger.error(
+            f"{subject_id}: Could not date {raw_path.name} ({error_code}). Skipping..."
+        )
+        db.record_failure(
+            config_file=config_file,
+            stage=MODULE_NAME,
+            error_code=error_code,
+            identifier=str(raw_path),
+            error=error,
+            identifier_type="file_path",
+            study_id=study_id,
+            subject_id=subject_id,
+        )
+        return None
+
+    logger.info(
+        f"{subject_id}: Using staff-confirmed datetime override for {raw_path.name}"
+    )
+    return override_datetime
+
+
+def build_interview_part(
+    interview_path: Path,
+    actual_interview_datetime: datetime,
+    interview_type: InterviewType,
+    study_id: str,
+    subject_id: str,
+    consent_date: datetime,
+) -> InterviewParts:
+    """
+    Builds the InterviewParts for a raw interview path recorded at a given datetime.
+
+    Args:
+        interview_path (Path): The raw interview file or directory.
+        actual_interview_datetime (datetime): When the interview was recorded.
+        interview_type (InterviewType): The interview type.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+        consent_date (datetime): The subject's consent date.
+
+    Returns:
+        InterviewParts: The part, numbered 1 until handle_multi_part_interviews renumbers it.
+    """
+    # Ignore time information, to get accurate day
+    interview_datetime = actual_interview_datetime.replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    interview_name = dpdash.get_dpdash_name(
+        study=study_id,
+        subject=subject_id,
+        data_type=f"{interview_type.value}Interview",
+        consent_date=consent_date,
+        event_date=interview_datetime,
+    )
+    interview_day = dpdash.get_days_between_dates(
+        consent_date=consent_date, event_date=interview_datetime
+    )
+
+    return InterviewParts(
+        interview_name=interview_name,
+        interview_path=interview_path,
+        interview_day=interview_day,
+        interview_part=1,
+        interview_datetime=actual_interview_datetime,
+    )
+
+
 def fetch_interviews(
     config_file: Path, subject_id: str, study_id: str, is_active: Optional[bool]
 ) -> List[InterviewParts]:
@@ -347,7 +449,8 @@ def fetch_interviews(
 {interview_type_path} does not exist."
             )
             continue
-        interview_dirs = [d for d in interview_type_path.iterdir() if d.is_dir()]
+        type_dir_entries = list(interview_type_path.iterdir())
+        interview_dirs = [d for d in type_dir_entries if d.is_dir()]
 
         interview_type_parts: List[InterviewParts] = []
         for interview_dir in interview_dirs:
@@ -358,65 +461,36 @@ def fetch_interviews(
                 date_dt = date.fromisoformat(parts[0])
                 # time format: 14.35.34
                 actual_time_dt = time.fromisoformat(parts[1].replace(".", ":"))
-                # Time is of the form HH.MM.SS
-                # Ignore time information, to get accurate day
-                time_dt = time.fromisoformat("00:00:00")
-                interview_datetime = datetime.combine(date_dt, time_dt)
                 actual_interview_datetime = datetime.combine(date_dt, actual_time_dt)
             except (ValueError, IndexError) as e:
-                override_datetime = datetime_overrides.get_override_datetime(
-                    config_file=config_file, identifier=str(interview_dir)
+                override_datetime = override_or_record_failure(
+                    config_file=config_file,
+                    raw_path=interview_dir,
+                    error_code="datetime_parse",
+                    error=e,
+                    study_id=study_id,
+                    subject_id=subject_id,
                 )
                 if override_datetime is None:
-                    logger.error(
-                        f"{subject_id}: Could not parse date and time from {base_name}. Skipping..."
-                    )
-                    db.record_failure(
-                        config_file=config_file,
-                        stage=MODULE_NAME,
-                        error_code="datetime_parse",
-                        identifier=str(interview_dir),
-                        error=e,
-                        identifier_type="file_path",
-                        study_id=study_id,
-                        subject_id=subject_id,
-                    )
                     continue
-
-                logger.info(
-                    f"{subject_id}: Using staff-confirmed datetime override for {base_name}"
-                )
                 actual_interview_datetime = override_datetime
-                # Ignore time information, to get accurate day - mirrors the
-                # normal-parse path above.
-                interview_datetime = override_datetime.replace(
-                    hour=0, minute=0, second=0, microsecond=0
+
+            interview_type_parts.append(
+                build_interview_part(
+                    interview_path=interview_dir,
+                    actual_interview_datetime=actual_interview_datetime,
+                    interview_type=interview_type,
+                    study_id=study_id,
+                    subject_id=subject_id,
+                    consent_date=consent_date,
                 )
-
-            interview_name = dpdash.get_dpdash_name(
-                study=study_id,
-                subject=subject_id,
-                data_type=f"{interview_type.value}Interview",
-                consent_date=consent_date,
-                event_date=interview_datetime,
             )
-            interview_day = dpdash.get_days_between_dates(
-                consent_date=consent_date, event_date=interview_datetime
-            )
-
-            interview_part = InterviewParts(
-                interview_name=interview_name,
-                interview_path=interview_dir,
-                interview_day=interview_day,
-                interview_part=1,
-                interview_datetime=actual_interview_datetime,
-            )
-
-            interview_type_parts.append(interview_part)
 
         wav_files = [
-            f for f in interview_type_path.glob("*.WAV")
-            if not f.name.startswith(".check_sum_")
+            f for f in type_dir_entries
+            if f.is_file()
+            and f.suffix.lower() == ".wav"
+            and not f.name.startswith(".check_sum_")
         ]
 
         for wav_file in wav_files:
@@ -425,59 +499,59 @@ def fetch_interviews(
                 actual_interview_datetime = datetime.strptime(
                     interview_datetime_str, "%Y%m%d%H%M%S"
                 )
-                # truncate time
-                interview_datetime = actual_interview_datetime.replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
             except ValueError as e:
-                override_datetime = datetime_overrides.get_override_datetime(
-                    config_file=config_file, identifier=str(wav_file)
+                override_datetime = override_or_record_failure(
+                    config_file=config_file,
+                    raw_path=wav_file,
+                    error_code="datetime_parse",
+                    error=e,
+                    study_id=study_id,
+                    subject_id=subject_id,
                 )
                 if override_datetime is None:
-                    logger.error(
-                        f"Could not parse date and time from {wav_file}. Skipping..."
-                    )
-                    db.record_failure(
-                        config_file=config_file,
-                        stage=MODULE_NAME,
-                        error_code="datetime_parse",
-                        identifier=str(wav_file),
-                        error=e,
-                        identifier_type="file_path",
-                        study_id=study_id,
-                        subject_id=subject_id,
-                    )
                     continue
-
-                logger.info(
-                    f"{subject_id}: Using staff-confirmed datetime override for {wav_file}"
-                )
                 actual_interview_datetime = override_datetime
-                # truncate time, mirrors the normal-parse path above
-                interview_datetime = override_datetime.replace(
-                    hour=0, minute=0, second=0, microsecond=0
+
+            interview_type_parts.append(
+                build_interview_part(
+                    interview_path=wav_file,
+                    actual_interview_datetime=actual_interview_datetime,
+                    interview_type=interview_type,
+                    study_id=study_id,
+                    subject_id=subject_id,
+                    consent_date=consent_date,
                 )
-
-            interview_name = dpdash.get_dpdash_name(
-                study=study_id,
-                subject=subject_id,
-                data_type=f"{interview_type.value}Interview",
-                consent_date=consent_date,
-                event_date=interview_datetime,
-            )
-            interview_day = dpdash.get_days_between_dates(
-                consent_date=consent_date, event_date=interview_datetime
             )
 
-            interview_part = InterviewParts(
-                interview_name=interview_name,
-                interview_path=wav_file,
-                interview_day=interview_day,
-                interview_part=1,
-                interview_datetime=actual_interview_datetime,
+        # Loose media is only imported once staff match it to a runsheet entry
+        loose_files = [
+            f for f in type_dir_entries
+            if f.is_file()
+            and not f.name.startswith(".")
+            and f.suffix.lower() in LOOSE_MEDIA_SUFFIXES
+        ]
+        for loose_file in loose_files:
+            override_datetime = override_or_record_failure(
+                config_file=config_file,
+                raw_path=loose_file,
+                error_code="loose_file",
+                error=f"Not in a dated interview folder: {loose_file.name}",
+                study_id=study_id,
+                subject_id=subject_id,
             )
+            if override_datetime is None:
+                continue
 
-            interview_type_parts.append(interview_part)
+            interview_type_parts.append(
+                build_interview_part(
+                    interview_path=loose_file,
+                    actual_interview_datetime=override_datetime,
+                    interview_type=interview_type,
+                    study_id=study_id,
+                    subject_id=subject_id,
+                    consent_date=consent_date,
+                )
+            )
 
         interview_type_parts = handle_multi_part_interviews(interview_type_parts)
         interview_parts.extend(interview_type_parts)

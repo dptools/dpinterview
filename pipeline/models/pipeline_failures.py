@@ -46,6 +46,7 @@ IdentifierType = Literal[
 # so call sites stay consistent instead of inventing near-duplicate strings.
 ErrorCode = Literal[
     "datetime_parse",
+    "loose_file",
     "subject_id_parse",
     "filename_parse",
     "consent_date_missing",

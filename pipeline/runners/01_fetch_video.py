@@ -149,7 +149,7 @@ if __name__ == "__main__":
                 interview_name = file_to_decrypt_t[2]
 
                 dest_dir = fetch_video.construct_dest_dir(
-                    encrypted_file_path=file_to_decrypt_path,
+                    interview_name=interview_name,
                     interview_type=interview_type,
                     study_id=study_id,
                     data_root=data_root,
