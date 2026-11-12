@@ -255,19 +255,7 @@ def choose_session_recordings(raw_path: Path) -> Union[List[Path], str]:
     if raw_path.is_file():
         media = [raw_path]
     else:
-        # find_media_dir ignores subfolders once the top level has media; a dated one may be a second session
-        nested = sorted(
-            d.name for d in raw_path.iterdir()
-            if d.is_dir()
-            and d.name != "Audio Record"
-            and not d.name.startswith(".")
-            and any(
-                f.suffix.lower() in MEDIA_SUFFIXES and not f.name.startswith(".")
-                for f in d.rglob("*")
-            )
-        )
-        if nested and list_media_files(raw_path):
-            return f"Recordings both at the top level and in subfolder(s): {', '.join(nested)}"
+        # Top-level recordings stand for the folder, as for timestamped folders
         media_dir = find_media_dir(raw_path)
         if not isinstance(media_dir, Path):
             return media_dir
