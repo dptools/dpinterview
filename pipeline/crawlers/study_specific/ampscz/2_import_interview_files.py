@@ -31,6 +31,7 @@ import argparse
 import logging
 import multiprocessing
 import re
+from collections import Counter
 from datetime import date, datetime, time
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -52,6 +53,9 @@ INSTANCE_NAME = MODULE_NAME
 # Media that can be an interview's recording, loose in a type folder or in a folder
 # (.wav is the timestamp-named recorder format, crawled separately)
 MEDIA_SUFFIXES = (".mp4", ".m4a")
+
+# Days a renamed folder's name date may sit from a runsheet entry and still be trusted
+RUNSHEET_MATCH_WINDOW_DAYS = 1
 
 logger = logging.getLogger(MODULE_NAME)
 logargs = {
@@ -336,6 +340,77 @@ def handle_multi_part_interviews(
     return interview_parts
 
 
+def parse_name_datetime(name: str) -> Tuple[Optional[date], Optional[time]]:
+    """
+    Parses the 'YYYY-MM-DD HH.MM.SS' prefix of an interview folder name.
+
+    Args:
+        name (str): The folder name.
+
+    Returns:
+        Tuple[Optional[date], Optional[time]]: The date, and the time if it also parsed.
+    """
+    parts = name.split(" ")
+    try:
+        name_date = date.fromisoformat(parts[0])
+    except ValueError:
+        return None, None
+
+    try:
+        # time format: 14.35.34
+        name_time = time.fromisoformat(parts[1].replace(".", ":"))
+    except (ValueError, IndexError):
+        name_time = None
+    return name_date, name_time
+
+
+def matches_runsheet(interview_day: int, expected_days: List[int]) -> bool:
+    """
+    Checks whether an interview day falls within the match window of any runsheet entry.
+
+    Args:
+        interview_day (int): The interview's day, counted from consent.
+        expected_days (List[int]): The runsheet entries' days, counted from consent.
+
+    Returns:
+        bool: True if some entry is within RUNSHEET_MATCH_WINDOW_DAYS.
+    """
+    return any(
+        abs(interview_day - expected_day) <= RUNSHEET_MATCH_WINDOW_DAYS
+        for expected_day in expected_days
+    )
+
+
+def fetch_expected_days(
+    config_file: Path, study_id: str, subject_id: str
+) -> Dict[str, List[int]]:
+    """
+    Fetches a subject's runsheet entry days, by interview type.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+
+    Returns:
+        Dict[str, List[int]]: Expected interview days keyed by InterviewType value.
+    """
+    query = f"""
+        SELECT expected_interview_type, expected_interview_day
+        FROM public.expected_interviews
+        WHERE study_id = '{db.santize_string(study_id)}'
+            AND subject_id = '{db.santize_string(subject_id)}';
+    """
+    df = db.execute_sql(config_file=config_file, query=query)
+
+    expected_days: Dict[str, List[int]] = {}
+    for row in df.itertuples(index=False):
+        expected_days.setdefault(row.expected_interview_type, []).append(
+            int(row.expected_interview_day)
+        )
+    return expected_days
+
+
 def override_or_record_failure(
     config_file: Path,
     raw_path: Path,
@@ -363,16 +438,11 @@ def override_or_record_failure(
         config_file=config_file, identifier=str(raw_path)
     )
     if override_datetime is None:
-        logger.error(
-            f"{subject_id}: Could not date {raw_path.name} ({error_code}). Skipping..."
-        )
-        db.record_failure(
+        record_undated(
             config_file=config_file,
-            stage=MODULE_NAME,
+            raw_path=raw_path,
             error_code=error_code,
-            identifier=str(raw_path),
             error=error,
-            identifier_type="file_path",
             study_id=study_id,
             subject_id=subject_id,
         )
@@ -382,6 +452,40 @@ def override_or_record_failure(
         f"{subject_id}: Using staff-confirmed datetime override for {raw_path.name}"
     )
     return override_datetime
+
+
+def record_undated(
+    config_file: Path,
+    raw_path: Path,
+    error_code: str,
+    error: Union[str, Exception],
+    study_id: str,
+    subject_id: str,
+) -> None:
+    """
+    Records a pipeline failure for a raw path the crawler could not date.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        raw_path (Path): The raw interview file or directory.
+        error_code (str): The pipeline_failures error code.
+        error (Union[str, Exception]): The error to record.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+    """
+    logger.error(
+        f"{subject_id}: Could not date {raw_path.name} ({error_code}). Skipping..."
+    )
+    db.record_failure(
+        config_file=config_file,
+        stage=MODULE_NAME,
+        error_code=error_code,
+        identifier=str(raw_path),
+        error=error,
+        identifier_type="file_path",
+        study_id=study_id,
+        subject_id=subject_id,
+    )
 
 
 def build_interview_part(
@@ -428,6 +532,76 @@ def build_interview_part(
         interview_part=1,
         interview_datetime=actual_interview_datetime,
     )
+
+
+def match_name_dated_dirs(
+    config_file: Path,
+    name_dated_dirs: List[Tuple[Path, date]],
+    dated_parts: List[InterviewParts],
+    expected_days: List[int],
+    interview_type: InterviewType,
+    study_id: str,
+    subject_id: str,
+    consent_date: datetime,
+) -> List[InterviewParts]:
+    """
+    Builds parts for renamed folders whose name date lands alone on a runsheet entry's day.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        name_dated_dirs (List[Tuple[Path, date]]): Folders with a name date but no time or override.
+        dated_parts (List[InterviewParts]): This type's parts already dated by name, timestamp or override.
+        expected_days (List[int]): This type's runsheet entry days, counted from consent.
+        interview_type (InterviewType): The interview type.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+        consent_date (datetime): The subject's consent date.
+
+    Returns:
+        List[InterviewParts]: The matched parts; the rest are recorded as day_taken or datetime_parse failures.
+    """
+    candidates = [
+        build_interview_part(
+            interview_path=interview_dir,
+            actual_interview_datetime=datetime.combine(name_date, time()),
+            interview_type=interview_type,
+            study_id=study_id,
+            subject_id=subject_id,
+            consent_date=consent_date,
+        )
+        for interview_dir, name_date in name_dated_dirs
+    ]
+    parts_per_day = Counter(p.interview_day for p in dated_parts + candidates)
+
+    matched: List[InterviewParts] = []
+    for part in candidates:
+        name_date = part.interview_datetime.date()
+        # A shared day is usually the leftover original of a folder staff already renamed
+        if parts_per_day[part.interview_day] > 1:
+            error_code = "day_taken"
+            error = f"Name date {name_date} shares its day with another {interview_type.value} part"
+        elif not matches_runsheet(part.interview_day, expected_days):
+            error_code = "datetime_parse"
+            error = (
+                f"Name date {name_date} has no {interview_type.value} runsheet entry "
+                f"within {RUNSHEET_MATCH_WINDOW_DAYS} day(s)"
+            )
+        else:
+            logger.info(
+                f"{subject_id}: Dated {part.interview_path.name} by its name, matched to the runsheet"
+            )
+            matched.append(part)
+            continue
+
+        record_undated(
+            config_file=config_file,
+            raw_path=part.interview_path,
+            error_code=error_code,
+            error=error,
+            study_id=study_id,
+            subject_id=subject_id,
+        )
+    return matched
 
 
 def fetch_interviews(
@@ -480,6 +654,8 @@ def fetch_interviews(
     interview_types: List[InterviewType] = [InterviewType.OPEN, InterviewType.PSYCHS]
 
     interview_parts: List[InterviewParts] = []
+    # Fetched only once a renamed folder needs it, so most subjects make no extra query
+    expected_days: Optional[Dict[str, List[int]]] = None
     for interview_type in interview_types:
         interview_type_path = (
             study_path / "raw" / subject_id / "interviews" / interview_type.value
@@ -500,21 +676,24 @@ def fetch_interviews(
         interview_dirs = [d for d in type_dir_entries if d.is_dir()]
 
         interview_type_parts: List[InterviewParts] = []
+        name_dated_dirs: List[Tuple[Path, date]] = []
         for interview_dir in interview_dirs:
-            base_name = interview_dir.name
-            parts = base_name.split(" ")
+            name_date, name_time = parse_name_datetime(interview_dir.name)
 
-            try:
-                date_dt = date.fromisoformat(parts[0])
-                # time format: 14.35.34
-                actual_time_dt = time.fromisoformat(parts[1].replace(".", ":"))
-                actual_interview_datetime = datetime.combine(date_dt, actual_time_dt)
-            except (ValueError, IndexError) as e:
+            if name_date is not None and name_time is not None:
+                actual_interview_datetime = datetime.combine(name_date, name_time)
+            elif name_date is not None and datetime_overrides.get_override_datetime(
+                config_file=config_file, identifier=str(interview_dir)
+            ) is None:
+                # A dropped time marks a hand-renamed folder: matched to the runsheet below
+                name_dated_dirs.append((interview_dir, name_date))
+                continue
+            else:
                 override_datetime = override_or_record_failure(
                     config_file=config_file,
                     raw_path=interview_dir,
                     error_code="datetime_parse",
-                    error=e,
+                    error=f"No 'YYYY-MM-DD HH.MM.SS' prefix: {interview_dir.name}",
                     study_id=study_id,
                     subject_id=subject_id,
                 )
@@ -593,6 +772,25 @@ def fetch_interviews(
                 build_interview_part(
                     interview_path=loose_file,
                     actual_interview_datetime=override_datetime,
+                    interview_type=interview_type,
+                    study_id=study_id,
+                    subject_id=subject_id,
+                    consent_date=consent_date,
+                )
+            )
+
+        # Runs after every other part of this type is dated, to see which days are taken
+        if name_dated_dirs:
+            if expected_days is None:
+                expected_days = fetch_expected_days(
+                    config_file=config_file, study_id=study_id, subject_id=subject_id
+                )
+            interview_type_parts.extend(
+                match_name_dated_dirs(
+                    config_file=config_file,
+                    name_dated_dirs=name_dated_dirs,
+                    dated_parts=interview_type_parts,
+                    expected_days=expected_days.get(interview_type.value, []),
                     interview_type=interview_type,
                     study_id=study_id,
                     subject_id=subject_id,
