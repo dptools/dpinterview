@@ -25,6 +25,7 @@ except ValueError:
 
 import argparse
 import json
+import shlex
 import subprocess
 from typing import NamedTuple, Optional
 import logging
@@ -110,7 +111,7 @@ def ffprobe(file_path: Path, config_file: Optional[Path] = None) -> FFProbeResul
             "json",
             "-show_format",
             "-show_streams",
-            f"'{file_path}'",
+            shlex.quote(str(file_path)),
         ]
         command_array = cli.singularity_run(
             config_file=config_file, command_array=command_array
@@ -124,7 +125,7 @@ def ffprobe(file_path: Path, config_file: Optional[Path] = None) -> FFProbeResul
             "json",
             "-show_format",
             "-show_streams",
-            str(file_path),
+            shlex.quote(str(file_path)),
         ]
 
     logger = logging.getLogger(__name__)
