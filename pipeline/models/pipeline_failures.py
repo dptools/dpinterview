@@ -48,6 +48,7 @@ ErrorCode = Literal[
     "datetime_parse",
     "loose_file",
     "no_media_files",
+    "day_taken",
     "subject_id_parse",
     "filename_parse",
     "consent_date_missing",

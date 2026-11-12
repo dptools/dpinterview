@@ -25,11 +25,15 @@ except ValueError:
 
 import argparse
 import json
+import shlex
+import shutil
 import subprocess
+from datetime import date, datetime, timezone
 from typing import NamedTuple, Optional
 import logging
 
 from pipeline.helpers import cli
+from pipeline.helpers.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +68,60 @@ class FFProbeResult(NamedTuple):
     return_code: int
     json: str
     error: str
+
+
+def can_probe(config_file: Optional[Path]) -> bool:
+    """
+    Checks whether ffprobe can run, through the binary path or the singularity image.
+
+    Args:
+        config_file (Optional[Path]): The configuration file; None means the system ffprobe.
+
+    Returns:
+        bool: False where ffprobe() would fail or cli.singularity_run() would exit.
+    """
+    if config_file is None or FFMPEG_LIB_BIN_PATH:
+        return shutil.which(FFPROBE_BIN_PATH) is not None
+    try:
+        params = config(path=config_file, section="singularity")
+    except ValueError:
+        return False
+    binary = params.get("singularity_binary_path", "singularity")
+    image = params.get("singularity_image_path")
+    return (
+        shutil.which(binary) is not None
+        and image is not None
+        and Path(image).is_file()
+    )
+
+
+def get_creation_date(config_file: Optional[Path], file_path: Path) -> Optional[date]:
+    """
+    Reads the UTC day of a media file's container creation_time tag. Never raises.
+
+    Args:
+        config_file (Optional[Path]): The configuration file, for the singularity image.
+        file_path (Path): The media file.
+
+    Returns:
+        Optional[date]: The day, or None if ffprobe is unavailable, fails, or finds no tag.
+    """
+    if not can_probe(config_file):
+        return None
+    try:
+        result = ffprobe(file_path=file_path, config_file=config_file)
+        tags = json.loads(result.json).get("format", {}).get("tags", {})
+        creation_time = tags.get("creation_time")
+        if result.return_code != 0 or not creation_time:
+            return None
+        created = datetime.fromisoformat(creation_time.replace("Z", "+00:00"))
+    except (ValueError, OSError) as e:
+        logger.warning(f"Could not read a creation date from {file_path}: {e}")
+        return None
+
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return created.astimezone(timezone.utc).date()
 
 
 def get_metadata(config_file: Optional[Path], file_path_to_process: Path) -> dict:
@@ -110,7 +168,7 @@ def ffprobe(file_path: Path, config_file: Optional[Path] = None) -> FFProbeResul
             "json",
             "-show_format",
             "-show_streams",
-            f"'{file_path}'",
+            shlex.quote(str(file_path)),
         ]
         command_array = cli.singularity_run(
             config_file=config_file, command_array=command_array
@@ -124,7 +182,7 @@ def ffprobe(file_path: Path, config_file: Optional[Path] = None) -> FFProbeResul
             "json",
             "-show_format",
             "-show_streams",
-            str(file_path),
+            shlex.quote(str(file_path)),
         ]
 
     logger = logging.getLogger(__name__)

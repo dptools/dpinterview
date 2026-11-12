@@ -31,14 +31,15 @@ import argparse
 import logging
 import multiprocessing
 import re
+from collections import Counter
 from datetime import date, datetime, time
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Set, Tuple, Union
 
 from rich.logging import RichHandler
 from rich.progress import Progress
 
 from pipeline import core, orchestrator
-from pipeline.helpers import cli, db, dpdash, utils
+from pipeline.helpers import cli, db, dpdash, ffprobe, utils
 from pipeline.helpers.config import config
 from pipeline.models import datetime_overrides
 from pipeline.models.files import File
@@ -52,6 +53,35 @@ INSTANCE_NAME = MODULE_NAME
 # Media that can be an interview's recording, loose in a type folder or in a folder
 # (.wav is the timestamp-named recorder format, crawled separately)
 MEDIA_SUFFIXES = (".mp4", ".m4a")
+
+# Days a renamed folder's name date may sit from a runsheet entry and still be trusted
+RUNSHEET_MATCH_WINDOW_DAYS = 1
+# An entry with a part this close is already covered, as dpinterview-web's Missing dashboard counts it
+RUNSHEET_CLAIM_WINDOW_DAYS = 10
+
+
+class UndatedPath(NamedTuple):
+    """A raw path with no timestamp in its name and no override, awaiting a metadata date."""
+
+    path: Path
+    error_code: str
+    reason: str
+
+
+class MetadataCandidate(NamedTuple):
+    """An undated path with the part its metadata date would give it."""
+
+    undated: UndatedPath
+    part: InterviewParts
+    is_video: bool
+
+
+class Rejection(NamedTuple):
+    """An undated path the metadata tier could not match, with the failure to record."""
+
+    undated: UndatedPath
+    error_code: str
+    detail: str
 
 logger = logging.getLogger(MODULE_NAME)
 logargs = {
@@ -196,6 +226,76 @@ def find_media_dir(interview_path: Path) -> Union[Path, str]:
     return f"Recordings in {len(media_subdirs)} subfolders, cannot choose one: {names}"
 
 
+def is_combined_audio(audio_file: Path) -> bool:
+    """
+    Checks whether an audio file is Zoom's combined recording rather than one speaker's track.
+
+    Args:
+        audio_file (Path): The audio file.
+
+    Returns:
+        bool: True for 'audio_only' or 'audio<digits>' outside an 'Audio Record' folder.
+    """
+    if "Audio Record" in audio_file.parts:
+        return False
+    stem = audio_file.stem
+    return stem == "audio_only" or re.fullmatch(r"audio\d+", stem) is not None
+
+
+def choose_session_recordings(raw_path: Path) -> Union[List[Path], str]:
+    """
+    Picks the recordings that stand for a raw path's session: its videos, else its combined audio.
+
+    Args:
+        raw_path (Path): A loose media file or an undated interview folder.
+
+    Returns:
+        Union[List[Path], str]: The recordings, or why none can stand for a single session.
+    """
+    if raw_path.is_file():
+        media = [raw_path]
+    else:
+        # Top-level recordings stand for the folder, as for timestamped folders
+        media_dir = find_media_dir(raw_path)
+        if not isinstance(media_dir, Path):
+            return media_dir
+        media = list_media_files(media_dir)
+
+    videos = [f for f in media if f.suffix.lower() == ".mp4"]
+    if videos:
+        return videos
+    combined = [f for f in media if f.suffix.lower() == ".m4a" and is_combined_audio(f)]
+    if combined:
+        return combined
+    return "No video or combined-audio recording to date it by"
+
+
+def date_by_recordings(config_file: Path, raw_path: Path) -> Union[Tuple[date, bool], str]:
+    """
+    Dates a raw path by its session recordings' creation_time, which must all share one day.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        raw_path (Path): A loose media file or an undated interview folder.
+
+    Returns:
+        Union[Tuple[date, bool], str]: The UTC day and whether it is video, or why it cannot be dated.
+    """
+    recordings = choose_session_recordings(raw_path)
+    if isinstance(recordings, str):
+        return recordings
+
+    days = set()
+    for recording in recordings:
+        day = ffprobe.get_creation_date(config_file=config_file, file_path=recording)
+        if day is None:
+            return f"No metadata creation date on {recording.name}"
+        days.add(day)
+    if len(days) > 1:
+        return f"Recordings span several days: {', '.join(str(d) for d in sorted(days))}"
+    return days.pop(), recordings[0].suffix.lower() == ".mp4"
+
+
 def fetch_interview_files(
     interview_part: InterviewParts, config_file: Path, study_id: str
 ) -> List[InterviewFile]:
@@ -336,6 +436,77 @@ def handle_multi_part_interviews(
     return interview_parts
 
 
+def parse_name_datetime(name: str) -> Tuple[Optional[date], Optional[time]]:
+    """
+    Parses the 'YYYY-MM-DD HH.MM.SS' prefix of an interview folder name.
+
+    Args:
+        name (str): The folder name.
+
+    Returns:
+        Tuple[Optional[date], Optional[time]]: The date, and the time if it also parsed.
+    """
+    parts = name.split(" ")
+    try:
+        name_date = date.fromisoformat(parts[0])
+    except ValueError:
+        return None, None
+
+    try:
+        # time format: 14.35.34
+        name_time = time.fromisoformat(parts[1].replace(".", ":"))
+    except (ValueError, IndexError):
+        name_time = None
+    return name_date, name_time
+
+
+def matches_runsheet(interview_day: int, expected_days: List[int]) -> bool:
+    """
+    Checks whether an interview day falls within the match window of any runsheet entry.
+
+    Args:
+        interview_day (int): The interview's day, counted from consent.
+        expected_days (List[int]): The runsheet entries' days, counted from consent.
+
+    Returns:
+        bool: True if some entry is within RUNSHEET_MATCH_WINDOW_DAYS.
+    """
+    return any(
+        abs(interview_day - expected_day) <= RUNSHEET_MATCH_WINDOW_DAYS
+        for expected_day in expected_days
+    )
+
+
+def fetch_expected_days(
+    config_file: Path, study_id: str, subject_id: str
+) -> Dict[str, List[int]]:
+    """
+    Fetches a subject's runsheet entry days, by interview type.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+
+    Returns:
+        Dict[str, List[int]]: Expected interview days keyed by InterviewType value.
+    """
+    query = f"""
+        SELECT expected_interview_type, expected_interview_day
+        FROM public.expected_interviews
+        WHERE study_id = '{db.santize_string(study_id)}'
+            AND subject_id = '{db.santize_string(subject_id)}';
+    """
+    df = db.execute_sql(config_file=config_file, query=query)
+
+    expected_days: Dict[str, List[int]] = {}
+    for row in df.itertuples(index=False):
+        expected_days.setdefault(row.expected_interview_type, []).append(
+            int(row.expected_interview_day)
+        )
+    return expected_days
+
+
 def override_or_record_failure(
     config_file: Path,
     raw_path: Path,
@@ -359,29 +530,77 @@ def override_or_record_failure(
     Returns:
         Optional[datetime]: The override datetime, or None if none has been recorded.
     """
-    override_datetime = datetime_overrides.get_override_datetime(
-        config_file=config_file, identifier=str(raw_path)
+    override_datetime = lookup_override(
+        config_file=config_file, raw_path=raw_path, subject_id=subject_id
     )
     if override_datetime is None:
-        logger.error(
-            f"{subject_id}: Could not date {raw_path.name} ({error_code}). Skipping..."
-        )
-        db.record_failure(
+        record_undated(
             config_file=config_file,
-            stage=MODULE_NAME,
+            raw_path=raw_path,
             error_code=error_code,
-            identifier=str(raw_path),
             error=error,
-            identifier_type="file_path",
             study_id=study_id,
             subject_id=subject_id,
         )
-        return None
-
-    logger.info(
-        f"{subject_id}: Using staff-confirmed datetime override for {raw_path.name}"
-    )
     return override_datetime
+
+
+def lookup_override(
+    config_file: Path, raw_path: Path, subject_id: str
+) -> Optional[datetime]:
+    """
+    Returns the staff-confirmed datetime override recorded for a raw path, if any.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        raw_path (Path): The raw interview file or directory.
+        subject_id (str): The subject ID, for logging.
+
+    Returns:
+        Optional[datetime]: The override datetime, or None if none has been recorded.
+    """
+    override_datetime = datetime_overrides.get_override_datetime(
+        config_file=config_file, identifier=str(raw_path)
+    )
+    if override_datetime is not None:
+        logger.info(
+            f"{subject_id}: Using staff-confirmed datetime override for {raw_path.name}"
+        )
+    return override_datetime
+
+
+def record_undated(
+    config_file: Path,
+    raw_path: Path,
+    error_code: str,
+    error: Union[str, Exception],
+    study_id: str,
+    subject_id: str,
+) -> None:
+    """
+    Records a pipeline failure for a raw path the crawler could not date.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        raw_path (Path): The raw interview file or directory.
+        error_code (str): The pipeline_failures error code.
+        error (Union[str, Exception]): The error to record.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+    """
+    logger.error(
+        f"{subject_id}: Could not date {raw_path.name} ({error_code}). Skipping..."
+    )
+    db.record_failure(
+        config_file=config_file,
+        stage=MODULE_NAME,
+        error_code=error_code,
+        identifier=str(raw_path),
+        error=error,
+        identifier_type="file_path",
+        study_id=study_id,
+        subject_id=subject_id,
+    )
 
 
 def build_interview_part(
@@ -428,6 +647,294 @@ def build_interview_part(
         interview_part=1,
         interview_datetime=actual_interview_datetime,
     )
+
+
+def match_name_dated_dirs(
+    config_file: Path,
+    name_dated_dirs: List[Tuple[Path, date]],
+    dated_parts: List[InterviewParts],
+    expected_days: List[int],
+    interview_type: InterviewType,
+    study_id: str,
+    subject_id: str,
+    consent_date: datetime,
+) -> List[InterviewParts]:
+    """
+    Builds parts for renamed folders whose name date lands alone on a day that a runsheet
+    entry or the folder's own recording metadata confirms.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        name_dated_dirs (List[Tuple[Path, date]]): Folders with a name date but no time or override.
+        dated_parts (List[InterviewParts]): This type's parts already dated by name, timestamp or override.
+        expected_days (List[int]): This type's runsheet entry days, counted from consent.
+        interview_type (InterviewType): The interview type.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+        consent_date (datetime): The subject's consent date.
+
+    Returns:
+        List[InterviewParts]: The matched parts; the rest are recorded as day_taken or datetime_parse failures.
+    """
+    candidates = [
+        build_interview_part(
+            interview_path=interview_dir,
+            actual_interview_datetime=datetime.combine(name_date, time()),
+            interview_type=interview_type,
+            study_id=study_id,
+            subject_id=subject_id,
+            consent_date=consent_date,
+        )
+        for interview_dir, name_date in name_dated_dirs
+    ]
+    parts_per_day = Counter(p.interview_day for p in dated_parts + candidates)
+
+    matched: List[InterviewParts] = []
+    for part in candidates:
+        name_date = part.interview_datetime.date()
+        # A shared day is usually the leftover original of a folder staff already renamed
+        if parts_per_day[part.interview_day] > 1:
+            error_code = "day_taken"
+            error = f"Name date {name_date} shares its day with another {interview_type.value} part"
+        elif not matches_runsheet(part.interview_day, expected_days):
+            # Off the runsheet (late or rescheduled), the recordings can still vouch for the name
+            dated = date_by_recordings(config_file=config_file, raw_path=part.interview_path)
+            if (
+                not isinstance(dated, str)
+                and abs((dated[0] - name_date).days) <= RUNSHEET_MATCH_WINDOW_DAYS
+            ):
+                logger.info(
+                    f"{subject_id}: Dated {part.interview_path.name} by its name, confirmed by its metadata"
+                )
+                matched.append(part)
+                continue
+            metadata = dated if isinstance(dated, str) else f"metadata date {dated[0]}"
+            error_code = "datetime_parse"
+            error = (
+                f"Name date {name_date} has no {interview_type.value} runsheet entry "
+                f"within {RUNSHEET_MATCH_WINDOW_DAYS} day(s), and is not confirmed: {metadata}"
+            )
+        else:
+            logger.info(
+                f"{subject_id}: Dated {part.interview_path.name} by its name, matched to the runsheet"
+            )
+            matched.append(part)
+            continue
+
+        record_undated(
+            config_file=config_file,
+            raw_path=part.interview_path,
+            error_code=error_code,
+            error=error,
+            study_id=study_id,
+            subject_id=subject_id,
+        )
+    return matched
+
+
+def date_undated_paths(
+    config_file: Path,
+    undated_paths: List[UndatedPath],
+    interview_type: InterviewType,
+    study_id: str,
+    subject_id: str,
+    consent_date: datetime,
+) -> Tuple[List[MetadataCandidate], List[Rejection]]:
+    """
+    Dates each undated path by its recordings' metadata.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        undated_paths (List[UndatedPath]): Undated folders and loose files.
+        interview_type (InterviewType): The interview type.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+        consent_date (datetime): The subject's consent date.
+
+    Returns:
+        Tuple[List[MetadataCandidate], List[Rejection]]: The dated paths, and those that could not be dated.
+    """
+    candidates: List[MetadataCandidate] = []
+    rejections: List[Rejection] = []
+    for undated in undated_paths:
+        dated = date_by_recordings(config_file=config_file, raw_path=undated.path)
+        if isinstance(dated, str):
+            rejections.append(Rejection(undated, undated.error_code, dated))
+            continue
+        metadata_date, is_video = dated
+        part = build_interview_part(
+            interview_path=undated.path,
+            actual_interview_datetime=datetime.combine(metadata_date, time()),
+            interview_type=interview_type,
+            study_id=study_id,
+            subject_id=subject_id,
+            consent_date=consent_date,
+        )
+        candidates.append(MetadataCandidate(undated, part, is_video))
+    return candidates, rejections
+
+
+def pick_session_primaries(
+    candidates: List[MetadataCandidate], taken_days: Set[int]
+) -> Tuple[List[MetadataCandidate], List[Rejection]]:
+    """
+    Keeps one recording per metadata day: the only video, else the only audio.
+
+    Args:
+        candidates (List[MetadataCandidate]): The metadata-dated paths.
+        taken_days (Set[int]): Days already holding a part dated another way.
+
+    Returns:
+        Tuple[List[MetadataCandidate], List[Rejection]]: The kept paths, and the rest.
+    """
+    by_day: Dict[int, List[MetadataCandidate]] = {}
+    for candidate in candidates:
+        by_day.setdefault(candidate.part.interview_day, []).append(candidate)
+
+    kept: List[MetadataCandidate] = []
+    rejections: List[Rejection] = []
+    for interview_day, same_day in by_day.items():
+        metadata_date = same_day[0].part.interview_datetime.date()
+        videos = [c for c in same_day if c.is_video]
+        if interview_day in taken_days:
+            rejections.extend(
+                Rejection(c.undated, "day_taken", f"Metadata date {metadata_date} shares its day with a dated part")
+                for c in same_day
+            )
+        elif len(videos) == 1 or (not videos and len(same_day) == 1):
+            primary = videos[0] if videos else same_day[0]
+            kept.append(primary)
+            # Same-day audio beside a video is that session's own audio
+            rejections.extend(
+                Rejection(c.undated, "day_taken", f"Metadata date {metadata_date} is {primary.undated.path.name}'s session")
+                for c in same_day if c is not primary
+            )
+        else:
+            rejections.extend(
+                Rejection(c.undated, c.undated.error_code, f"{len(same_day)} recordings date to {metadata_date}; cannot choose one")
+                for c in same_day
+            )
+    return kept, rejections
+
+
+def match_to_entries(
+    candidates: List[MetadataCandidate], unclaimed_days: List[int]
+) -> Tuple[List[MetadataCandidate], List[Rejection]]:
+    """
+    Matches each path to the one unclaimed runsheet entry near its metadata date.
+
+    Args:
+        candidates (List[MetadataCandidate]): One path per metadata day.
+        unclaimed_days (List[int]): Runsheet entry days no dated part covers.
+
+    Returns:
+        Tuple[List[MetadataCandidate], List[Rejection]]: Paths with an entry to themselves, and the rest.
+    """
+    nearby = [
+        [d for d in unclaimed_days if abs(d - c.part.interview_day) <= RUNSHEET_MATCH_WINDOW_DAYS]
+        for c in candidates
+    ]
+    claims = Counter(days[0] for days in nearby if len(days) == 1)
+
+    matched: List[MetadataCandidate] = []
+    rejections: List[Rejection] = []
+    for candidate, days in zip(candidates, nearby):
+        metadata_date = candidate.part.interview_datetime.date()
+        code = candidate.undated.error_code
+        if not days:
+            rejections.append(Rejection(candidate.undated, code, (
+                f"Metadata date {metadata_date} has no unmatched runsheet entry "
+                f"within {RUNSHEET_MATCH_WINDOW_DAYS} day(s)"
+            )))
+        elif len(days) > 1:
+            rejections.append(Rejection(candidate.undated, code, (
+                f"Metadata date {metadata_date} is near {len(days)} runsheet entries"
+            )))
+        elif claims[days[0]] > 1:
+            rejections.append(Rejection(candidate.undated, code, (
+                f"Metadata date {metadata_date} shares its runsheet entry with another recording"
+            )))
+        else:
+            matched.append(candidate)
+    return matched, rejections
+
+
+def match_by_metadata(
+    config_file: Path,
+    undated_paths: List[UndatedPath],
+    dated_parts: List[InterviewParts],
+    expected_days: List[int],
+    interview_type: InterviewType,
+    study_id: str,
+    subject_id: str,
+    consent_date: datetime,
+) -> List[InterviewParts]:
+    """
+    Builds parts for undated folders and loose files whose recordings' metadata date lands
+    alone on a runsheet entry no other part covers.
+
+    Args:
+        config_file (Path): The path to the configuration file.
+        undated_paths (List[UndatedPath]): Undated folders and loose files of this type.
+        dated_parts (List[InterviewParts]): This type's parts dated another way this pass.
+        expected_days (List[int]): This type's runsheet entry days, counted from consent.
+        interview_type (InterviewType): The interview type.
+        study_id (str): The study ID.
+        subject_id (str): The subject ID.
+        consent_date (datetime): The subject's consent date.
+
+    Returns:
+        List[InterviewParts]: The matched parts; the rest are recorded as failures.
+    """
+    # Claims come from this pass only: a part matched on an earlier pass is undated again now
+    unclaimed_days = [
+        d for d in expected_days
+        if not any(abs(d - p.interview_day) <= RUNSHEET_CLAIM_WINDOW_DAYS for p in dated_parts)
+    ]
+
+    matched: List[MetadataCandidate] = []
+    if not unclaimed_days:
+        # Nothing to fill, so skip probing entirely
+        rejections = [
+            Rejection(u, u.error_code, f"No unmatched {interview_type.value} runsheet entry to fill")
+            for u in undated_paths
+        ]
+    else:
+        started = datetime.now()
+        candidates, rejections = date_undated_paths(
+            config_file=config_file,
+            undated_paths=undated_paths,
+            interview_type=interview_type,
+            study_id=study_id,
+            subject_id=subject_id,
+            consent_date=consent_date,
+        )
+        logger.info(
+            f"{subject_id}: Read metadata for {len(undated_paths)} undated "
+            f"{interview_type.value} path(s) in {(datetime.now() - started).total_seconds():.1f}s"
+        )
+        primaries, same_day_rejections = pick_session_primaries(
+            candidates=candidates, taken_days={p.interview_day for p in dated_parts}
+        )
+        matched, entry_rejections = match_to_entries(
+            candidates=primaries, unclaimed_days=unclaimed_days
+        )
+        rejections += same_day_rejections + entry_rejections
+
+    for candidate in matched:
+        logger.info(
+            f"{subject_id}: Dated {candidate.undated.path.name} by its metadata, matched to the runsheet"
+        )
+    for rejection in rejections:
+        record_undated(
+            config_file=config_file,
+            raw_path=rejection.undated.path,
+            error_code=rejection.error_code,
+            error=f"{rejection.undated.reason}; {rejection.detail}",
+            study_id=study_id,
+            subject_id=subject_id,
+        )
+    return [c.part for c in matched]
 
 
 def fetch_interviews(
@@ -480,6 +987,8 @@ def fetch_interviews(
     interview_types: List[InterviewType] = [InterviewType.OPEN, InterviewType.PSYCHS]
 
     interview_parts: List[InterviewParts] = []
+    # Fetched only once a renamed folder needs it, so most subjects make no extra query
+    expected_days: Optional[Dict[str, List[int]]] = None
     for interview_type in interview_types:
         interview_type_path = (
             study_path / "raw" / subject_id / "interviews" / interview_type.value
@@ -500,27 +1009,30 @@ def fetch_interviews(
         interview_dirs = [d for d in type_dir_entries if d.is_dir()]
 
         interview_type_parts: List[InterviewParts] = []
+        name_dated_dirs: List[Tuple[Path, date]] = []
+        undated_paths: List[UndatedPath] = []
         for interview_dir in interview_dirs:
-            base_name = interview_dir.name
-            parts = base_name.split(" ")
+            name_date, name_time = parse_name_datetime(interview_dir.name)
 
-            try:
-                date_dt = date.fromisoformat(parts[0])
-                # time format: 14.35.34
-                actual_time_dt = time.fromisoformat(parts[1].replace(".", ":"))
-                actual_interview_datetime = datetime.combine(date_dt, actual_time_dt)
-            except (ValueError, IndexError) as e:
-                override_datetime = override_or_record_failure(
-                    config_file=config_file,
-                    raw_path=interview_dir,
-                    error_code="datetime_parse",
-                    error=e,
-                    study_id=study_id,
-                    subject_id=subject_id,
+            if name_date is not None and name_time is not None:
+                actual_interview_datetime = datetime.combine(name_date, name_time)
+            else:
+                override_datetime = lookup_override(
+                    config_file=config_file, raw_path=interview_dir, subject_id=subject_id
                 )
-                if override_datetime is None:
+                if override_datetime is not None:
+                    actual_interview_datetime = override_datetime
+                elif name_date is not None:
+                    # A dropped time marks a hand-renamed folder: matched to the runsheet below
+                    name_dated_dirs.append((interview_dir, name_date))
                     continue
-                actual_interview_datetime = override_datetime
+                else:
+                    undated_paths.append(UndatedPath(
+                        interview_dir,
+                        "datetime_parse",
+                        f"No 'YYYY-MM-DD HH.MM.SS' prefix: {interview_dir.name}",
+                    ))
+                    continue
 
             interview_type_parts.append(
                 build_interview_part(
@@ -570,7 +1082,7 @@ def fetch_interviews(
                 )
             )
 
-        # Loose media is only imported once staff match it to a runsheet entry
+        # Loose media is imported on a staff override, else dated by its metadata below
         loose_files = [
             f for f in type_dir_entries
             if f.is_file()
@@ -578,21 +1090,56 @@ def fetch_interviews(
             and f.suffix.lower() in MEDIA_SUFFIXES
         ]
         for loose_file in loose_files:
-            override_datetime = override_or_record_failure(
-                config_file=config_file,
-                raw_path=loose_file,
-                error_code="loose_file",
-                error=f"Not in a dated interview folder: {loose_file.name}",
-                study_id=study_id,
-                subject_id=subject_id,
+            override_datetime = lookup_override(
+                config_file=config_file, raw_path=loose_file, subject_id=subject_id
             )
             if override_datetime is None:
+                undated_paths.append(UndatedPath(
+                    loose_file,
+                    "loose_file",
+                    f"Not in a dated interview folder: {loose_file.name}",
+                ))
                 continue
 
             interview_type_parts.append(
                 build_interview_part(
                     interview_path=loose_file,
                     actual_interview_datetime=override_datetime,
+                    interview_type=interview_type,
+                    study_id=study_id,
+                    subject_id=subject_id,
+                    consent_date=consent_date,
+                )
+            )
+
+        # Runs after every other part of this type is dated, to see which days are taken
+        if name_dated_dirs or undated_paths:
+            if expected_days is None:
+                expected_days = fetch_expected_days(
+                    config_file=config_file, study_id=study_id, subject_id=subject_id
+                )
+            type_expected_days = expected_days.get(interview_type.value, [])
+        if name_dated_dirs:
+            interview_type_parts.extend(
+                match_name_dated_dirs(
+                    config_file=config_file,
+                    name_dated_dirs=name_dated_dirs,
+                    dated_parts=interview_type_parts,
+                    expected_days=type_expected_days,
+                    interview_type=interview_type,
+                    study_id=study_id,
+                    subject_id=subject_id,
+                    consent_date=consent_date,
+                )
+            )
+        # After name-dated folders, so their parts claim runsheet entries first
+        if undated_paths:
+            interview_type_parts.extend(
+                match_by_metadata(
+                    config_file=config_file,
+                    undated_paths=undated_paths,
+                    dated_parts=interview_type_parts,
+                    expected_days=type_expected_days,
                     interview_type=interview_type,
                     study_id=study_id,
                     subject_id=subject_id,
@@ -835,6 +1382,16 @@ if __name__ == "__main__":
 
     console.rule(f"[bold red]{MODULE_NAME}")
     logger.info(f"Using config file: {config_file}")
+
+    # Without an [ffmpeg] binary path, ffprobe runs through singularity as in 02_metadata
+    try:
+        ffmpeg_bin_path = config(path=config_file, section="ffmpeg").get("ffmpeg_bin_path")
+    except ValueError:
+        ffmpeg_bin_path = None
+    if ffmpeg_bin_path:
+        ffprobe.set_ffmpeg_bin_path(ffmpeg_bin_path)
+    if not ffprobe.can_probe(config_file):
+        logger.warning("ffprobe is unavailable: undated folders and loose files will not be dated by metadata")
 
     study_ids = orchestrator.get_studies(config_file=config_file)
     with utils.get_progress_bar() as progress:
